@@ -25,6 +25,7 @@ export class CotController {
     @HttpCode(200)
     @Roles('super admin', 'supervisor', 'lcu', 'user')
     @UseGuards(AuthGuard, RoleGuard)
+
     async list(
         @User() user: CurrentUserRequest,
         @Query('q') q?: string,

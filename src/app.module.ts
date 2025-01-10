@@ -23,7 +23,7 @@ import { CertificateModule } from './certificate/certificate.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'), // Mengarah ke folder 'public' di root proyek
     }),
-    CommonModule, 
+    CommonModule,
     SharedModule,
     UserModule,
     AuthModule,

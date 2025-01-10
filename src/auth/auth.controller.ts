@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards } from "@nestjs/common";
 import { AuthGuard } from "../shared/guard/auth.guard";
 import { AuthResponse, CurrentUserRequest, LoginUserRequest, RegisterUserRequest, UpdatePassword } from "../model/auth.model";
 import { buildResponse, WebResponse } from "../model/web.model";
@@ -74,7 +74,7 @@ export class AuthController {
     @Post('/login')
     @HttpCode(200)
     async login(@Body() request: LoginUserRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
-        let result = await this.authService.login(request);
+        const result = await this.authService.login(request);
         res.cookie('refresh_token', result.refreshToken, {
             httpOnly: true,
             secure: this.configService.get<string>('NODE_ENV') === 'production',
@@ -99,7 +99,7 @@ export class AuthController {
     @Get('/token')
     @HttpCode(200)
     async refreshTokens(@GetCookie('refresh_token') refreshToken: string, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
-        let result = await this.authService.refreshTokens(refreshToken);
+        const result = await this.authService.refreshTokens(refreshToken);
         res.cookie('access_token', result.accessToken, {
             httpOnly: true,
             secure: this.configService.get<string>('NODE_ENV') === 'production',

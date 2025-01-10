@@ -1,11 +1,9 @@
-import { Module } from "@nestjs/common";
-import { ParticipantCotService } from "./participant-cot.service";
-import { ParticipantCotController } from "./participant-cot.controller";
+import { Module } from '@nestjs/common';
+import { ParticipantCotService } from './participant-cot.service';
+import { ParticipantCotController } from './participant-cot.controller';
 
 @Module({
-    controllers: [ParticipantCotController],
-    providers: [ParticipantCotService]
+  controllers: [ParticipantCotController],
+  providers: [ParticipantCotService],
 })
-export class ParticipantCotModule {
-    
-}
+export class ParticipantCotModule {}

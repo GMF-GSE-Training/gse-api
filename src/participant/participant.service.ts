@@ -142,12 +142,6 @@ export class ParticipantService {
     
         const userRole = user.role.name.toLowerCase();
     
-        if(userRole === 'user') {
-            if(participant.nik !== user.nik) {
-                throw new HttpException('Akses terlarang, pengguna tidak bisa mengakses data pengguna lain', 403);
-            }
-        }
-    
         if(userRole === 'lcu') {
             this.validateDinasForLcuRequest(participant.dinas, user.dinas);
         }

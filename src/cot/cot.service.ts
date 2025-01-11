@@ -100,7 +100,7 @@ export class CotService {
         }
     
         // Mapping hasil query ke bentuk CotResponse
-        const cotResponse: CotResponse = {
+        let cotResponse: CotResponse = {
             id: cot.id,
             startDate: cot.startDate,
             endDate: cot.endDate,
@@ -113,7 +113,46 @@ export class CotService {
             status: cot.status,
             capability: cot.capabilityCots[0]?.capability || null,
         };
-    
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let updateCOt: any;
+        if (cot.startDate > today) {
+            updateCOt = await this.prismaService.cOT.update({
+                where: {
+                    id: cot.id
+                },
+                data: {
+                    status: 'Akan datang'
+                }
+            });
+
+            cotResponse.status = updateCOt.status;
+        } else if(cot.startDate <= today && cot.endDate > today) {
+            updateCOt = await this.prismaService.cOT.update({
+                where: {
+                    id: cot.id
+                },
+                data: {
+                    status: 'Sedang berjalan',
+                }
+            });
+            
+            cotResponse.status = updateCOt.status;
+        } else if(cot.endDate < today) {
+            updateCOt = await this.prismaService.cOT.update({
+                where: {
+                    id: cot.id
+                },
+                data: {
+                    status: 'Selesai',
+                }
+            });
+            
+            cotResponse.status = updateCOt.status;
+        }
+
         return cotResponse;
     }
 

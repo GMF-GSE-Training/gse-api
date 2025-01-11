@@ -374,6 +374,12 @@ export class ParticipantService {
     
         const userRole = user.role.name.toLowerCase();
     
+        if(userRole === 'user') {
+            if(user.participantId !== participantId) {
+                throw new HttpException('Anda tidak bisa memperbarui data participant lain', 403);
+            }
+        }
+    
         if(userRole !== 'super admin' && updateRequest.email) {
             throw new HttpException('Anda tidak bisa mengubah email participant', 400);
         }

@@ -50,4 +50,29 @@ export class PrismaService
       this.logger.info(e);
     });
   }
+
+//   async createTemporaryRegistration(data: Prisma.TemporaryRegistrationCreateInput) {
+//     return this.temporaryRegistration.create({
+//       data,
+//     });
+//   }
+
+//   async findTemporaryRegistrationByToken(token: string) {
+//     return this.temporaryRegistration.findUnique({
+//       where: { verificationToken: token },
+//     });
+//   }
+
+//   async verifyTemporaryRegistration(token: string) {
+//     return this.temporaryRegistration.update({
+//       where: { verificationToken: token },
+//       data: { isVerified: true },
+//     });
+//   }
+
+//   async deleteExpiredRegistrations() {
+//     return this.temporaryRegistration.deleteMany({
+//       where: { expiresAt: { lt: new Date() } },
+//     });
+//   }
 }

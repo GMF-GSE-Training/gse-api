@@ -1,5 +1,17 @@
 import { ParticipantResponse } from './participant.model';
 
+// export interface TemporaryRegistrationData {
+//   email: string;
+//   nik: string;
+//   idNumber?: string;
+//   name: string;
+//   dinas?: string;
+//   password: string;
+//   roleId: string;
+//   verificationToken: string;
+//   expiresAt: Date;
+// }
+
 export interface RegisterUserRequest {
   participantId?: string;
   idNumber?: string;

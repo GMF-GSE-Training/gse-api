@@ -1,0 +1,41 @@
+# Ignore dependencies
+node_modules/
+
+# Ignore Prisma migrations (if unnecessary for runtime)
+prisma/migrations/
+
+# Ignore public assets unless explicitly needed (but include public/)
+!public/
+
+# Ignore logs and temporary files
+*.log
+*.temp
+*.lock
+
+# dotenv environment variable files
+.env.local
+# !*.env
+.env.development
+.env.development.local
+.env.test.local
+# .env.production
+.env.production.local
+
+# Ignore documentation and source files (unneeded for runtime)
+docs/
+
+# Ignore any IDE/editor configurations
+*.vscode/
+.idea/
+*.swp
+
+# Ignore testing and debug-related files
+coverage/
+__tests__/
+__mocks__/
+*.spec.js
+*.spec.ts
+
+# Ignore other unnecessary files
+*.md
+Dockerfile.old

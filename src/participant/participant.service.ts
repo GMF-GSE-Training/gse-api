@@ -255,10 +255,10 @@ export class ParticipantService {
 
     const gmfLogoUrl = `http://${localIp}:3000/assets/images/Logo_GMF_Aero_Asia.png`;
 
-    const photoBase64 = participant.foto.toString('base64');
-    const qrCodeBase64 = participant.qrCode.toString('base64');
-    const photoType = this.getMediaType(participant.foto);
-    const qrCodeType = this.getMediaType(participant.qrCode);
+    const photoBase64 = Buffer.from(participant.foto).toString('base64');
+    const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
+    const photoType = this.getMediaType(Buffer.from(participant.foto));
+    const qrCodeType = this.getMediaType(Buffer.from(participant.qrCode));
 
     // Render EJS template
     const templatePath = join(
@@ -427,10 +427,10 @@ export class ParticipantService {
     }
 
     const gmfLogoUrl = `http://${localIp}:3000/assets/images/Logo_GMF_Aero_Asia.png`;
-    const photoBase64 = participant.foto.toString('base64');
-    const qrCodeBase64 = participant.qrCode.toString('base64');
-    const photoType = this.getMediaType(participant.foto);
-    const qrCodeType = this.getMediaType(participant.qrCode);
+    const photoBase64 = Buffer.from(participant.foto).toString('base64');
+    const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
+    const photoType = this.getMediaType(Buffer.from(participant.foto));
+    const qrCodeType = this.getMediaType(Buffer.from(participant.qrCode));
 
     // Render EJS template
     const templatePath = join(

@@ -42,6 +42,7 @@ export class ParticipantCotService {
 
     // Construct base where clause
     const baseWhereClause: any = {
+      AND: [],
       NOT: {
         participantsCots: {
           some: { cotId: cotId },
@@ -83,8 +84,6 @@ export class ParticipantCotService {
       }),
       this.prismaService.participant.count({ where: baseWhereClause }),
     ]);
-
-    console.log(unregisteredParticipants);
 
     const totalPage = Math.ceil(totalParticipants / request.size);
 

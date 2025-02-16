@@ -156,7 +156,7 @@ export class ESignService {
       throw new HttpException('File E-Sign tidak ditemukan', 404);
     }
 
-    return eSign.eSign;
+    return Buffer.from(eSign.eSign);
   }
 
   async deleteESign(eSignId: string): Promise<string> {

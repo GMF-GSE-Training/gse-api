@@ -104,20 +104,20 @@ export class CertificateService {
       (item) => item.type === 'Kompetensi',
     );
 
-    const photoBase64 = participant.foto.toString('base64');
-    const photoType = this.getMediaType(participant.foto);
+    const photoBase64 = Buffer.from(participant.foto).toString('base64');
+    const photoType = this.getMediaType(Buffer.from(participant.foto));
 
     const signature1 = eSign.find(
       (item) => item.signatureType === 'SIGNATURE1',
     );
-    const signature1Base64 = signature1.eSign.toString('base64');
-    const signature1Type = this.getMediaType(signature1.eSign);
+    const signature1Base64 = Buffer.from(signature1.eSign).toString('base64');
+    const signature1Type = this.getMediaType(Buffer.from(signature1.eSign));
 
     const signature2 = eSign.find(
       (item) => item.signatureType === 'SIGNATURE2',
     );
-    const signature2Base64 = signature2.eSign.toString('base64');
-    const signature2Type = this.getMediaType(signature2.eSign);
+    const signature2Base64 = Buffer.from(signature2.eSign).toString('base64');
+    const signature2Type = this.getMediaType(Buffer.from(signature2.eSign));
 
     const formattedStartDate = this.formatDate(new Date(cot.startDate));
     const formattedEndDate = this.formatDate(new Date(cot.endDate));

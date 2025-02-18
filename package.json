@@ -65,7 +65,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^10.0.0",
-    "@types/winston": "^3.0.14",
+    "@types/winston": "^2.4.4",
     "@typescript-eslint/eslint-plugin": "^8.24.0",
     "@typescript-eslint/parser": "^8.24.0",
     "cookie-parser": "^1.4.7",

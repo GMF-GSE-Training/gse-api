@@ -89,7 +89,7 @@ export class CertificateService {
 
     if (!eSign) {
       throw new HttpException(
-        'Gagal membaut sertifikat. Tidak ada Esign yang aktif',
+        'Gagal membuat sertifikat. Tidak ada Esign yang aktif',
         404,
       );
     }

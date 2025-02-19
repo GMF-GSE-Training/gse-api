@@ -244,7 +244,7 @@ export class UserService {
       }
     }
 
-    return 'User berhasil diperbari';
+    return 'User berhasil diperbarui';
   }
 
   async delete(userId: string): Promise<string> {

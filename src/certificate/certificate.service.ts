@@ -70,7 +70,7 @@ export class CertificateService {
 
     if (!cot) {
       throw new HttpException(
-        'Gagal membaut sertifikat. COT tidak ditemukan',
+        'Gagal membuat sertifikat. COT tidak ditemukan',
         404,
       );
     }

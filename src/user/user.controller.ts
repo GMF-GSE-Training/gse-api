@@ -33,7 +33,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @Roles('Super Admin', 'supervisor', 'LCU')
+  @Roles('Super Admin', 'Supervisor', 'LCU')
   @UseGuards(AuthGuard, RoleGuard)
   @HttpCode(200)
   async create(

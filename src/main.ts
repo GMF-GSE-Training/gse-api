@@ -15,7 +15,7 @@ async function bootstrap() {
   // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
   const networkInterfaces = os.networkInterfaces();
   let localIp = 'localhost'; // Default fallback
-  
+
   // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
   for (const interfaceName in networkInterfaces) {
     const addresses = networkInterfaces[interfaceName];
@@ -35,7 +35,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [`${process.env.ORIGIN}`, `http://${host}:4200`],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type', 
+    allowedHeaders: 'Content-Type',
     credentials: true,
   });
 

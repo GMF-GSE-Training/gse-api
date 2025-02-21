@@ -39,7 +39,7 @@ Response Body (success) :
     "links": {
       "self": "/users/1",
       "update": "/users/1",
-      "delete": "/users/1",
+      "delete": "/users/1"
     }
   }
 }
@@ -51,7 +51,7 @@ Response Body (fail) :
 {
   "code": "500",
   "status": "SERVER_ERROR",
-  "errors": "",
+  "errors": ""
 }
 ```
 
@@ -80,7 +80,7 @@ Response Body (success) :
     "links": {
       "self": "/users/1",
       "update": "/users/1",
-      "delete": "/users/1",
+      "delete": "/users/1"
     }
   }
 }
@@ -92,7 +92,7 @@ Response Body (fail) :
 {
   "code": "401",
   "status": "UNAUTHORIZED",
-  "errors": "",
+  "errors": ""
 }
 ```
 
@@ -105,6 +105,7 @@ Headers :
 - Authorization : token
 
 Query Parameter :
+
 - paging : number, default 1
 - size : number, default 10
 
@@ -148,11 +149,10 @@ Response Body (success) :
     "size": 100,
     "links": {
       "next": "/users/list/result?page=2&size=10",
-      "prev": null,
+      "prev": null
     }
   }
 }
-
 ```
 
 Response Body (fail) :
@@ -161,7 +161,7 @@ Response Body (fail) :
 {
   "code": "403",
   "status": "FORBIDDEND",
-  "errors": "",
+  "errors": ""
 }
 ```
 
@@ -169,7 +169,7 @@ Response Body (fail) :
 
 Endpoint : PATCH /users/:userId
 
-Headers : 
+Headers :
 
 - Authorization : token
 
@@ -182,7 +182,7 @@ Request Body :
   "name": "John Doe, optional",
   "password": "rahasia, optional",
   "dinas": "TU, optional",
-  "role": "super admin, optional",
+  "role": "super admin, optional"
 }
 ```
 
@@ -200,9 +200,9 @@ Response Body (success) :
     "role": "super admin",
     "no_peg": "12345",
     "links": {
-        "self": "/users/2",
-        "update": "/users/2",
-        "delete": "/users/2"
+      "self": "/users/2",
+      "update": "/users/2",
+      "delete": "/users/2"
     }
   }
 }
@@ -215,12 +215,8 @@ Response Body (fail) :
   "code": "404",
   "status": "NOT_FOUND",
   "errors": {
-    "id": [
-      "",
-    ],
-    "name": [
-      "",
-    ],
+    "id": [""],
+    "name": [""]
   }
 }
 ```
@@ -249,7 +245,7 @@ Response Body (fail) :
 {
   "code": "500",
   "status": "SERVER_ERROR",
-  "errors": "",
+  "errors": ""
 }
 ```
 
@@ -262,6 +258,7 @@ Headers :
 - Authorization : token
 
 Query Parameter :
+
 - No Pegawai: string, user no_pegawai, optional
 - email : string, user email, optional
 - name : string, user name, optional
@@ -272,6 +269,7 @@ Query Parameter :
 - size : number, default 10
 
 Request Header :
+
 - X-API-TOKEN : token
 
 Response Body (Success) :
@@ -314,7 +312,7 @@ Response Body (Success) :
     "size": 100,
     "links": {
       "next": "/users/search/result?paging=2&size=10",
-      "prev": null,
+      "prev": null
     }
   }
 }
@@ -326,6 +324,6 @@ Response Body (Failed) :
 {
   "code": "500",
   "status": "SERVER_ERROR",
-  "errors": "",
+  "errors": ""
 }
 ```

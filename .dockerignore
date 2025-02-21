@@ -13,8 +13,10 @@ prisma/migrations/
 *.lock
 
 # dotenv environment variable files
+.env
 .env.local
 # !*.env
+.env.staging
 .env.development
 .env.development.local
 .env.test.local

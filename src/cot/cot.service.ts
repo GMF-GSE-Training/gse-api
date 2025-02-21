@@ -313,6 +313,11 @@ export class CotService {
                         },
                     },
                 },
+                _count: {
+                  select: {
+                      participantsCots: true
+                  }
+              },
             },
             skip: (request.page - 1) * request.size,
             take: request.size,
@@ -341,6 +346,8 @@ export class CotService {
             id: cot.id,
             startDate: cot.startDate,
             endDate: cot.endDate,
+            numberOfParticipants: cot._count.participantsCots,
+            trainingLocation: cot.trainingLocation,
             capability: cot.capabilityCots[0]?.capability
                 ? {
                     ratingCode: cot.capabilityCots[0].capability.ratingCode,

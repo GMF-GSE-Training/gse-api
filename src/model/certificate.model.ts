@@ -1,4 +1,4 @@
 export interface CreateCertificate {
-    theoryScore: number;
-    practiceScore: number;
+  theoryScore: number;
+  practiceScore: number;
 }

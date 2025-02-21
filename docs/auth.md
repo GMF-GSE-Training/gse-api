@@ -32,7 +32,7 @@ Response Body (success) :
     "link": {
       "self": "/auth/current",
       "update": "/auth/current",
-      "logout": "/auth/current",
+      "logout": "/auth/current"
     }
   }
 }
@@ -45,14 +45,8 @@ Response Body (fail) :
   "code": "400",
   "status": "BAD_REQUEST",
   "errors": {
-    "id": [
-      "",
-      "",
-    ],
-    "name": [
-      "",
-      "",
-    ],
+    "id": ["", ""],
+    "name": ["", ""]
   }
 }
 ```
@@ -80,14 +74,14 @@ Response Body (success) :
     "id": 1,
     "email": "johndoe@example.com",
     "name": "Jogn Doe",
-    "dinas": "TU",  
+    "dinas": "TU",
     "role": "super admin",
     "no_peg": "12345",
     "token": "session_id_generated",
     "link": {
       "self": "/auth/current",
       "update": "/auth/current",
-      "logout": "/auth/current",
+      "logout": "/auth/current"
     }
   }
 }
@@ -100,12 +94,8 @@ Response Body (fail) :
   "code": "404",
   "status": "NOT_FOUND",
   "errors": {
-    "id": [
-      "",
-    ],
-    "name": [
-      "",
-    ],
+    "id": [""],
+    "name": [""]
   }
 }
 ```
@@ -134,12 +124,12 @@ Response Body (success) :
     "no_peg": "12345",
     "role": {
       "id": 2,
-      "role": "super admin",
+      "role": "super admin"
     },
     "link": {
       "self": "/auth/current",
       "update": "/auth/current",
-      "logout": "/auth/current",
+      "logout": "/auth/current"
     }
   }
 }
@@ -151,7 +141,7 @@ Response Body (fail) :
 {
   "code": "401",
   "status": "UNAUTHORIZED",
-  "errors": "",
+  "errors": ""
 }
 ```
 
@@ -159,7 +149,7 @@ Response Body (fail) :
 
 Endpoint : PATCH /auth/me
 
-Headers : 
+Headers :
 
 - Authorization : token
 
@@ -172,7 +162,7 @@ Request Body :
   "name": "John Doe, optional",
   "password": "rahasia, optional",
   "dinas": "TU, optional",
-  "role": "super admin, optional",
+  "role": "super admin, optional"
 }
 ```
 
@@ -192,7 +182,7 @@ Response Body (success) :
     "link": {
       "self": "/auth/current",
       "update": "/auth/current",
-      "logout": "/auth/current",
+      "logout": "/auth/current"
     }
   }
 }
@@ -205,12 +195,8 @@ Response Body (fail) :
   "code": "404",
   "status": "NOT_FOUND",
   "errors": {
-    "id": [
-      "",
-    ],
-    "name": [
-      "",
-    ],
+    "id": [""],
+    "name": [""]
   }
 }
 ```
@@ -239,6 +225,6 @@ Response Body (fail) :
 {
   "code": "500",
   "status": "SERVER_ERROR",
-  "errors": "",
+  "errors": ""
 }
 ```

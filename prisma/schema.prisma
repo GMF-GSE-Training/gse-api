@@ -45,6 +45,7 @@ model Role {
   @@map("roles")
 }
 
+
 model Participant {
   id                            String              @id @default(uuid())
   idNumber                      String?             @unique @db.VarChar(20)

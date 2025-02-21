@@ -17,8 +17,9 @@ async function bootstrap() {
     app.use(cookieParser());
 
     const nodeEnv = (configService.get('NODE_ENV') as string) || process.env.NODE_ENV || 'development';
-    const localIp = getLocalIpAddress() || '127.0.0.1';
-    const host = nodeEnv === 'development' ? localIp : (configService.get('HOST') as string) || process.env.HOST || 'localhost';
+    // const localIp = getLocalIpAddress() || '127.0.0.1';
+    // const host = nodeEnv === 'development' ? localIp : (configService.get('HOST') as string) || process.env.HOST || 'localhost';
+    const host = (configService.get('HOST') as string) || 'localhost';
     const port = (configService.get('PORT') as number) || process.env.PORT || (nodeEnv === 'development' ? 3000 : 3000);
     const protocol = (configService.get('PROTOCOL') as string) || process.env.PROTOCOL || (nodeEnv === 'production' ? 'https' : 'http');
     const frontendUrl = (configService.get('FRONTEND_URL') as string) || process.env.FRONTEND_URL || 'http://localhost:4200';

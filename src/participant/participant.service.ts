@@ -314,7 +314,7 @@ export class ParticipantService {
 
         // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
         const networkInterfaces = os.networkInterfaces();
-        let localIp = 'localhost'; // Default fallback
+        let localIp = 'localhost'; // Default fallbackf
         
         // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
         for (const interfaceName in networkInterfaces) {
@@ -426,7 +426,7 @@ export class ParticipantService {
             }
         }
 
-        return "Participant berhasil diperbari";
+        return "Participant berhasil diperbarui";
     }
 
     async deleteParticipant(participantId: string, user: CurrentUserRequest): Promise<string> {

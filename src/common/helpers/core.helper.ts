@@ -13,24 +13,15 @@ export class CoreHelper {
   constructor(private prismaService: PrismaService) {}
 
   async ensureUniqueFields(
-    tableName: string,
-    data: UniqueFieldCheck[],
-    excludeId?: string,
+    table: string,
+    fields: { field: string; value: string; message: string }[],
+    prismaInstance?: any
   ): Promise<void> {
-    for (const { field, value, message } of data) {
-      if (!value || value === null || value === '') {
-        continue;
-      }
-
-      const condition: any = { [field]: value };
-      if (excludeId) {
-        condition.NOT = { id: excludeId };
-      }
-
-      const count = await this.prismaService[tableName].count({
-        where: condition,
+    const db = prismaInstance || this.prismaService;
+    for (const { field, value, message } of fields) {
+      const count = await db[table].count({
+        where: { [field]: value },
       });
-
       if (count > 0) {
         throw new HttpException(message, 400);
       }

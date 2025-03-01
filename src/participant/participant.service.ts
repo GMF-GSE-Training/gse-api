@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from "@nestjs/common";
+import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../common/service/prisma.service";
 import { CreateParticipantRequest, ParticipantResponse, UpdateParticipantRequest } from "../model/participant.model";
 import * as QRCode from 'qrcode';
@@ -17,12 +17,29 @@ import * as os from 'os';
 
 @Injectable()
 export class ParticipantService {
+    private readonly logger = new Logger(ParticipantService.name);
     constructor(
         private readonly prismaService: PrismaService,
         private readonly validationService: ValidationService,
         private readonly configService: ConfigService,
         private readonly coreHelper: CoreHelper,
     ) {}
+
+    private getBaseUrl(type: 'frontend' | 'backend'): string {
+        const protocol = this.configService.get<string>('PROTOCOL') || 'http';
+        const host = this.configService.get<string>('HOST') || 'localhost';
+        const port = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_PORT' : 'PORT') || '4200';
+    
+        const envUrl = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_URL' : 'BACKEND_URL');
+        if (envUrl) {
+            this.logger.debug(`Menggunakan ${type} URL dari .env: ${envUrl}`);
+            return envUrl;
+        }
+    
+        const constructedUrl = `${protocol}://${host}:${port}`;
+        this.logger.warn(`Tidak ada ${type} URL di .env, menggunakan URL default: ${constructedUrl}`);
+        return constructedUrl;
+    }
 
     async createParticipant(data: CreateParticipantRequest, user: CurrentUserRequest): Promise<ParticipantResponse> {
         for (const key in data) {
@@ -150,6 +167,7 @@ export class ParticipantService {
     }
 
     async downloadIdCard(participantId: string): Promise<Buffer> {
+        // Ambil data peserta
         const participant = await this.prismaService.participant.findUnique({
             where: { id: participantId },
             select: {
@@ -159,42 +177,28 @@ export class ParticipantService {
                 company: true,
                 nationality: true,
                 qrCode: true,
-            }
+            },
         });
-    
+
         if (!participant) {
             throw new HttpException('Peserta tidak ditemukan', 404);
         }
-    
+
         if (!participant.foto || !participant.company || !participant.nationality || !participant.qrCode) {
             throw new HttpException('ID Card tidak bisa diunduh, lengkapi data terlebih dahulu', 400);
         }
-    
-        // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-        const networkInterfaces = os.networkInterfaces();
-        let localIp = 'localhost'; // Default fallback
-        
-        // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-        for (const interfaceName in networkInterfaces) {
-            const addresses = networkInterfaces[interfaceName];
-            if (addresses) {
-                for (const addr of addresses) {
-                    if (addr.family === 'IPv4' && !addr.internal) {
-                        localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-                        break;
-                    }
-                }
-            }
-        }
-    
-        const gmfLogoUrl = `http://${localIp}:3000/assets/images/Logo_GMF_Aero_Asia.png`;
-    
+
+        // Gunakan BACKEND_URL dari .env, fallback ke IP lokal
+        const backendUrl = this.getBaseUrl('backend');
+        const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
+
+        // Konversi data ke base64
         const photoBase64 = Buffer.from(participant.foto).toString('base64');
         const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
         const photoType = this.getMediaType(Buffer.from(participant.foto));
         const qrCodeType = this.getMediaType(Buffer.from(participant.qrCode));
-    
-        // Render EJS template
+
+        // Render template EJS
         const templatePath = join(__dirname, '..', 'templates', 'id-card', 'id-card.ejs');
         const idCard = await ejs.renderFile(templatePath, {
             gmfLogoUrl,
@@ -207,16 +211,19 @@ export class ParticipantService {
             idNumber: participant.idNumber,
             nationality: participant.nationality,
         });
-    
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
-        await page.setContent(idCard, { waitUntil: 'networkidle0' });
-    
-        const pdfBuffer = await page.pdf({ format: 'A4' });
-    
-        await browser.close(); // Don't forget to close the browser after generating PDF
-    
-        return Buffer.from(pdfBuffer);
+
+        // Generate PDF dengan penanganan kesalahan
+        try {
+            const browser = await puppeteer.launch();
+            const page = await browser.newPage();
+            await page.setContent(idCard, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({ format: 'A4' });
+            await browser.close();
+            return Buffer.from(pdfBuffer);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            throw new HttpException('Gagal menghasilkan ID Card PDF', 500);
+        }
     }
 
     async downloadDocument(participantId: string): Promise<Buffer> {
@@ -300,44 +307,59 @@ export class ParticipantService {
     }
 
     async getIdCard(participantId: string): Promise<string> {
+        this.logger.debug(`Rendering ID card HTML for participant ID: ${participantId}`);
+
+        // Validasi input
+        if (!participantId || participantId.trim() === '') {
+          this.logger.warn('Participant ID is empty or invalid');
+          throw new HttpException('ID peserta tidak valid', 400);
+        }
+
+        // Ambil data peserta
         const participant = await this.prismaService.participant.findUnique({
-            where: { id: participantId },
+          where: { id: participantId },
         });
-    
+
         if (!participant) {
-            throw new HttpException('Peserta tidak ditemukan', 404);
-        }
-    
-        if (!participant.foto || !participant.company || !participant.nationality || !participant.qrCode) {
-            throw new HttpException('ID Card tidak bisa dilihat, lengkapi data terlebih dahulu', 400);
+          this.logger.warn(`Participant not found for ID: ${participantId}`);
+          throw new HttpException('Peserta tidak ditemukan', 404);
         }
 
-        // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-        const networkInterfaces = os.networkInterfaces();
-        let localIp = 'localhost'; // Default fallbackf
-        
-        // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-        for (const interfaceName in networkInterfaces) {
-            const addresses = networkInterfaces[interfaceName];
-            if (addresses) {
-                for (const addr of addresses) {
-                    if (addr.family === 'IPv4' && !addr.internal) {
-                        localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-                        break;
-                    }
-                }
-            }
+        // Validasi data yang diperlukan
+        const requiredFields = {
+          foto: participant.foto,
+          company: participant.company,
+          nationality: participant.nationality,
+          qrCode: participant.qrCode,
+        };
+        const missingFields = Object.entries(requiredFields)
+          .filter(([_, value]) => !value)
+          .map(([key]) => key);
+        if (missingFields.length > 0) {
+          this.logger.warn(`Missing required fields: ${missingFields.join(', ')}`);
+          throw new HttpException('ID Card tidak bisa dilihat, lengkapi data terlebih dahulu', 400);
         }
 
-        const gmfLogoUrl = `http://${localIp}:3000/assets/images/Logo_GMF_Aero_Asia.png`;
-        const photoBase64 = Buffer.from(participant.foto).toString('base64');
-        const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
-        const photoType = this.getMediaType(Buffer.from(participant.foto));
-        const qrCodeType = this.getMediaType(Buffer.from(participant.qrCode));
+        // Konversi Uint8Array ke Buffer secara eksplisit
+        const photoBuffer = Buffer.from(participant.foto);
+        const qrCodeBuffer = Buffer.from(participant.qrCode);
 
-        // Render EJS template
+        // Konversi ke base64
+        const photoBase64 = photoBuffer.toString('base64');
+        const qrCodeBase64 = qrCodeBuffer.toString('base64');
+
+        // Dapatkan tipe media
+        const photoType = this.getMediaType(photoBuffer);
+        const qrCodeType = this.getMediaType(qrCodeBuffer);
+
+        // Gunakan BACKEND_URL dari .env
+        const backendUrl = this.getBaseUrl('backend');
+        const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
+
+        // Render template EJS
         const templatePath = join(__dirname, '..', 'templates', 'id-card', 'id-card.ejs');
-        const idCard = await ejs.renderFile(templatePath, {
+        try {
+          const idCard = await ejs.renderFile(templatePath, {
             gmfLogoUrl,
             photoBase64,
             qrCodeBase64,
@@ -347,9 +369,13 @@ export class ParticipantService {
             company: participant.company,
             idNumber: participant.idNumber,
             nationality: participant.nationality,
-        });
-    
-        return idCard;
+          });
+          this.logger.debug(`Successfully rendered ID card HTML for participant ID: ${participantId}`);
+          return idCard;
+        } catch (error) {
+          this.logger.error('Failed to render EJS template', error.stack);
+          throw new HttpException('Gagal merender tampilan ID Card', 500);
+        }
     }
 
     async updateParticipant(participantId: string, req: UpdateParticipantRequest, user: CurrentUserRequest): Promise<string> {
@@ -597,11 +623,27 @@ export class ParticipantService {
         return this.coreHelper.validateActions(userRole, accessMap);
     }
 
+    // private getMediaType(buffer: Buffer): string {
+    //     const header = buffer.toString('hex', 0, 4);
+    //     if (header.startsWith('89504e47')) return 'image/png'; // PNG
+    //     if (header.startsWith('ffd8ff')) return 'image/jpeg'; // JPEG
+    //     if (header.startsWith('25504446')) return 'application/pdf'; // PDF
+    //     throw new Error('Unable to detect file type');
+    // }
+
     private getMediaType(buffer: Buffer): string {
-        const header = buffer.toString('hex', 0, 4);
-        if (header.startsWith('89504e47')) return 'image/png'; // PNG
-        if (header.startsWith('ffd8ff')) return 'image/jpeg'; // JPEG
-        if (header.startsWith('25504446')) return 'application/pdf'; // PDF
-        throw new Error('Unable to detect file type');
+        const signatures = {
+          'image/png': Buffer.from([0x89, 0x50, 0x4e, 0x47]),      // PNG
+          'image/jpeg': Buffer.from([0xff, 0xd8, 0xff]),          // JPEG
+          'application/pdf': Buffer.from([0x25, 0x50, 0x44, 0x46]), // PDF
+        };
+    
+        for (const [type, signature] of Object.entries(signatures)) {
+          if (buffer.subarray(0, signature.length).equals(signature)) {
+            return type;
+          }
+        }
+    
+        throw new HttpException('Tipe file tidak didukung', 400);
+      }
     }
-}

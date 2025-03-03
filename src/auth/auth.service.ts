@@ -1,4 +1,5 @@
 import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
+import { User } from '@prisma/client';
 import { PrismaService } from '../common/service/prisma.service';
 import { ValidationService } from '../common/service/validation.service';
 import {
@@ -412,6 +413,7 @@ export class AuthService {
               { field: 'nik', value: registerRequest.nik, message: 'NIK sudah digunakan' },
               { field: 'email', value: registerRequest.email, message: 'Email sudah digunakan' },
             ],
+            undefined,
             prisma // Pastikan CoreHelper mendukung instance Prisma
           );
 
@@ -549,7 +551,8 @@ export class AuthService {
       req,
     );
 
-    let user: any;
+    // Gunakan tipe User dari Prisma untuk kejelasan
+    let user: User | null;
     if (loginRequest.identifier.includes('@')) {
       user = await this.prismaService.user.findFirst({
         where: {

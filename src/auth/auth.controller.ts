@@ -41,54 +41,6 @@ export class AuthController {
         return buildResponse(HttpStatus.OK, result);
     }
 
-    // @Get('/verify-account/:token')
-    // async accountVerification(@Param('token') token: string, @Res() res: Response): Promise<void> {
-    //     // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-    //     const networkInterfaces = os.networkInterfaces();
-    //     let localIp = 'localhost'; // Default fallback
-        
-    //     // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-    //     for (const interfaceName in networkInterfaces) {
-    //         const addresses = networkInterfaces[interfaceName];
-    //         if (addresses) {
-    //             for (const addr of addresses) {
-    //                 if (addr.family === 'IPv4' && !addr.internal) {
-    //                     localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-    //                     break;
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     try {
-    //         const result = await this.authService.accountVerification(token);
-            
-    //         res.cookie('refresh_token', result.refreshToken, {
-    //             httpOnly: true,
-    //             secure: this.configService.get<string>('NODE_ENV') === 'production',
-    //             sameSite: 'lax',
-    //             path: '/',
-    //             maxAge: 1000 * 60 * 60 * 24,
-    //         });
-            
-    //         res.cookie('access_token', result.accessToken, {
-    //             httpOnly: true,
-    //             secure: this.configService.get<string>('NODE_ENV') === 'production',
-    //             sameSite: 'lax',
-    //             path: '/',
-    //             maxAge: 1000 * 60 * 60 * 24,
-    //         });
-            
-    //         const redirectUrl = `http://${localIp}:4200/home`;
-    //         return res.redirect(redirectUrl);
-    //     } catch (error) {
-    //         // Tangani kesalahan dengan redirect ke halaman login atau halaman error
-    //         console.log(error);
-    //         const redirectUrl = `http://${localIp}:4200/verification?error=${error.message}`;
-    //         return res.redirect(redirectUrl);
-    //     }
-    // }
-
     @Get('/verify-account/:token')
     async accountVerification(@Param('token') token: string, @Res() res: Response): Promise<void> {
         this.logger.debug(`Memulai verifikasi akun dengan token: ${token}`);
@@ -196,37 +148,6 @@ export class AuthController {
         return buildResponse(HttpStatus.OK, result);
     }
 
-    // @Get('/verify-reset-password/:token')
-    // async verifyPasswordResetRequestToken(@Param('token') token: string, @Res() res: Response): Promise<WebResponse<boolean>> {
-    //     // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-    //     const networkInterfaces = os.networkInterfaces();
-    //     let localIp = 'localhost'; // Default fallback
-        
-    //     // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-    //     for (const interfaceName in networkInterfaces) {
-    //         const addresses = networkInterfaces[interfaceName];
-    //         if (addresses) {
-    //             for (const addr of addresses) {
-    //                 if (addr.family === 'IPv4' && !addr.internal) {
-    //                     localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-    //                     break;
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     try {
-    //         const result = await this.authService.verifyPasswordResetRequestToken(token);
-    //         res.redirect(`http://${localIp}:4200/reset/${token}`);
-    //         return buildResponse(HttpStatus.OK, result);
-    //     } catch (error) {
-    //         // Tangani kesalahan dengan redirect ke halaman login atau halaman error
-    //         console.log(error);
-    //         const redirectUrl = `http://${localIp}:4200/password-reset?error=${error.message}`;
-    //         res.redirect(redirectUrl);
-    //     }
-    // }
-
     @Get('/verify-reset-password/:token')
     async verifyPasswordResetRequestToken(
         @Param('token') token: string,
@@ -271,51 +192,6 @@ export class AuthController {
         const result = await this.authService.updateEmailRequest(email, user);
         return buildResponse(HttpStatus.OK, result);
     }
-
-    // @Get('/update-email/verify/:token')
-    // @HttpCode(200)
-    // @UseGuards(AuthGuard)
-    // async verifyUpdateEmailRequestToken(@User() user: CurrentUserRequest, @Param('token') token: string, @Res() res: Response): Promise<WebResponse<string>>{
-    //     // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-    //     const networkInterfaces = os.networkInterfaces();
-    //     let localIp = 'localhost'; // Default fallback
-        
-    //     // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-    //     for (const interfaceName in networkInterfaces) {
-    //         const addresses = networkInterfaces[interfaceName];
-    //         if (addresses) {
-    //             for (const addr of addresses) {
-    //                 if (addr.family === 'IPv4' && !addr.internal) {
-    //                     localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-    //                     break;
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     try {
-    //         const result = await this.authService.verifyUpdateEmailRequestToken(token, user);
-    //         if(user.role.name.toLowerCase() === 'user') {
-    //             res.redirect(`http://${localIp}:4200/participants/${user.participantId}/profile/account?success=${result}`);
-    //         } else {
-    //             res.redirect(`http://${localIp}:4200/users/${user.id}/account?success=${result}`)
-    //         }
-    //         return buildResponse(HttpStatus.OK, result);
-    //     } catch (error) {
-    //         // Tangani kesalahan dengan redirect ke halaman login atau halaman error
-    //         console.log(error);
-    //         if(user) {
-    //             if(user.role.name.toLowerCase() === 'user') {
-    //                 res.redirect(`http://${localIp}:4200/participants/${user.participantId}/profile/account?error=${error.message}`);
-    //             } else {
-    //                 res.redirect(`http://${localIp}:4200/users/${user.id}/account?error=${error.message}`)
-    //             }
-    //         } else {
-    //             const redirectUrl = `http://${localIp}:4200/home`;
-    //             res.redirect(redirectUrl);
-    //         }
-    //     }
-    // }
 
     @Get('/update-email/verify/:token')
     @HttpCode(200)

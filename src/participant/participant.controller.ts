@@ -18,7 +18,6 @@ import {
   UploadedFiles,
   UseGuards,
   UseInterceptors,
-  Header,
 } from '@nestjs/common';
 import { ParticipantService } from './participant.service';
 import {

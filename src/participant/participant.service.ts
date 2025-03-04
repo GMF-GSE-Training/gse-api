@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from "@nestjs/common";
+import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../common/service/prisma.service";
 import { CreateParticipantRequest, ParticipantResponse, UpdateParticipantRequest } from "../model/participant.model";
 import * as QRCode from 'qrcode';
@@ -17,12 +17,34 @@ import * as os from 'os';
 
 @Injectable()
 export class ParticipantService {
+    private readonly logger = new Logger(ParticipantService.name);
     constructor(
         private readonly prismaService: PrismaService,
         private readonly validationService: ValidationService,
         private readonly configService: ConfigService,
         private readonly coreHelper: CoreHelper,
     ) {}
+
+    private getBaseUrl(type: 'frontend' | 'backend'): string {
+        const protocol = this.configService.get<string>('PROTOCOL') || 'http';
+        const host = this.configService.get<string>('HOST') || 'localhost';
+        const port = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_PORT' : 'PORT') || '4200';
+    
+        const envUrl = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_URL' : 'BACKEND_URL');
+        if (envUrl) {
+            this.logger.debug(`Menggunakan ${type} URL dari .env: ${envUrl}`);
+            return envUrl;
+        }
+    
+        const constructedUrl = `${protocol}://${host}:${port}`;
+        this.logger.warn(`Tidak ada ${type} URL di .env, menggunakan URL default: ${constructedUrl}`);
+        return constructedUrl;
+    }
+
+    async uploadParticipantFile(buffer: Buffer): Promise<void> {
+        const mediaType = this.coreHelper.getMediaType(buffer);
+        this.logger.log(`File type detected: ${mediaType}`);
+    }
 
     async createParticipant(data: CreateParticipantRequest, user: CurrentUserRequest): Promise<ParticipantResponse> {
         for (const key in data) {
@@ -149,131 +171,124 @@ export class ParticipantService {
         return this.toParticipantResponse(participant);
     }
 
-    async downloadIdCard(participantId: string): Promise<Buffer> {
-        const participant = await this.prismaService.participant.findUnique({
-            where: { id: participantId },
-            select: {
-                idNumber: true,
-                name: true,
-                foto: true,
-                company: true,
-                nationality: true,
-                qrCode: true,
-            }
-        });
-    
-        if (!participant) {
-            throw new HttpException('Peserta tidak ditemukan', 404);
-        }
-    
-        if (!participant.foto || !participant.company || !participant.nationality || !participant.qrCode) {
+    async downloadIdCard(participantId: string): Promise<{ pdfBuffer: Buffer; participantName: string }> {
+        this.logger.debug(`Mengunduh ID Card untuk participant ID: ${participantId}`);
+
+        // Ambil data peserta
+        const participant = await this.findOneParticipant(participantId);
+        const requiredFields = {
+            foto: participant.foto,
+            company: participant.company,
+            nationality: participant.nationality,
+            qrCode: participant.qrCode,
+        };
+        const missingFields = Object.entries(requiredFields)
+            .filter(([_, value]) => !value)
+            .map(([key]) => key);
+
+        if (missingFields.length > 0) {
+            this.logger.warn(`Data ID Card tidak lengkap: ${missingFields.join(', ')}`);
             throw new HttpException('ID Card tidak bisa diunduh, lengkapi data terlebih dahulu', 400);
         }
-    
-        // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-        const networkInterfaces = os.networkInterfaces();
-        let localIp = 'localhost'; // Default fallback
-        
-        // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-        for (const interfaceName in networkInterfaces) {
-            const addresses = networkInterfaces[interfaceName];
-            if (addresses) {
-                for (const addr of addresses) {
-                    if (addr.family === 'IPv4' && !addr.internal) {
-                        localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-                        break;
-                    }
-                }
-            }
-        }
-    
-        const gmfLogoUrl = `http://${localIp}:3000/assets/images/Logo_GMF_Aero_Asia.png`;
-    
+
+        // Konfigurasi URL dan konversi data
+        const backendUrl = this.getBaseUrl('backend');
+        const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
         const photoBase64 = Buffer.from(participant.foto).toString('base64');
         const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
-        const photoType = this.getMediaType(Buffer.from(participant.foto));
-        const qrCodeType = this.getMediaType(Buffer.from(participant.qrCode));
-    
-        // Render EJS template
+        const photoType = this.coreHelper.getMediaType(Buffer.from(participant.foto));
+        const qrCodeType = this.coreHelper.getMediaType(Buffer.from(participant.qrCode));
+
+        // Render template EJS
         const templatePath = join(__dirname, '..', 'templates', 'id-card', 'id-card.ejs');
-        const idCard = await ejs.renderFile(templatePath, {
-            gmfLogoUrl,
-            photoBase64,
-            qrCodeBase64,
-            photoType,
-            qrCodeType,
-            name: participant.name,
-            company: participant.company,
-            idNumber: participant.idNumber,
-            nationality: participant.nationality,
-        });
-    
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
-        await page.setContent(idCard, { waitUntil: 'networkidle0' });
-    
-        const pdfBuffer = await page.pdf({ format: 'A4' });
-    
-        await browser.close(); // Don't forget to close the browser after generating PDF
-    
-        return Buffer.from(pdfBuffer);
+        let idCardHtml: string;
+        try {
+            idCardHtml = await ejs.renderFile(templatePath, {
+                gmfLogoUrl,
+                photoBase64,
+                qrCodeBase64,
+                photoType,
+                qrCodeType,
+                name: participant.name,
+                company: participant.company,
+                idNumber: participant.idNumber,
+                nationality: participant.nationality,
+            });
+        } catch (error) {
+            this.logger.error('Gagal merender template EJS untuk ID Card', error.stack);
+            throw new HttpException('Gagal menghasilkan ID Card', 500);
+        }
+
+        // Generate PDF dengan Puppeteer
+        try {
+            const browser = await puppeteer.launch({
+                headless: true, // Kompatibel dengan semua versi
+                args: ['--no-sandbox', '--disable-setuid-sandbox'], // Hindari masalah izin
+            });
+            const page = await browser.newPage();
+            await page.setContent(idCardHtml, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({ format: 'A4' });
+            await browser.close();
+            this.logger.debug(`Berhasil menghasilkan PDF ID Card untuk participant ID: ${participantId}`);
+            return { pdfBuffer: Buffer.from(pdfBuffer), participantName: participant.name };
+        } catch (error) {
+            this.logger.error('Gagal menghasilkan PDF ID Card dengan Puppeteer', {
+                message: error.message,
+                stack: error.stack,
+            });
+            throw new HttpException('Gagal menghasilkan ID Card PDF', 500);
+        }
     }
 
-    async downloadDocument(participantId: string): Promise<Buffer> {
-        const participant = await this.prismaService.participant.findUnique({
-            where: { id: participantId },
-            select: {
-                name: true,
-                simA: true,
-                simB: true,
-                ktp: true,
-                suratSehatButaWarna: true,
-                suratBebasNarkoba: true
-            }
-        });
-    
-        if (!participant) {
-            throw new HttpException('Peserta tidak ditemukan', 404);
-        }
-    
-        if (!participant.simA || !participant.ktp || !participant.suratSehatButaWarna || !participant.suratBebasNarkoba) {
+    async downloadDocument(participantId: string): Promise<{ pdfBuffer: Buffer; participantName: string }> {
+        this.logger.debug(`Mengunduh dokumen untuk participant ID: ${participantId}`);
+
+        // Ambil data peserta
+        const participant = await this.findOneParticipant(participantId);
+        const requiredFields = {
+            simA: participant.simA,
+            ktp: participant.ktp,
+            suratSehatButaWarna: participant.suratSehatButaWarna,
+            suratBebasNarkoba: participant.suratBebasNarkoba,
+        };
+        const missingFields = Object.entries(requiredFields)
+            .filter(([_, value]) => !value)
+            .map(([key]) => key);
+
+        if (missingFields.length > 0) {
+            this.logger.warn(`Dokumen tidak lengkap: ${missingFields.join(', ')}`);
             throw new HttpException('Dokumen belum lengkap, lengkapi data terlebih dahulu', 400);
         }
-    
+
+        // Buat dokumen PDF baru
         const pdfDoc = await PDFDocument.create();
-    
-        // Helper function to handle both image and PDF
+
+        // Fungsi bantu untuk menambahkan file ke PDF
         const addFileToPdf = async (fileBuffer: Buffer, fileName: string) => {
+            const mimeType = this.coreHelper.getMediaType(fileBuffer);
             try {
-                const mimeType = this.getMediaType(fileBuffer);
-                
-                if (mimeType.startsWith('application/pdf')) {
+                if (mimeType === 'application/pdf') {
                     const existingPdf = await PDFDocument.load(fileBuffer);
                     const copiedPages = await pdfDoc.copyPages(existingPdf, existingPdf.getPageIndices());
                     copiedPages.forEach((page) => pdfDoc.addPage(page));
                 } else if (mimeType.startsWith('image/')) {
                     const page = pdfDoc.addPage();
                     const { width, height } = page.getSize();
-                    const imageBytes = fileBuffer;
-                    
                     let embeddedImage: PDFImage;
+
                     if (mimeType === 'image/jpeg') {
-                        embeddedImage = await pdfDoc.embedJpg(imageBytes);
+                        embeddedImage = await pdfDoc.embedJpg(fileBuffer);
                     } else if (mimeType === 'image/png') {
-                        embeddedImage = await pdfDoc.embedPng(imageBytes);
+                        embeddedImage = await pdfDoc.embedPng(fileBuffer);
                     } else {
-                        console.log(`Format gambar '${fileName}' tidak didukung`);
-                        return;
+                        this.logger.warn(`Format file '${fileName}' tidak didukung: ${mimeType}`);
+                        throw new Error(`Unsupported format`);
                     }
-                
-                    // Scale image to fit page while maintaining aspect ratio
-                    const scale = Math.min(
-                        width / embeddedImage.width, 
-                        height / embeddedImage.height
-                    );
+
+                    const scale = Math.min(width / embeddedImage.width, height / embeddedImage.height);
                     const scaledWidth = embeddedImage.width * scale;
                     const scaledHeight = embeddedImage.height * scale;
-    
+
                     page.drawImage(embeddedImage, {
                         x: (width - scaledWidth) / 2,
                         y: (height - scaledHeight) / 2,
@@ -281,75 +296,83 @@ export class ParticipantService {
                         height: scaledHeight,
                     });
                 } else {
-                    console.log(`Format gambar '${fileName}' tidak didukung`);
+                    this.logger.warn(`Tipe file '${fileName}' tidak didukung: ${mimeType}`);
+                    throw new Error(`Unsupported file type`);
                 }
             } catch (error) {
-                console.error(`Error processing ${fileName}:`, error);
+                this.logger.error(`Gagal memproses dokumen '${fileName}'`, error.stack);
                 throw new HttpException(`Gagal memproses dokumen ${fileName}`, 500);
             }
         };
 
-        // Add each document to the final PDF
+        // Tambahkan dokumen ke PDF
         await addFileToPdf(Buffer.from(participant.simA), 'SIM A');
         await addFileToPdf(Buffer.from(participant.ktp), 'KTP');
         await addFileToPdf(Buffer.from(participant.suratSehatButaWarna), 'Surat Sehat Buta Warna');
         await addFileToPdf(Buffer.from(participant.suratBebasNarkoba), 'Surat Bebas Narkoba');
 
+        // Simpan dan kembalikan PDF
         const pdfBytes = await pdfDoc.save();
-        return Buffer.from(pdfBytes);
+        this.logger.debug(`Berhasil menghasilkan PDF dokumen untuk participant ID: ${participantId}`);
+        return { pdfBuffer: Buffer.from(pdfBytes), participantName: participant.name };
     }
 
     async getIdCard(participantId: string): Promise<string> {
-        const participant = await this.prismaService.participant.findUnique({
-            where: { id: participantId },
-        });
-    
-        if (!participant) {
-            throw new HttpException('Peserta tidak ditemukan', 404);
+        this.logger.debug(`Rendering ID Card HTML untuk participant ID: ${participantId}`);
+
+        // Validasi input
+        if (!participantId || participantId.trim() === '') {
+            this.logger.warn('Participant ID kosong atau tidak valid');
+            throw new HttpException('ID peserta tidak valid', 400);
         }
-    
-        if (!participant.foto || !participant.company || !participant.nationality || !participant.qrCode) {
+
+        // Ambil data peserta
+        const participant = await this.findOneParticipant(participantId);
+        const requiredFields = {
+            foto: participant.foto,
+            company: participant.company,
+            nationality: participant.nationality,
+            qrCode: participant.qrCode,
+        };
+        const missingFields = Object.entries(requiredFields)
+            .filter(([_, value]) => !value)
+            .map(([key]) => key);
+
+        if (missingFields.length > 0) {
+            this.logger.warn(`Data ID Card tidak lengkap: ${missingFields.join(', ')}`);
             throw new HttpException('ID Card tidak bisa dilihat, lengkapi data terlebih dahulu', 400);
         }
 
-        // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-        const networkInterfaces = os.networkInterfaces();
-        let localIp = 'localhost'; // Default fallbackf
-        
-        // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-        for (const interfaceName in networkInterfaces) {
-            const addresses = networkInterfaces[interfaceName];
-            if (addresses) {
-                for (const addr of addresses) {
-                    if (addr.family === 'IPv4' && !addr.internal) {
-                        localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-                        break;
-                    }
-                }
-            }
-        }
-
-        const gmfLogoUrl = `http://${localIp}:3000/assets/images/Logo_GMF_Aero_Asia.png`;
+        // Konversi data ke base64
         const photoBase64 = Buffer.from(participant.foto).toString('base64');
         const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
-        const photoType = this.getMediaType(Buffer.from(participant.foto));
-        const qrCodeType = this.getMediaType(Buffer.from(participant.qrCode));
+        const photoType = this.coreHelper.getMediaType(Buffer.from(participant.foto));
+        const qrCodeType = this.coreHelper.getMediaType(Buffer.from(participant.qrCode));
 
-        // Render EJS template
+        // Konfigurasi URL
+        const backendUrl = this.getBaseUrl('backend');
+        const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
+
+        // Render template EJS
         const templatePath = join(__dirname, '..', 'templates', 'id-card', 'id-card.ejs');
-        const idCard = await ejs.renderFile(templatePath, {
-            gmfLogoUrl,
-            photoBase64,
-            qrCodeBase64,
-            photoType,
-            qrCodeType,
-            name: participant.name,
-            company: participant.company,
-            idNumber: participant.idNumber,
-            nationality: participant.nationality,
-        });
-    
-        return idCard;
+        try {
+            const idCard = await ejs.renderFile(templatePath, {
+                gmfLogoUrl,
+                photoBase64,
+                qrCodeBase64,
+                photoType,
+                qrCodeType,
+                name: participant.name,
+                company: participant.company,
+                idNumber: participant.idNumber,
+                nationality: participant.nationality,
+            });
+            this.logger.debug(`Berhasil merender ID Card HTML untuk participant ID: ${participantId}`);
+            return idCard;
+        } catch (error) {
+            this.logger.error('Gagal merender template EJS untuk ID Card', error.stack);
+            throw new HttpException('Gagal merender tampilan ID Card', 500);
+        }
     }
 
     async updateParticipant(participantId: string, req: UpdateParticipantRequest, user: CurrentUserRequest): Promise<string> {
@@ -574,11 +597,13 @@ export class ParticipantService {
 
     private async findOneParticipant(participantId: string): Promise<Participant> {
         const participant = await this.prismaService.participant.findUnique({
-            where: {
-                id: participantId
-            },
+            where: { id: participantId },
         });
-        return participant
+        if (!participant) {
+            this.logger.warn(`Participant not found for ID: ${participantId}`);
+            throw new HttpException('Peserta tidak ditemukan', 404);
+        }
+        return participant;
     }
 
     private validateDinasForLcuRequest(participantDinas: string, lcuDinas: string) {
@@ -595,13 +620,5 @@ export class ParticipantService {
         };
         
         return this.coreHelper.validateActions(userRole, accessMap);
-    }
-
-    private getMediaType(buffer: Buffer): string {
-        const header = buffer.toString('hex', 0, 4);
-        if (header.startsWith('89504e47')) return 'image/png'; // PNG
-        if (header.startsWith('ffd8ff')) return 'image/jpeg'; // JPEG
-        if (header.startsWith('25504446')) return 'application/pdf'; // PDF
-        throw new Error('Unable to detect file type');
     }
 }

@@ -3,6 +3,7 @@ interface AppConfig {
   host: string;
   port: number;
   frontendUrl: string;
+  backendUrl: string;
   protocol: string;
   databaseUrl: string;
   qrCodeLink: string;
@@ -21,6 +22,7 @@ export default (): AppConfig => ({
   host: process.env.HOST,
   port: parseInt(process.env.PORT, 10) || 3000,
   frontendUrl: process.env.FRONTEND_URL,
+  backendUrl: process.env.BACKEND_URL,
   protocol: process.env.PROTOCOL || (process.env.NODE_ENV === 'production' ? 'https' : 'http'),
   databaseUrl: process.env.DATABASE_URL,
   qrCodeLink: process.env.QR_CODE_LINK,

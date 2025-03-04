@@ -32,6 +32,7 @@ import { RoleGuard } from '../shared/guard/role.guard';
 import { Roles } from '../shared/decorator/role.decorator';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { User } from 'src/shared/decorator/user.decorator';
+import { Response } from 'express';
 
 @Controller('/participants')
 export class ParticipantController {
@@ -324,8 +325,7 @@ export class ParticipantController {
     @Param('participantId', ParseUUIDPipe) participantId: string,
   ): Promise<string> {
     try {
-      const result = await this.participantService.getIdCard(participantId);
-      return result;
+      return await this.participantService.getIdCard(participantId);
     } catch (error) {
       throw new HttpException(error.message, error.status || 500);
     }
@@ -337,15 +337,30 @@ export class ParticipantController {
   @HttpCode(200)
   async downloadIdCard(
     @Param('participantId', ParseUUIDPipe) participantId: string,
-  ): Promise<StreamableFile> {
+    @Res() res: Response,
+  ): Promise<void> {
     try {
-      const pdfBuffer =
-        await this.participantService.downloadIdCard(participantId);
-      const filename = `ID_Card_${participantId}.pdf`;
-      return new StreamableFile(pdfBuffer, {
-        type: 'application/pdf',
-        disposition: `attachment; filename="${filename}"`,
+      const { pdfBuffer, participantName } = await this.participantService.downloadIdCard(participantId);
+      const sanitizedName = participantName
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
+      const filename = `ID_Card_${sanitizedName}_${participantId}.pdf`;
+
+      console.log(`Generated filename: ${filename}`);
+      const encodedFilename = encodeURIComponent(filename);
+      const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`;
+
+      // Set header secara langsung pada respons
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': disposition,
+        'X-Participant-Name': sanitizedName,
       });
+
+      console.log(`Sending X-Participant-Name: ${sanitizedName}`);
+      // Kirim buffer langsung ke client
+      res.send(pdfBuffer);
     } catch (error) {
       throw new HttpException(error.message, error.status || 500);
     }
@@ -359,9 +374,13 @@ export class ParticipantController {
     @Param('participantId', ParseUUIDPipe) participantId: string,
   ): Promise<StreamableFile> {
     try {
-      const pdfBuffer =
-        await this.participantService.downloadDocument(participantId);
-      const filename = `Document_${participantId}.pdf`;
+      const { pdfBuffer, participantName } = await this.participantService.downloadDocument(participantId);
+      const sanitizedName = participantName
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
+      const filename = `Document_${sanitizedName}_${participantId}.pdf`;
+
       return new StreamableFile(pdfBuffer, {
         type: 'application/pdf',
         disposition: `attachment; filename="${filename}"`,

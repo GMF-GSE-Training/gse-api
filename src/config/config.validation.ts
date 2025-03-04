@@ -15,6 +15,10 @@ export const validationSchema = Joi.object({
     .uri()
     .required()
     .messages({ 'any.required': 'FRONTEND_URL wajib diisi sebagai URI yang valid' }),
+  BACKEND_URL: Joi.string()
+    .uri()
+    .required()
+    .messages({ 'any.required': 'BACKEND_URL wajib diisi sebagai URI yang valid' }),
   PROTOCOL: Joi.string()
     .valid('http', 'https')
     .default('http')

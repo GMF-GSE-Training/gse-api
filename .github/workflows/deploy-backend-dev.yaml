@@ -1,0 +1,45 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: gmf-training
+
+      - name: Set-Up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: gmf-training
+
+      - name: Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker --quiet
+
+      - name: Build Docker Image
+        run: |
+          docker build -t gcr.io/gmf-training/dev-backend-web-server:latest .
+
+      - name: Push to GCR
+        run: |
+          docker push gcr.io/gmf-training/dev-backend-web-server:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy dev-backend-service \
+            --image gcr.io/gmf-training/dev-backend-web-server:latest \
+            --platform managed \
+            --region asia-southeast1 \
+            --allow-unauthenticated \
+            --set-env-vars "NODE_ENV=production,PROTOCOL=https,HOST=0.0.0.0,FRONTEND_URL=https://dev.gmf-aeroasia.publicvm.com,BACKEND_URL=https://dev-api.gmf-aeroasia.publicvm.com,DATABASE_URL=${{ secrets.DATABASE_URL }},QR_CODE_LINK=https://dev.gmf-aeroasia.publicvm.com/participants/{id}/detail,ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }},REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN }},VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN }},MAIL_HOST=smtp.gmail.com,MAIL_PORT=587,MAIL_USER=${{ secrets.MAIL_USER }},MAIL_PASS=${{ secrets.MAIL_PASS }},APP_NAME=Admin GMF Training"

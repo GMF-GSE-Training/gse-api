@@ -18,7 +18,7 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
           project_id: gmf-training
 
-      - name: Set up Google Cloud SDK
+      - name: Set Up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: gmf-training

@@ -1,10 +1,10 @@
 {
   "name": "backend-web-based-certificate-project",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A backend project for web-based certificate management",
   "author": "",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "",
   "repository": {
     "type": "git",
     "url": "https://github.com/AminudinAbdulloh/backend-projek-sertifikat-berbasis-web.git"
@@ -17,9 +17,10 @@
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/src/main",
+    "start:dev": "NODE_ENV=development nest start --watch",
+    "start:stag": "NODE_ENV=staging nest start",
+    "start:prod": "NODE_ENV=production node dist/src/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -49,7 +50,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "winston": "^3.17.0",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "joi": "^17.13.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.2",

@@ -4,7 +4,7 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { RoleModule } from './role/role.module';
 import { ParticipantModule } from './participant/participant.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule } from './config/config.module';
 import { CapabilityModule } from './capability/capability.module';
 import { CurriculumSyllabusModule } from './curriculum-syllabus/curriculum-syllabus.module';
 import { CotModule } from './cot/cot.module';
@@ -17,9 +17,7 @@ import { CertificateModule } from './certificate/certificate.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    ConfigModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'), // Mengarah ke folder 'public' di root proyek
     }),

@@ -12,6 +12,10 @@ export interface ParticipantCotResponse {
     practicalInstructor2: string;
     totalParticipants: number;
     status: string;
+    capability: {
+      ratingCode: string;
+      trainingName: string;
+    };
     participants: {
       data: {
         name: string;
@@ -31,4 +35,10 @@ export interface ParticipantCotResponse {
 
 export interface addParticipantToCot {
   participantIds: string[];
+}
+
+export interface AddParticipantResponse {
+  message: string;
+  updatedCount: number;
+  addedParticipants: string[];
 }

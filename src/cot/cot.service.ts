@@ -18,29 +18,22 @@ export class CotService {
     async createCot(request: CreateCot): Promise<string> {
         request.startDate = new Date(request.startDate);
         request.endDate = new Date(request.endDate);
-    
+
         const { capabilityId, ...createCotData } = this.validationService.validate(CotValidation.CREATE, request);
-    
+
         const createCot = await this.prismaService.cOT.create({
             data: createCotData
         });
-    
-        if(createCot) {
+
+        if (createCot) {
             await this.prismaService.capabilityCOT.create({
                 data: {
                     cotId: createCot.id,
                     capabilityId: capabilityId
                 }
             });
-            
-            await this.prismaService.participantsCOT.create({
-                data: {
-                    cotId: createCot.id,
-                    participantId: undefined // karena belum ada participant
-                }
-            });
-        };
-    
+        }
+
         return 'Cot berhasil dibuat';
     }
 
@@ -48,9 +41,7 @@ export class CotService {
         const userRole = user.role.name.toLowerCase();
 
         const cot = await this.prismaService.cOT.findUnique({
-            where: {
-                id: cotId
-            },
+            where: { id: cotId },
             include: {
                 capabilityCots: {
                     select: {
@@ -66,20 +57,17 @@ export class CotService {
                 _count: {
                     select: {
                         participantsCots: {
-                            where: userRole === 'lcu'
-                            ? {
-                                participant: {
-                                    dinas: user.dinas,
-                                }
+                            where: {
+                                participantId: { not: null },
+                                ...(userRole === 'lcu' ? { participant: { dinas: user.dinas } } : {})
                             }
-                            : undefined,
                         }
                     }
                 },
             }
         });
-    
-        if(!cot) {
+
+        if (!cot) {
             throw new HttpException('Cot Tidak ditemukan', 404);
         }
     

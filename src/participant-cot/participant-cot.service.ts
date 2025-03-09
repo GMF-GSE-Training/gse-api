@@ -5,6 +5,7 @@ import { CurrentUserRequest } from 'src/model/auth.model';
 import {
   addParticipantToCot,
   ParticipantCotResponse,
+  AddParticipantResponse,
 } from 'src/model/participant-cot.model';
 import { ListParticipantResponse } from 'src/model/participant.model';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
@@ -40,7 +41,6 @@ export class ParticipantCotService {
     );
     const { startDate, endDate } = currentCot;
 
-    // Construct base where clause
     const baseWhereClause: any = {
       AND: [],
       NOT: {
@@ -56,7 +56,6 @@ export class ParticipantCotService {
       }),
     };
 
-    // Add search filters if provided
     if (request.searchQuery) {
       baseWhereClause.AND.push({
         OR: [
@@ -101,7 +100,7 @@ export class ParticipantCotService {
     cotId: string,
     user: CurrentUserRequest,
     request: addParticipantToCot,
-  ): Promise<string> {
+  ): Promise<AddParticipantResponse> {
     const AddParticipantToCotRequest = this.validationService.validate(
       ParticipantCotValidation.ADD,
       request,
@@ -131,8 +130,7 @@ export class ParticipantCotService {
 
     if (
       userRole === 'lcu' &&
-      validParticipantIds.length !==
-        AddParticipantToCotRequest.participantIds.length
+      validParticipantIds.length !== AddParticipantToCotRequest.participantIds.length
     ) {
       throw new HttpException(
         `LCU hanya dapat menambahkan participant dari dinas yang sama (${user.dinas})`,
@@ -140,58 +138,48 @@ export class ParticipantCotService {
       );
     }
 
-    // Filter hanya ID yang valid
     if (validParticipantIds.length === 0) {
-      throw new HttpException(
-        'Tidak ada participant yang valid ditemukan',
-        404,
-      );
+      throw new HttpException('Tidak ada participant yang valid ditemukan', 404);
     }
 
-    const overlappingParticipants =
-      await this.prismaService.participantsCOT.findMany({
-        where: {
-          participantId: { in: validParticipantIds },
-          cot: {
-            capabilityCots: {
-              some: {
-                capabilityId: {
-                  in: cot.capabilityCots.map((cc) => cc.capabilityId),
-                },
+    const overlappingParticipants = await this.prismaService.participantsCOT.findMany({
+      where: {
+        participantId: { in: validParticipantIds },
+        cot: {
+          capabilityCots: {
+            some: {
+              capabilityId: {
+                in: cot.capabilityCots.map((cc) => cc.capabilityId),
               },
             },
-            OR: [
-              {
-                startDate: { lte: cot.endDate },
-                endDate: { gte: cot.startDate },
-              },
-            ],
           },
+          OR: [
+            {
+              startDate: { lte: cot.endDate },
+              endDate: { gte: cot.startDate },
+            },
+          ],
         },
-        include: { cot: true },
-      });
+      },
+      include: { cot: true },
+    });
 
     if (overlappingParticipants.length > 0) {
-      const overlappingIds = overlappingParticipants.map(
-        (op) => op.participantId,
-      );
+      const overlappingIds = overlappingParticipants.map((op) => op.participantId);
       throw new HttpException(
         `Participant dengan ID berikut tidak dapat didaftarkan karena jadwal bertabrakan: ${overlappingIds.join(', ')}`,
         400,
       );
     }
 
-    const existingParticipants =
-      await this.prismaService.participantsCOT.findMany({
-        where: {
-          cotId,
-          participantId: { in: validParticipantIds },
-        },
-      });
+    const existingParticipants = await this.prismaService.participantsCOT.findMany({
+      where: {
+        cotId,
+        participantId: { in: validParticipantIds },
+      },
+    });
 
-    const existingParticipantIds = existingParticipants.map(
-      (p) => p.participantId,
-    );
+    const existingParticipantIds = existingParticipants.map((p) => p.participantId);
     const newParticipantIds = validParticipantIds.filter(
       (id) => !existingParticipantIds.includes(id),
     );
@@ -203,6 +191,8 @@ export class ParticipantCotService {
       );
     }
 
+    console.log('Sebelum menambah peserta:', await this.prismaService.participantsCOT.findMany({ where: { cotId } }));
+
     const participantData = newParticipantIds.map((participantId) => ({
       participantId,
       cotId,
@@ -212,7 +202,20 @@ export class ParticipantCotService {
       data: participantData,
     });
 
-    return `${newParticipantIds.length} participant berhasil ditambahkan`;
+    console.log('Setelah menambah peserta:', await this.prismaService.participantsCOT.findMany({ where: { cotId } }));
+
+    const updatedCount = await this.prismaService.participantsCOT.count({
+      where: {
+        cotId,
+        participantId: { not: null },
+      },
+    });
+
+    return {
+      message: `${newParticipantIds.length} participant berhasil ditambahkan`,
+      updatedCount,
+      addedParticipants: newParticipantIds,
+    };
   }
 
   async listParticipantsCot(
@@ -221,7 +224,6 @@ export class ParticipantCotService {
     request: ListRequest,
   ): Promise<ParticipantCotResponse> {
     const userRole = user.role.name.toLowerCase();
-
     const isUser = userRole === 'user';
 
     let participantCotWhereClause: any = {};
@@ -241,7 +243,6 @@ export class ParticipantCotService {
       idNumber: true,
       name: true,
       dinas: true,
-      // hanya tambahkan simB, simA, tglKeluarSuratSehatButaWarna, dan tglKeluarSuratBebasNarkoba jika bukan role 'user'
       ...(userRole !== 'user' && {
         simB: true,
         simA: true,
@@ -275,7 +276,35 @@ export class ParticipantCotService {
           skip: (request.page - 1) * request.size,
           take: request.size,
         },
-        _count: { select: { participantsCots: true } },
+        _count: {
+          select: {
+            participantsCots: {
+              where:
+                userRole === 'lcu'
+                  ? {
+                      participantId: { not: null },
+                      participant: {
+                        dinas: user.dinas,
+                        ...participantCotWhereClause,
+                      },
+                    }
+                  : {
+                      participantId: { not: null },
+                      participant: participantCotWhereClause,
+                    },
+            },
+          },
+        },
+        capabilityCots: {
+          select: {
+            capability: {
+              select: {
+                ratingCode: true,
+                trainingName: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -283,15 +312,13 @@ export class ParticipantCotService {
       throw new HttpException('COT tidak ditemukan', 404);
     }
 
-    // Validasi akses untuk user
     if (isUser) {
-      const isParticipantLinked =
-        await this.prismaService.participantsCOT.count({
-          where: {
-            cotId: cotId,
-            participantId: user.participantId,
-          },
-        });
+      const isParticipantLinked = await this.prismaService.participantsCOT.count({
+        where: {
+          cotId: cotId,
+          participantId: user.participantId,
+        },
+      });
 
       if (!isParticipantLinked) {
         throw new HttpException(
@@ -310,7 +337,6 @@ export class ParticipantCotService {
       .map((participant) => {
         const participantData = {
           ...participant,
-          // Jika role bukan 'user', simB dan simA akan tetap ada
           ...(userRole !== 'user' && {
             simB: !!participant.simB,
             simA: !!participant.simA,
@@ -320,6 +346,11 @@ export class ParticipantCotService {
       });
 
     const actions = this.validateActions(userRole);
+
+    const capability = participantCot.capabilityCots[0]?.capability || {
+      ratingCode: '',
+      trainingName: '',
+    };
 
     const response: ParticipantCotResponse = {
       cot: {
@@ -333,6 +364,10 @@ export class ParticipantCotService {
         practicalInstructor2: participantCot.practicalInstructor2,
         totalParticipants,
         status: participantCot.status,
+        capability: {
+          ratingCode: capability.ratingCode,
+          trainingName: capability.trainingName,
+        },
         participants: {
           data: participants,
           paging: {
@@ -362,7 +397,6 @@ export class ParticipantCotService {
         },
       });
 
-    // Jika tidak ada data yang dihapus
     if (deletedParticipantFromCot.count === 0) {
       throw new HttpException('Data tidak ditemukan', 404);
     }

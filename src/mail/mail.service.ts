@@ -1,20 +1,33 @@
-import { MailerService } from '@nestjs-modules/mailer';
 import { Injectable } from '@nestjs/common';
-import { SendEmail } from 'src/model/mail.model';
 
+import { MailerService } from '@nestjs-modules/mailer';
+
+import { SendEmail } from '../model/mail.model.js';
+
+/**
+ *
+ */
 @Injectable()
 export class MailService {
+  /**
+   *
+   * @param mailerService
+   */
   constructor(private readonly mailerService: MailerService) {}
 
+  /**
+   *
+   * @param email
+   */
   async sendEmail(email: SendEmail) {
-    const { from, receptients, subject, html, placeholderReplacements } = email;
+    const { from, recipients, subject, template, context } = email;
     try {
       const result = await this.mailerService.sendMail({
         from,
-        to: receptients,
+        to: recipients,
         subject,
-        template: html,
-        context: placeholderReplacements,
+        template, //: html
+        context, //: placeholderReplacements
       });
       return result;
     } catch (error) {

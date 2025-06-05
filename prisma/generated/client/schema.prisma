@@ -1,0 +1,384 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * Enum untuk provider OAuth.
+ * @description Membatasi nilai provider OAuth ke daftar yang valid.
+ */
+enum OAuthProvider {
+  GOOGLE
+  MICROSOFT
+}
+
+/**
+ * Model untuk pengguna sistem.
+ * @description Menyimpan informasi pengguna seperti email, nama, dan kredensial autentikasi.
+ */
+model User {
+  id                       String             @id @default(uuid())
+  email                    String             @unique @db.VarChar(255)
+  idNumber                 String?            @unique @db.VarChar(20)
+  name                     String             @db.VarChar(255)
+  nik                      String?            @unique @db.VarChar(16)
+  dinas                    String?            @db.VarChar(100)
+  password                 String?            @db.VarChar(255) // Nullable untuk OAuth users
+  photo                    String?            @db.Text
+  hashAlgorithm            String             @default("argon2id") @db.VarChar(50)
+  roleId                   String
+  role                     Role               @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  participantId            String?            @unique
+  participant              Participant?       @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  verifiedAccount          Boolean            @default(false)
+  accountVerificationToken String?            @db.Text
+  verificationSentAt       DateTime?
+  passwordResetToken       String?            @db.Text
+  updateEmailToken         String?            @db.Text
+  loginAttempts            Int                @default(0)
+  lockUntil                DateTime?
+  twoFactorEnabled         Boolean            @default(false)
+  twoFactorSecret          String?            @db.Text
+  oauthProvider            OAuthProvider?
+  oauthId                  String?            @db.VarChar(255)
+  oauthRefreshToken        String?            @db.Text
+  refreshTokens            RefreshToken[]     @relation("UserToRefreshToken")
+  auditLogs                AuditLog[]         @relation("UserToAuditLog")
+  blacklistedTokens        BlacklistedToken[] @relation("UserToBlacklistedToken")
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([email])
+  @@index([nik])
+  @@index([idNumber])
+  @@index([roleId])
+  @@index([oauthId, oauthProvider])
+  @@index([accountVerificationToken])
+  @@index([passwordResetToken])
+  @@index([updateEmailToken])
+  @@index([participantId])
+  @@map("users")
+}
+
+/**
+ * Model untuk peran pengguna.
+ * @description Menyimpan informasi peran seperti admin atau user.
+ */
+model Role {
+  id        String   @id @default(uuid())
+  name      String   @unique @db.VarChar(50)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+
+  @@map("roles")
+}
+
+/**
+ * Model untuk menyimpan state OAuth.
+ * @description Digunakan untuk melacak sesi OAuth sementara.
+ */
+model OAuthState {
+  id        String   @id @default(uuid())
+  state     String   @unique @db.VarChar(255)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  provider  String   @db.VarChar(50) // google, microsoft, dll.
+
+  @@index([state])
+  @@map("oauth_states")
+}
+
+/**
+ * Model untuk konfigurasi aplikasi.
+ * @description Menyimpan URL frontend dan backend.
+ */
+model AppConfig {
+  id          String   @id @default(uuid())
+  frontendUrl String
+  backendUrl  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("app_configs")
+}
+
+/**
+ * Model untuk metadata file.
+ * @description Menyimpan informasi file seperti path, tipe, ukuran, dan sensitivitas.
+ */
+model FileMetadata {
+  id          Int      @id @default(autoincrement())
+  path        String   @unique @db.Text
+  fileName    String?  @db.VarChar(255)
+  mimeType    String   @db.VarChar(100)
+  fileSize    Int
+  storageType String   @db.VarChar(50)
+  iv          String?  @db.Text
+  isSensitive Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Unique foreign keys for each relation
+  participantSimAId                String? @unique
+  participantSimBId                String? @unique
+  participantKtpId                 String? @unique
+  participantFotoId                String? @unique
+  participantSuratSehatButaWarnaId String? @unique
+  participantSuratBebasNarkobaId   String? @unique
+  participantQrCodeId              String? @unique
+
+  participantSimA                Participant? @relation(name: "ParticipantToSimA", fields: [participantSimAId], references: [id])
+  participantSimB                Participant? @relation(name: "ParticipantToSimB", fields: [participantSimBId], references: [id])
+  participantKtp                 Participant? @relation(name: "ParticipantToKtp", fields: [participantKtpId], references: [id])
+  participantFoto                Participant? @relation(name: "ParticipantToFoto", fields: [participantFotoId], references: [id])
+  participantSuratSehatButaWarna Participant? @relation(name: "ParticipantToSuratSehatButaWarna", fields: [participantSuratSehatButaWarnaId], references: [id])
+  participantSuratBebasNarkoba   Participant? @relation(name: "ParticipantToSuratBebasNarkoba", fields: [participantSuratBebasNarkobaId], references: [id])
+  participantQrCode              Participant? @relation(name: "ParticipantToQrCode", fields: [participantQrCodeId], references: [id])
+  signatureESign                 Signature?   @relation(name: "SignatureToESign")
+
+  @@map("file_metadata")
+}
+
+/**
+ * Model untuk peserta pelatihan.
+ * @description Menyimpan data peserta seperti NIK, email, dan dokumen terkait.
+ */
+model Participant {
+  id                           String    @id @default(uuid())
+  idNumber                     String?   @unique @db.VarChar(20)
+  name                         String    @db.VarChar(255)
+  nik                          String    @unique @db.VarChar(50)
+  dinas                        String?   @db.VarChar(100)
+  bidang                       String?   @db.VarChar(50)
+  company                      String?   @db.VarChar(255)
+  email                        String    @unique @db.VarChar(255)
+  phoneNumber                  String?   @db.VarChar(50)
+  nationality                  String?   @db.VarChar(50)
+  placeOfBirth                 String?   @db.VarChar(50)
+  dateOfBirth                  DateTime? @db.Date
+  qrCodeLink                   String?   @db.Text
+  tglKeluarSuratSehatButaWarna DateTime? @db.Date
+  tglKeluarSuratBebasNarkoba   DateTime? @db.Date
+  gmfNonGmf                    String?   @db.VarChar(20)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+
+  simA                FileMetadata[]    @relation(name: "ParticipantToSimA")
+  simB                FileMetadata[]    @relation(name: "ParticipantToSimB")
+  ktp                 FileMetadata[]    @relation(name: "ParticipantToKtp")
+  foto                FileMetadata[]    @relation(name: "ParticipantToFoto")
+  suratSehatButaWarna FileMetadata[]    @relation(name: "ParticipantToSuratSehatButaWarna")
+  suratBebasNarkoba   FileMetadata[]    @relation(name: "ParticipantToSuratBebasNarkoba")
+  qrCode              FileMetadata[]    @relation(name: "ParticipantToQrCode")
+  participantsCots    ParticipantsCOT[]
+  user                User?
+  certificates        Certificate[]
+
+  @@index([email])
+  @@index([nik])
+  @@index([idNumber])
+  @@map("participants")
+}
+
+/**
+ * Model untuk kemampuan pelatihan.
+ * @description Menyimpan informasi tentang kode pelatihan dan durasi.
+ */
+model Capability {
+  id                              String               @id @default(uuid())
+  ratingCode                      String               @db.VarChar(20)
+  trainingCode                    String               @db.VarChar(50)
+  trainingName                    String               @db.VarChar(50)
+  totalTheoryDurationRegGse       Int?
+  totalPracticeDurationRegGse     Int?
+  totalTheoryDurationCompetency   Int?
+  totalPracticeDurationCompetency Int?
+  totalDuration                   Int?
+  curriculumSyllabus              CurriculumSyllabus[]
+  capabilityCots                  CapabilityCOT[]
+  createdAt                       DateTime             @default(now())
+  updatedAt                       DateTime             @updatedAt
+
+  @@map("capabilities")
+}
+
+/**
+ * Model untuk silabus kurikulum.
+ * @description Menyimpan detail silabus seperti durasi teori dan praktik.
+ */
+model CurriculumSyllabus {
+  id               String     @id @default(uuid())
+  capabilityId     String
+  name             String     @db.VarChar(50)
+  theoryDuration   Int
+  practiceDuration Int
+  type             String     @db.VarChar(20)
+  capability       Capability @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@map("curriculum_syllabus")
+}
+
+/**
+ * Model untuk pelatihan (COT).
+ * @description Menyimpan informasi pelatihan seperti tanggal dan lokasi.
+ */
+model COT {
+  id                         String            @id @default(uuid())
+  startDate                  DateTime
+  endDate                    DateTime
+  trainingLocation           String            @db.VarChar(50)
+  theoryInstructorRegGse     String            @db.VarChar(50)
+  theoryInstructorCompetency String            @db.VarChar(50)
+  practicalInstructor1       String            @db.VarChar(50)
+  practicalInstructor2       String            @db.VarChar(50)
+  status                     String            @db.VarChar(50)
+  capabilityCots             CapabilityCOT[]
+  participantsCots           ParticipantsCOT[]
+  certificates               Certificate[]
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+
+  @@map("cots")
+}
+
+/**
+ * Model untuk menghubungkan kemampuan dengan pelatihan.
+ * @description Relasi antara Capability dan COT.
+ */
+model CapabilityCOT {
+  capabilityId String
+  cotId        String
+  capability   Capability @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  cot          COT        @relation(fields: [cotId], references: [id], onDelete: Cascade)
+
+  @@id([capabilityId, cotId])
+  @@map("capability_cots")
+}
+
+/**
+ * Model untuk menghubungkan peserta dengan pelatihan.
+ * @description Relasi antara Participant dan COT.
+ */
+model ParticipantsCOT {
+  id            String       @id @default(uuid())
+  participantId String?
+  cotId         String
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  cot           COT          @relation(fields: [cotId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("participants_cot")
+}
+
+/**
+ * Model untuk tanda tangan digital.
+ * @description Menyimpan informasi tanda tangan elektronik.
+ */
+model Signature {
+  id            String        @id @default(uuid())
+  idNumber      String        @unique @db.VarChar(20)
+  role          String        @db.VarChar(50)
+  name          String        @db.VarChar(50)
+  eSignId       Int?          @unique @map("e_sign_id")
+  signatureType SignatureType
+  status        Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  eSign         FileMetadata? @relation(name: "SignatureToESign", fields: [eSignId], references: [id], onDelete: SetNull)
+  certificates  Certificate[]
+
+  @@map("signatures")
+}
+
+/**
+ * Enum untuk tipe tanda tangan.
+ */
+enum SignatureType {
+  SIGNATURE1
+  SIGNATURE2
+}
+
+/**
+ * Model untuk sertifikat pelatihan.
+ * @description Menyimpan informasi sertifikat yang diterbitkan.
+ */
+model Certificate {
+  id                String      @id @default(uuid())
+  cotId             String
+  signatureId       String
+  participantId     String
+  issuedDate        DateTime    @default(now())
+  certificateNumber String      @db.VarChar(50)
+  attendance        Boolean
+  theoryScore       Float
+  practiceScore     Float
+  cot               COT         @relation(fields: [cotId], references: [id], onDelete: Cascade)
+  signature         Signature   @relation(fields: [signatureId], references: [id], onDelete: Restrict)
+  participant       Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@map("certificates")
+}
+
+/**
+ * Model untuk token refresh.
+ * @description Menyimpan token refresh untuk autentikasi sesi.
+ */
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @db.Text
+  userId    String
+  sessionId String?  @unique @db.VarChar(255)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation("UserToRefreshToken", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@map("refresh_tokens")
+}
+
+/**
+ * Model untuk token yang diblacklist.
+ * @description Menyimpan token yang tidak valid lagi.
+ */
+model BlacklistedToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation("UserToBlacklistedToken", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("blacklisted_tokens")
+}
+
+/**
+ * Model untuk log audit.
+ * @description Mencatat aktivitas pengguna untuk pelacakan keamanan.
+ */
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String   @db.VarChar(100)
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+  user      User?    @relation("UserToAuditLog", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}

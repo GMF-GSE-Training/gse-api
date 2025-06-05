@@ -1,5 +1,8 @@
-import { ActionAccessRights, Paging } from './web.model';
+import type { ActionAccessRights, Paging } from './web.model.js';
 
+/**
+ * Response untuk data COT dengan participant.
+ */
 export interface ParticipantCotResponse {
   cot: {
     id: string;
@@ -10,7 +13,7 @@ export interface ParticipantCotResponse {
     theoryInstructorCompetency: string;
     practicalInstructor1: string;
     practicalInstructor2: string;
-    totalParticipants: number;
+    numberOfParticipants: number;
     status: string;
     capability: {
       ratingCode: string;
@@ -20,12 +23,12 @@ export interface ParticipantCotResponse {
       data: {
         name: string;
         id: string;
-        idNumber: string;
-        dinas: string;
-        simA?: boolean;
-        simB?: boolean;
-        tglKeluarSuratSehatButaWarna?: Date;
-        tglKeluarSuratBebasNarkoba?: Date;
+        idNumber?: string | null;
+        dinas?: string | null;
+        simAId?: number | null;
+        simBId?: number | null;
+        tglKeluarSuratSehatButaWarna?: Date | null;
+        tglKeluarSuratBebasNarkoba?: Date | null;
       }[];
       paging: Paging;
       actions: ActionAccessRights;
@@ -33,10 +36,16 @@ export interface ParticipantCotResponse {
   };
 }
 
-export interface addParticipantToCot {
+/**
+ * Request untuk menambahkan participant ke COT.
+ */
+export interface AddParticipantToCot {
   participantIds: string[];
 }
 
+/**
+ * Response untuk penambahan participant.
+ */
 export interface AddParticipantResponse {
   message: string;
   updatedCount: number;

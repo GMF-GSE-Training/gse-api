@@ -8,29 +8,44 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import { CertificateService } from './certificate.service';
-import { Roles } from 'src/shared/decorator/role.decorator';
-import { AuthGuard } from 'src/shared/guard/auth.guard';
-import { RoleGuard } from 'src/shared/guard/role.guard';
-import { CreateCertificate } from 'src/model/certificate.model';
 
+import { CreateCertificate } from '../model/certificate.model.js';
+import { Roles } from '../shared/decorator/role.decorator.js';
+import { AuthGuard } from '../shared/guard/auth.guard.js';
+import { RoleGuard } from '../shared/guard/role.guard.js';
+
+import { CertificateService } from './certificate.service.js';
+
+/**
+ *
+ */
 @Controller('/certificate')
 export class CertificateController {
+  /**
+   *
+   * @param certificateService
+   */
   constructor(private readonly certificateService: CertificateService) {}
 
+  /**
+   *
+   * @param cotId
+   * @param participantId
+   * @param request
+   */
   @Post('/:cotId/:participantId')
   @Roles('super admin')
   @UseGuards(AuthGuard, RoleGuard)
   async create(
     @Param('cotId', ParseUUIDPipe) cotId: string,
     @Param('participantId', ParseUUIDPipe) participantId: string,
-    @Body() request: CreateCertificate,
+    @Body() request: CreateCertificate
   ): Promise<any> {
     try {
       const result = await this.certificateService.createCertificate(
         cotId,
         participantId,
-        request,
+        request
       );
       const filename = `Certificate_${participantId}.pdf`;
       return new StreamableFile(result, {

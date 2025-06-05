@@ -3,6 +3,7 @@
 /node_modules
 /build
 /uploads
+/sh
 
 # Docker
 Dockerfile.exp
@@ -22,6 +23,7 @@ lerna-debug.log*
 # Tests
 /coverage
 /.nyc_output
+test/
 
 # IDEs and editors
 /.idea

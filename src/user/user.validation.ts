@@ -1,7 +1,12 @@
-import { z, ZodType } from 'zod';
+//dihapus
+import type { ZodType } from 'zod';
+import { z } from 'zod';
 
 const passwordRegex = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{8,}$/;
 
+/**
+ *
+ */
 export class UserValidation {
   static readonly CREATE: ZodType = z.object({
     participantId: z.string().uuid().max(255).optional().nullable(),
@@ -13,7 +18,7 @@ export class UserValidation {
       .string()
       .min(8)
       .max(255)
-      .refine((val) => passwordRegex.test(val), {
+      .refine(val => passwordRegex.test(val), {
         message:
           'Password harus memiliki minimal satu huruf besar dan satu angka',
       }),
@@ -30,7 +35,7 @@ export class UserValidation {
       .string()
       .min(8)
       .max(255)
-      .refine((val) => passwordRegex.test(val), {
+      .refine(val => passwordRegex.test(val), {
         message:
           'Password harus memiliki minimal satu huruf besar dan satu angka',
       })

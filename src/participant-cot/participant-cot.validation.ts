@@ -1,5 +1,9 @@
-import { z, ZodType } from 'zod';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
 
+/**
+ *
+ */
 export class ParticipantCotValidation {
   static readonly ADD: ZodType = z.object({
     participantIds: z.array(z.string().uuid()).nonempty({

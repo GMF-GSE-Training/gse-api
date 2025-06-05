@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../common/service/prisma.service';
-import { ParticipantService } from './participant.service';
-import { ParticipantController } from './participant.controller';
 
+import { PrismaService } from '../common/service/prisma.service.js';
+
+import { ParticipantController } from './participant.controller.js';
+import { ParticipantService } from './participant.service.js';
+
+/**
+ *
+ */
 @Module({
   providers: [PrismaService, ParticipantService],
   controllers: [ParticipantController],

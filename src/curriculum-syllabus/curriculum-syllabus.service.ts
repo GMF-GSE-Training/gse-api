@@ -1,30 +1,44 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/common/service/prisma.service';
-import { ValidationService } from 'src/common/service/validation.service';
+
+import { PrismaService } from '../common/service/prisma.service.js';
+import { ValidationService } from '../common/service/validation.service.js';
 import {
   CreateCurriculumSyllabus,
   UpdateCurriculumSyllabus,
-} from 'src/model/curriculum-syllabus.model';
-import { CurriculumSyllabusValidation } from './curriculum-syllabus.validation';
+} from '../model/curriculum-syllabus.model.js';
 
+import { CurriculumSyllabusValidation } from './curriculum-syllabus.validation.js';
+
+/**
+ *
+ */
 @Injectable()
 export class CurriculumSyllabusService {
+  /**
+   *
+   * @param prismaService
+   * @param validationService
+   */
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly validationService: ValidationService, // jika diperlukan
+    private readonly validationService: ValidationService // jika diperlukan
   ) {}
 
+  /**
+   *
+   * @param request
+   */
   async createCurriculumSyllabus(
-    request: CreateCurriculumSyllabus,
+    request: CreateCurriculumSyllabus
   ): Promise<string> {
     const curriculumSyllabusRequest = this.validationService.validate(
       CurriculumSyllabusValidation.CREATE,
-      request,
+      request
     );
     const { curriculumSyllabus } = curriculumSyllabusRequest;
 
     await this.prismaService.curriculumSyllabus.createMany({
-      data: curriculumSyllabus.map((curriculumSyllabus) => ({
+      data: curriculumSyllabus.map(curriculumSyllabus => ({
         capabilityId: curriculumSyllabus.capabilityId,
         name: curriculumSyllabus.name,
         theoryDuration: curriculumSyllabus.theoryDuration,
@@ -37,28 +51,28 @@ export class CurriculumSyllabusService {
 
     // Menghitung total theoryDuration dari semua item di curriculumSyllabus
     const totalTheoryDurationRegGse = curriculumSyllabus
-      .filter((item) => item.type.toLocaleLowerCase() === 'regulasi gse')
+      .filter(item => item.type.toLocaleLowerCase() === 'regulasi gse')
       .reduce((total, item) => {
         return total + item.theoryDuration;
       }, 0);
 
     // Menghitung total practiceDuration dari semua item di curriculumSyllabus
     const totalPracticeDurationRegGse = curriculumSyllabus
-      .filter((item) => item.type.toLocaleLowerCase() === 'regulasi gse')
+      .filter(item => item.type.toLocaleLowerCase() === 'regulasi gse')
       .reduce((total, item) => {
         return total + item.practiceDuration;
       }, 0);
 
     // Menghitung total practiceDuration dari semua item di curriculumSyllabus
     const totalTheoryDurationCompetency = curriculumSyllabus
-      .filter((item) => item.type.toLocaleLowerCase() === 'kompetensi')
+      .filter(item => item.type.toLocaleLowerCase() === 'kompetensi')
       .reduce((total, item) => {
         return total + item.theoryDuration;
       }, 0);
 
     // Menghitung total practiceDuration dari semua item di curriculumSyllabus
     const totalPracticeDurationCompetency = curriculumSyllabus
-      .filter((item) => item.type.toLocaleLowerCase() === 'kompetensi')
+      .filter(item => item.type.toLocaleLowerCase() === 'kompetensi')
       .reduce((total, item) => {
         return total + item.practiceDuration;
       }, 0);
@@ -85,13 +99,18 @@ export class CurriculumSyllabusService {
     return 'Berhasil membuat Curriculum & Syllabus';
   }
 
+  /**
+   *
+   * @param capabilityId
+   * @param request
+   */
   async updateCurriculumSyllabus(
     capabilityId: string,
-    request: UpdateCurriculumSyllabus,
+    request: UpdateCurriculumSyllabus
   ): Promise<string> {
     const updateCurriculumSyllabusRequest = this.validationService.validate(
       CurriculumSyllabusValidation.UPDATE,
-      request,
+      request
     );
 
     const capability = await this.prismaService.capability.findUnique({
@@ -113,12 +132,12 @@ export class CurriculumSyllabusService {
       });
 
     // Simpan semua ID yang ada dalam request
-    const requestIds = curriculumSyllabus.map((item) => item.id);
+    const requestIds = curriculumSyllabus.map(item => item.id);
 
     // Hapus data di database yang tidak ada di request
     const idsToDelete = existingSyllabus
-      .filter((item) => !requestIds.includes(item.id)) // Cari data yang tidak ada di request
-      .map((item) => item.id);
+      .filter(item => !requestIds.includes(item.id)) // Cari data yang tidak ada di request
+      .map(item => item.id);
 
     await this.prismaService.curriculumSyllabus.deleteMany({
       where: { id: { in: idsToDelete } },
@@ -156,19 +175,19 @@ export class CurriculumSyllabusService {
 
     // Hitung total durasi dan perbarui capability
     const totalTheoryDurationRegGse = curriculumSyllabus
-      .filter((item) => item.type.toLowerCase() === 'regulasi gse')
+      .filter(item => item.type.toLowerCase() === 'regulasi gse')
       .reduce((total, item) => total + item.theoryDuration, 0);
 
     const totalPracticeDurationRegGse = curriculumSyllabus
-      .filter((item) => item.type.toLowerCase() === 'regulasi gse')
+      .filter(item => item.type.toLowerCase() === 'regulasi gse')
       .reduce((total, item) => total + item.practiceDuration, 0);
 
     const totalTheoryDurationCompetency = curriculumSyllabus
-      .filter((item) => item.type.toLowerCase() === 'kompetensi')
+      .filter(item => item.type.toLowerCase() === 'kompetensi')
       .reduce((total, item) => total + item.theoryDuration, 0);
 
     const totalPracticeDurationCompetency = curriculumSyllabus
-      .filter((item) => item.type.toLowerCase() === 'kompetensi')
+      .filter(item => item.type.toLowerCase() === 'kompetensi')
       .reduce((total, item) => total + item.practiceDuration, 0);
 
     const totalDuration =

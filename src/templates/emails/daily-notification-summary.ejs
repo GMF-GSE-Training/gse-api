@@ -1,0 +1,4 @@
+<%- include('./layouts/layouts.ejs', {
+    title: 'Daily File Upload Notification Summary',
+    content: include('./partials/contents/daily-notification-summary-content.ejs', { sensitiveNotifications, failureNotifications, date, hasSensitive, hasFailures })
+}) %>

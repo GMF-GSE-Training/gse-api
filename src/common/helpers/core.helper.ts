@@ -1,6 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/common/service/prisma.service';
-import { ActionAccessRights } from 'src/model/web.model';
+
+import { PrismaService } from '../../common/service/prisma.service.js';
+import { ActionAccessRights } from '../../model/web.model.js';
 
 interface UniqueFieldCheck {
   field: string;
@@ -8,17 +9,31 @@ interface UniqueFieldCheck {
   message: string;
 }
 
+/**
+ *
+ */
 @Injectable()
 export class CoreHelper {
   // Tambahkan properti signatures untuk menyimpan tanda tangan tipe file
   private readonly signatures: { [key: string]: Buffer } = {
-    'image/png': Buffer.from([0x89, 0x50, 0x4e, 0x47]),       // PNG
-    'image/jpeg': Buffer.from([0xff, 0xd8, 0xff]),           // JPEG
+    'image/png': Buffer.from([0x89, 0x50, 0x4e, 0x47]), // PNG
+    'image/jpeg': Buffer.from([0xff, 0xd8, 0xff]), // JPEG
     'application/pdf': Buffer.from([0x25, 0x50, 0x44, 0x46]), // PDF
   };
 
+  /**
+   *
+   * @param prismaService
+   */
   constructor(private prismaService: PrismaService) {}
 
+  /**
+   *
+   * @param table
+   * @param fields
+   * @param excludeId
+   * @param prismaInstance
+   */
   async ensureUniqueFields(
     table: string,
     fields: UniqueFieldCheck[],
@@ -50,6 +65,10 @@ export class CoreHelper {
     }
   }
 
+  /**
+   *
+   * @param currentRole
+   */
   validateActions(
     currentRole: string,
     accessMap: { [role: string]: ActionAccessRights }
@@ -63,6 +82,10 @@ export class CoreHelper {
     return accessMap[currentRole] || defaultAccess;
   }
 
+  /**
+   *
+   * @param value
+   */
   transformEmptyToNull(value: any): any {
     return value === '' ? null : value;
   }
@@ -76,7 +99,10 @@ export class CoreHelper {
   getMediaType(buffer: Buffer): string {
     // Validasi input
     if (!buffer || buffer.length < 4) {
-      throw new HttpException('Buffer file tidak valid atau terlalu pendek', 400);
+      throw new HttpException(
+        'Buffer file tidak valid atau terlalu pendek',
+        400
+      );
     }
 
     // Iterasi melalui signatures

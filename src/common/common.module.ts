@@ -1,48 +1,27 @@
-import { Global, HttpException, Module } from '@nestjs/common';
-import { WinstonModule } from 'nest-winston';
-import * as winston from 'winston';
-import { PrismaService } from './service/prisma.service';
-import { ValidationService } from './service/validation.service';
-import { APP_FILTER } from '@nestjs/core';
-import { ErrorFilter } from './error/error.filter';
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MulterModule } from '@nestjs/platform-express';
-import { extname } from 'path';
-import { CoreHelper } from './helpers/core.helper';
+import { APP_FILTER } from '@nestjs/core';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 
+import { ErrorFilter } from './error/error.filter.js';
+import { CoreHelper } from './helpers/core.helper.js';
+import { PrismaService } from './service/prisma.service.js';
+import { TokenBlacklistService } from './service/token-blacklist.service.js';
+import { ValidationService } from './service/validation.service.js';
+
+/**
+ * Modul global untuk menyediakan layanan umum yang dapat digunakan di seluruh aplikasi.
+ * @description Menyediakan autentikasi JWT, database Prisma, validasi, dan utilitas umum.
+ */
 @Global()
 @Module({
   imports: [
-    WinstonModule.forRoot({
-      format: winston.format.json(),
-      transports: [new winston.transports.Console()],
-    }),
-    JwtModule.register({}),
-    MulterModule.register({
-      fileFilter: (_req, file, callback) => {
-        const allowedExtensions = ['.png', '.jpg', '.jpeg', '.pdf'];
-        const fileExtension = extname(file.originalname).toLowerCase();
-
-        if (!allowedExtensions.includes(fileExtension)) {
-          return callback(
-            new HttpException(
-              `Format file untuk ${file.fieldname} tidak valid. Hanya file dengan format PNG, JPG, JPEG, dan PDF yang diperbolehkan.`,
-              400,
-            ),
-            false,
-          );
-        }
-        callback(null, true);
-      },
-      limits: {
-        fileSize: 2 * 1024 * 1024,
-      },
-    }),
+    JwtModule.register({}), // Registrasi JwtModule untuk dependency injection
   ],
   providers: [
     PrismaService,
     ValidationService,
+    TokenBlacklistService, // Opsional, hapus jika tidak ada di proyek Anda
     {
       provide: APP_FILTER,
       useClass: ErrorFilter,
@@ -50,34 +29,28 @@ import { CoreHelper } from './helpers/core.helper';
     CoreHelper,
     {
       provide: 'ACCESS_JWT_SERVICE',
-      useFactory: async (configService: ConfigService) =>
+      useFactory: (configService: ConfigService) =>
         new JwtService({
-          secret: configService.get<string>('ACCESS_TOKEN'),
-          signOptions: {
-            expiresIn: '1h',
-          },
+          secret: configService.get<string>('JWT_ACCESS_SECRET'),
+          signOptions: { expiresIn: '1h' },
         }),
       inject: [ConfigService],
     },
     {
       provide: 'REFRESH_JWT_SERVICE',
-      useFactory: async (configService: ConfigService) =>
+      useFactory: (configService: ConfigService) =>
         new JwtService({
-          secret: configService.get<string>('REFRESH_TOKEN'),
-          signOptions: {
-            expiresIn: '1d',
-          },
+          secret: configService.get<string>('JWT_REFRESH_SECRET'),
+          signOptions: { expiresIn: '1d' },
         }),
       inject: [ConfigService],
     },
     {
       provide: 'VERIFICATION_JWT_SERVICE',
-      useFactory: async (configService: ConfigService) =>
+      useFactory: (configService: ConfigService) =>
         new JwtService({
-          secret: configService.get<string>('VERIFICATION_TOKEN'),
-          signOptions: {
-            expiresIn: '15m',
-          },
+          secret: configService.get<string>('JWT_VERIFICATION_SECRET'),
+          signOptions: { expiresIn: '15m' },
         }),
       inject: [ConfigService],
     },
@@ -85,6 +58,7 @@ import { CoreHelper } from './helpers/core.helper';
   exports: [
     PrismaService,
     ValidationService,
+    TokenBlacklistService, // Opsional, hapus jika tidak ada di proyek Anda
     JwtModule,
     CoreHelper,
     'ACCESS_JWT_SERVICE',

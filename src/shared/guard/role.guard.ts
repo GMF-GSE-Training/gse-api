@@ -5,15 +5,28 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PrismaService } from '../../common/service/prisma.service';
 
+import { PrismaService } from '../../common/service/prisma.service.js';
+
+/**
+ *
+ */
 @Injectable()
 export class RoleGuard implements CanActivate {
+  /**
+   *
+   * @param reflector
+   * @param prismaService
+   */
   constructor(
     private reflector: Reflector,
-    private prismaService: PrismaService,
+    private prismaService: PrismaService
   ) {}
 
+  /**
+   *
+   * @param context
+   */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredRoles = this.getRequiredRoles(context);
     const request = context.switchToHttp().getRequest();
@@ -24,10 +37,14 @@ export class RoleGuard implements CanActivate {
     return true;
   }
 
+  /**
+   *
+   * @param context
+   */
   private getRequiredRoles(context: ExecutionContext): string[] {
     const requiredRoles = this.reflector.get<string[]>(
       'roles',
-      context.getHandler(),
+      context.getHandler()
     );
     if (!requiredRoles) {
       throw new HttpException('Forbidden', 403);
@@ -35,6 +52,10 @@ export class RoleGuard implements CanActivate {
     return requiredRoles;
   }
 
+  /**
+   *
+   * @param request
+   */
   private async getUserWithRole(request: any): Promise<any> {
     const user = request.user;
 
@@ -54,12 +75,17 @@ export class RoleGuard implements CanActivate {
     return userWithRole.role.name;
   }
 
+  /**
+   *
+   * @param userRole
+   * @param requiredRoles
+   */
   private checkRoleAuthorization(
     userRole: string,
-    requiredRoles: string[],
+    requiredRoles: string[]
   ): void {
     const hasRole = requiredRoles
-      .map((role) => role.toLowerCase())
+      .map(role => role.toLowerCase())
       .includes(userRole.toLowerCase());
 
     if (!hasRole) {

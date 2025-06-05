@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
-import { CotService } from './cot.service';
-import { CotController } from './cot.controller';
 
+import { CotController } from './cot.controller.js';
+import { CotService } from './cot.service.js';
+
+/**
+ *
+ */
 @Module({
   providers: [CotService],
   controllers: [CotController],

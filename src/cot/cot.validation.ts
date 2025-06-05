@@ -1,5 +1,9 @@
-import { z, ZodType } from 'zod';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
 
+/**
+ *
+ */
 export class CotValidation {
   static readonly CREATE: ZodType = z.object({
     capabilityId: z.string().uuid().min(1).max(255),

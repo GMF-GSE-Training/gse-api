@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
-import { CurriculumSyllabusService } from './curriculum-syllabus.service';
-import { CurriculumSyllabusController } from './curriculum-syllabus.controller';
 
+import { CurriculumSyllabusController } from './curriculum-syllabus.controller.js';
+import { CurriculumSyllabusService } from './curriculum-syllabus.service.js';
+
+/**
+ *
+ */
 @Module({
   providers: [CurriculumSyllabusService],
   controllers: [CurriculumSyllabusController],

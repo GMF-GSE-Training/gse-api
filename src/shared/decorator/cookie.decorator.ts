@@ -1,9 +1,10 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import type { ExecutionContext } from '@nestjs/common';
+import { createParamDecorator } from '@nestjs/common';
 
 export const SetCookie = createParamDecorator(
   (
     data: { name: string; value: string; options?: any },
-    ctx: ExecutionContext,
+    ctx: ExecutionContext
   ) => {
     const response = ctx.switchToHttp().getResponse();
 
@@ -19,7 +20,7 @@ export const SetCookie = createParamDecorator(
     }
 
     return null;
-  },
+  }
 );
 
 export const GetCookie = createParamDecorator(
@@ -31,13 +32,13 @@ export const GetCookie = createParamDecorator(
     }
 
     return request.cookies || {};
-  },
+  }
 );
 
 export const ClearCookie = createParamDecorator(
   (
     data: { name: string; value: string; options?: any },
-    ctx: ExecutionContext,
+    ctx: ExecutionContext
   ) => {
     const response = ctx.switchToHttp().getResponse();
 
@@ -46,5 +47,5 @@ export const ClearCookie = createParamDecorator(
     }
 
     return null;
-  },
+  }
 );

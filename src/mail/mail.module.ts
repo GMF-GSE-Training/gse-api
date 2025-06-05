@@ -1,11 +1,16 @@
-import { Module } from '@nestjs/common';
-import { MailService } from './mail.service';
-import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
-import { EjsAdapter } from '@nestjs-modules/mailer/dist/adapters/ejs.adapter';
-import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
 
+import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+
+import { MailerModule } from '@nestjs-modules/mailer';
+import { EjsAdapter } from '@nestjs-modules/mailer/dist/adapters/ejs.adapter.js';
+
+import { MailService } from './mail.service.js';
+
+/**
+ *
+ */
 @Module({
   imports: [
     MailerModule.forRootAsync({

@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
-import { CapabilityService } from './capability.service';
-import { CapabilityController } from './capability.controller';
 
+import { CapabilityController } from './capability.controller.js';
+import { CapabilityService } from './capability.service.js';
+
+/**
+ *
+ */
 @Module({
   providers: [CapabilityService],
   controllers: [CapabilityController],

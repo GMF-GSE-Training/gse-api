@@ -1,30 +1,45 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/common/service/prisma.service';
-import { ValidationService } from 'src/common/service/validation.service';
+
+import { CoreHelper } from '../common/helpers/core.helper.js';
+import { PrismaService } from '../common/service/prisma.service.js';
+import { ValidationService } from '../common/service/validation.service.js';
+import { CurrentUserRequest } from '../model/auth.model.js';
 import {
   CapabilityResponse,
   CreateCapability,
   UpdateCapability,
-} from 'src/model/capability.model';
-import { CapabilityValidation } from './capability.validation';
-import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
-import { CurrentUserRequest } from 'src/model/auth.model';
-import { CoreHelper } from 'src/common/helpers/core.helper';
+} from '../model/capability.model.js';
+import { ActionAccessRights, ListRequest, Paging } from '../model/web.model.js';
 
+import { CapabilityValidation } from './capability.validation.js';
+
+/**
+ *
+ */
 @Injectable()
 export class CapabilityService {
+  /**
+   *
+   * @param prismaService
+   * @param validationService
+   * @param coreHelper
+   */
   constructor(
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
-    private readonly coreHelper: CoreHelper,
+    private readonly coreHelper: CoreHelper
   ) {}
 
+  /**
+   *
+   * @param request
+   */
   async createCapability(
-    request: CreateCapability,
+    request: CreateCapability
   ): Promise<CapabilityResponse> {
     const createCapabilityRequest = this.validationService.validate(
       CapabilityValidation.CREATE,
-      request,
+      request
     );
 
     await this.coreHelper.ensureUniqueFields('capability', [
@@ -61,6 +76,10 @@ export class CapabilityService {
     return result;
   }
 
+  /**
+   *
+   * @param capabilityId
+   */
   async getCapabilityById(capabilityId: string): Promise<CapabilityResponse> {
     const capability = await this.prismaService.capability.findUnique({
       where: {
@@ -81,8 +100,12 @@ export class CapabilityService {
     return capability;
   }
 
+  /**
+   *
+   * @param capabilityId
+   */
   async getCurriculumSyllabus(
-    capabilityId: string,
+    capabilityId: string
   ): Promise<CapabilityResponse> {
     const capability = await this.prismaService.capability.findUnique({
       where: {
@@ -104,13 +127,18 @@ export class CapabilityService {
     return capability;
   }
 
+  /**
+   *
+   * @param capabilityId
+   * @param req
+   */
   async updateCapability(
     capabilityId: string,
-    req: UpdateCapability,
+    req: UpdateCapability
   ): Promise<string> {
     const updateCapabilityRequest = this.validationService.validate(
       CapabilityValidation.UPDATE,
-      req,
+      req
     );
 
     const capability = await this.prismaService.capability.findUnique({
@@ -142,7 +170,7 @@ export class CapabilityService {
           message: 'Nama Training sudah ada',
         },
       ],
-      capabilityId,
+      capabilityId
     );
 
     await this.prismaService.capability.update({
@@ -155,6 +183,10 @@ export class CapabilityService {
     return 'Capability berhasil diperbarui';
   }
 
+  /**
+   *
+   * @param capabilityId
+   */
   async deleteCapability(capabilityId: string): Promise<string> {
     const capability = await this.prismaService.capability.findUnique({
       where: {
@@ -166,7 +198,7 @@ export class CapabilityService {
       throw new HttpException('Capability tidak ditemukan', 404);
     }
 
-    await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async prisma => {
       // Hapus curriculumSyllabus terkait capabilityId
       await prisma.curriculumSyllabus.deleteMany({
         where: {
@@ -185,9 +217,12 @@ export class CapabilityService {
     return 'Capability berhasil dihapus';
   }
 
+  /**
+   *
+   */
   async getAllCapability(): Promise<CapabilityResponse[]> {
     const capability = await this.prismaService.capability.findMany();
-    return capability.map((item) => ({
+    return capability.map(item => ({
       id: item.id,
       ratingCode: item.ratingCode,
       trainingCode: item.trainingCode,
@@ -195,9 +230,14 @@ export class CapabilityService {
     }));
   }
 
+  /**
+   *
+   * @param user
+   * @param request
+   */
   async listCapability(
     user: CurrentUserRequest,
-    request: ListRequest,
+    request: ListRequest
   ): Promise<{
     data: CapabilityResponse[];
     actions: ActionAccessRights;
@@ -224,7 +264,7 @@ export class CapabilityService {
     });
 
     const capabilitiesWithFilteredAttributes = capabilities.map(
-      this.mapCapabilityWithDurations,
+      this.mapCapabilityWithDurations
     );
 
     const totalPage = Math.ceil(totalCapability / request.size);
@@ -243,6 +283,10 @@ export class CapabilityService {
     };
   }
 
+  /**
+   *
+   * @param userRole
+   */
   private validateActions(userRole: string): ActionAccessRights {
     const accessMap = {
       'super admin': { canEdit: true, canDelete: true },
@@ -254,6 +298,10 @@ export class CapabilityService {
     return this.coreHelper.validateActions(userRole, accessMap);
   }
 
+  /**
+   *
+   * @param capability
+   */
   private mapCapabilityWithDurations(capability: any): any {
     const {
       totalTheoryDurationRegGse,

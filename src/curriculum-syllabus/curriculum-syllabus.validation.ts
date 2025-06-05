@@ -1,5 +1,9 @@
-import { z, ZodType } from 'zod';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
 
+/**
+ *
+ */
 export class CurriculumSyllabusValidation {
   static readonly CREATE: ZodType = z.object({
     curriculumSyllabus: z.array(
@@ -9,7 +13,7 @@ export class CurriculumSyllabusValidation {
         theoryDuration: z.number().min(0),
         practiceDuration: z.number().min(0),
         type: z.string().min(1),
-      }),
+      })
     ),
   });
 
@@ -21,7 +25,7 @@ export class CurriculumSyllabusValidation {
         theoryDuration: z.number().min(0).optional(),
         practiceDuration: z.number().min(0).optional(),
         type: z.string().min(1),
-      }),
+      })
     ),
   });
 }

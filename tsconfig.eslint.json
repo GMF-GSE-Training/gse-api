@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "jest.config.ts",
+    "eslint.config.js",
+    "migrate.ts",
+    "seed.ts",
+    "prisma/**/*",
+    "*.config.js",
+    "*.config.ts"
+  ]
+}

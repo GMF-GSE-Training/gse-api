@@ -1,5 +1,9 @@
-import { z, ZodType } from 'zod';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
 
+/**
+ *
+ */
 export class CertificateValidation {
   static readonly CREATE: ZodType = z.object({
     theoryScore: z

@@ -12,7 +12,12 @@
       {
         "include": "./templates/**/*",
         "outDir": "dist/src"
+      },
+      {
+        "include": "src/i18n/**/*",
+        "outDir": "dist/src"
       }
-    ]
+    ],
+    "watchAssets": true
   }
 }

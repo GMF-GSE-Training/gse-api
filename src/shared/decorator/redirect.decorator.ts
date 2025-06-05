@@ -1,4 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import type { ExecutionContext } from '@nestjs/common';
+import { createParamDecorator } from '@nestjs/common';
 
 export const Redirect = createParamDecorator(
   (data: { url: string }, ctx: ExecutionContext) => {
@@ -9,5 +10,5 @@ export const Redirect = createParamDecorator(
     }
 
     return null;
-  },
+  }
 );

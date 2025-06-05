@@ -15,83 +15,116 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { CapabilityService } from './capability.service';
+
+import { CurrentUserRequest } from '../model/auth.model.js';
 import {
   CapabilityResponse,
   CreateCapability,
   UpdateCapability,
-} from 'src/model/capability.model';
-import { buildResponse, ListRequest, WebResponse } from 'src/model/web.model';
-import { Roles } from 'src/shared/decorator/role.decorator';
-import { AuthGuard } from 'src/shared/guard/auth.guard';
-import { RoleGuard } from 'src/shared/guard/role.guard';
-import { CurrentUserRequest } from 'src/model/auth.model';
-import { User } from 'src/shared/decorator/user.decorator';
+} from '../model/capability.model.js';
+import { buildResponse, ListRequest, WebResponse } from '../model/web.model.js';
+import { Roles } from '../shared/decorator/role.decorator.js';
+import { User } from '../shared/decorator/user.decorator.js';
+import { AuthGuard } from '../shared/guard/auth.guard.js';
+import { RoleGuard } from '../shared/guard/role.guard.js';
 
+import { CapabilityService } from './capability.service.js';
+
+/**
+ *
+ */
 @Controller('/capability')
 export class CapabilityController {
+  /**
+   *
+   * @param capabilityService
+   */
   constructor(private readonly capabilityService: CapabilityService) {}
 
+  /**
+   *
+   * @param request
+   */
   @Post()
   @HttpCode(200)
   @Roles('super admin')
   @UseGuards(AuthGuard, RoleGuard)
   async create(
-    @Body() request: CreateCapability,
+    @Body() request: CreateCapability
   ): Promise<WebResponse<CapabilityResponse>> {
     const result = await this.capabilityService.createCapability(request);
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param capabilityId
+   */
   @Get('/:capabilityId')
   @HttpCode(200)
   @Roles('super admin')
   @UseGuards(AuthGuard, RoleGuard)
   async get(
-    @Param('capabilityId', ParseUUIDPipe) capabilityId: string,
+    @Param('capabilityId', ParseUUIDPipe) capabilityId: string
   ): Promise<WebResponse<CapabilityResponse>> {
     const result = await this.capabilityService.getCapabilityById(capabilityId);
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param capabilityId
+   */
   @Get('/:capabilityId/curriculum-syllabus')
   @HttpCode(200)
   @Roles('super admin', 'supervisor', 'lcu', 'user')
   @UseGuards(AuthGuard, RoleGuard)
   async getCurriculumSyllabus(
-    @Param('capabilityId', ParseUUIDPipe) capabilityId: string,
+    @Param('capabilityId', ParseUUIDPipe) capabilityId: string
   ): Promise<WebResponse<CapabilityResponse>> {
     const result =
       await this.capabilityService.getCurriculumSyllabus(capabilityId);
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param capabilityId
+   * @param req
+   */
   @Patch('/:capabilityId')
   @HttpCode(200)
   @Roles('super admin')
   @UseGuards(AuthGuard, RoleGuard)
   async update(
     @Param('capabilityId', ParseUUIDPipe) capabilityId: string,
-    @Body() req: UpdateCapability,
+    @Body() req: UpdateCapability
   ): Promise<WebResponse<string>> {
     const result = await this.capabilityService.updateCapability(
       capabilityId,
-      req,
+      req
     );
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param capabilityId
+   */
   @Delete('/:capabilityId')
   @HttpCode(200)
   @Roles('super admin')
   @UseGuards(AuthGuard, RoleGuard)
   async delete(
-    @Param('capabilityId', ParseUUIDPipe) capabilityId: string,
+    @Param('capabilityId', ParseUUIDPipe) capabilityId: string
   ): Promise<WebResponse<string>> {
     const result = await this.capabilityService.deleteCapability(capabilityId);
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   */
   @Get()
   @HttpCode(200)
   @Roles('super admin')
@@ -101,6 +134,13 @@ export class CapabilityController {
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param user
+   * @param q
+   * @param page
+   * @param size
+   */
   @Get('/list/result')
   @HttpCode(200)
   @Roles('super admin', 'supervisor', 'lcu', 'user')
@@ -114,7 +154,7 @@ export class CapabilityController {
         optional: true,
         exceptionFactory: () =>
           new HttpException('Page must be a positive number', 400),
-      }),
+      })
     )
     page?: number,
     @Query(
@@ -123,9 +163,9 @@ export class CapabilityController {
         optional: true,
         exceptionFactory: () =>
           new HttpException('Size must be a positive number', 400),
-      }),
+      })
     )
-    size?: number,
+    size?: number
   ): Promise<WebResponse<CapabilityResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
@@ -138,7 +178,7 @@ export class CapabilityController {
       result.data,
       null,
       result.actions,
-      result.paging,
+      result.paging
     );
   }
 }

@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+
 import {
   PrismaClientKnownRequestError,
   PrismaClientRustPanicError,
@@ -14,8 +15,16 @@ import {
 import { MulterError } from 'multer';
 import { ZodError } from 'zod';
 
+/**
+ *
+ */
 @Catch()
 export class ErrorFilter implements ExceptionFilter {
+  /**
+   *
+   * @param exception
+   * @param host
+   */
   catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse();
@@ -115,10 +124,14 @@ export class ErrorFilter implements ExceptionFilter {
     response.status(statusCode).json(errorResponse);
   }
 
+  /**
+   *
+   * @param zodErrors
+   */
   private formatZodErrors(zodErrors: any[]): Record<string, string[]> {
     const formattedErrors: Record<string, string[]> = {};
 
-    zodErrors.forEach((error) => {
+    zodErrors.forEach(error => {
       const fieldName = error.path.join('.');
       if (!formattedErrors[fieldName]) {
         formattedErrors[fieldName] = [];

@@ -13,24 +13,41 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ParticipantCotService } from './participant-cot.service';
-import { Roles } from 'src/shared/decorator/role.decorator';
-import { AuthGuard } from 'src/shared/guard/auth.guard';
-import { RoleGuard } from 'src/shared/guard/role.guard';
-import { buildResponse, ListRequest, WebResponse } from 'src/model/web.model';
+
+import { CurrentUserRequest } from '../model/auth.model.js';
 import {
   addParticipantToCot,
   ParticipantCotResponse,
   AddParticipantResponse,
-} from 'src/model/participant-cot.model';
-import { User } from 'src/shared/decorator/user.decorator';
-import { CurrentUserRequest } from 'src/model/auth.model';
-import { ListParticipantResponse } from 'src/model/participant.model';
+} from '../model/participant-cot.model.js';
+import { ListParticipantResponse } from '../model/participant.model.js';
+import { buildResponse, ListRequest, WebResponse } from '../model/web.model.js';
+import { Roles } from '../shared/decorator/role.decorator.js';
+import { User } from '../shared/decorator/user.decorator.js';
+import { AuthGuard } from '../shared/guard/auth.guard.js';
+import { RoleGuard } from '../shared/guard/role.guard.js';
 
+import { ParticipantCotService } from './participant-cot.service.js';
+
+/**
+ *
+ */
 @Controller('/participant-cot')
 export class ParticipantCotController {
+  /**
+   *
+   * @param participantCotService
+   */
   constructor(private readonly participantCotService: ParticipantCotService) {}
 
+  /**
+   *
+   * @param cotId
+   * @param user
+   * @param q
+   * @param page
+   * @param size
+   */
   @Get('unregistered/:cotId')
   @HttpCode(200)
   @Roles('super admin', 'lcu')
@@ -45,7 +62,7 @@ export class ParticipantCotController {
         optional: true,
         exceptionFactory: () =>
           new HttpException('Page must be a positive number', 400),
-      }),
+      })
     )
     page?: number,
     @Query(
@@ -54,9 +71,9 @@ export class ParticipantCotController {
         optional: true,
         exceptionFactory: () =>
           new HttpException('Size must be a positive number', 400),
-      }),
+      })
     )
-    size?: number,
+    size?: number
   ): Promise<WebResponse<ListParticipantResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
@@ -67,11 +84,17 @@ export class ParticipantCotController {
     const result = await this.participantCotService.getUnregisteredParticipants(
       cotId,
       user,
-      query,
+      query
     );
     return buildResponse(HttpStatus.OK, result.data, null, null, result.paging);
   }
 
+  /**
+   *
+   * @param cotId
+   * @param user
+   * @param request
+   */
   @Post('/:cotId')
   @HttpCode(200)
   @Roles('super admin', 'lcu')
@@ -79,31 +102,44 @@ export class ParticipantCotController {
   async addParticipantToCot(
     @Param('cotId', ParseUUIDPipe) cotId: string,
     @User() user: CurrentUserRequest,
-    @Body() request: addParticipantToCot,
+    @Body() request: addParticipantToCot
   ): Promise<WebResponse<AddParticipantResponse>> {
     const result = await this.participantCotService.addParticipantToCot(
       cotId,
       user,
-      request,
+      request
     );
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param cotId
+   * @param participantId
+   */
   @Delete('/:cotId/:participantId')
   @HttpCode(200)
   @Roles('super admin')
   @UseGuards(AuthGuard, RoleGuard)
   async deleteParticipantFromCot(
     @Param('cotId', ParseUUIDPipe) cotId: string,
-    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const result = await this.participantCotService.deleteParticipantFromCot(
       participantId,
-      cotId,
+      cotId
     );
     return buildResponse(HttpStatus.OK, result);
   }
 
+  /**
+   *
+   * @param cotId
+   * @param user
+   * @param q
+   * @param page
+   * @param size
+   */
   @Get('/:cotId/list/result')
   @HttpCode(200)
   @Roles('super admin', 'supervisor', 'lcu', 'user')
@@ -118,7 +154,7 @@ export class ParticipantCotController {
         optional: true,
         exceptionFactory: () =>
           new HttpException('Page must be a positive number', 400),
-      }),
+      })
     )
     page?: number,
     @Query(
@@ -127,9 +163,9 @@ export class ParticipantCotController {
         optional: true,
         exceptionFactory: () =>
           new HttpException('Size must be a positive number', 400),
-      }),
+      })
     )
-    size?: number,
+    size?: number
   ): Promise<WebResponse<ParticipantCotResponse>> {
     const query: ListRequest = {
       searchQuery: q,
@@ -139,7 +175,7 @@ export class ParticipantCotController {
     const result = await this.participantCotService.listParticipantsCot(
       cotId,
       user,
-      query,
+      query
     );
     return buildResponse(HttpStatus.OK, result);
   }

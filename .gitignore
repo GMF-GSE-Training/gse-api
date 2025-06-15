@@ -3,6 +3,7 @@
 /node_modules
 /build
 /uploads
+prisma/dummy-data/*
 
 # Docker
 Dockerfile.exp

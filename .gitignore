@@ -4,6 +4,8 @@
 /build
 /uploads
 /prisma/dummy-data
+/prisma/migrations
+/.github
 
 # Docker
 Dockerfile.exp

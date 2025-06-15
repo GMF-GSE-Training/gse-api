@@ -29,7 +29,15 @@
 ## Installation
 
 ```bash
-$ npm install
+$ npm install -g npm
+```
+
+```bash
+$ npm install -g pnpm
+```
+
+```bash
+$ pnpm install
 ```
 
 ## Running the app

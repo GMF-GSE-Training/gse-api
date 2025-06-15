@@ -402,6 +402,9 @@ export class AuthService {
     const authSelectedFields = this.authSelectedFields();
 
     // Transaksi Prisma
+      // Simpan token setelah berhasil membuat user & participant, tetap di dalam transaksi
+    let accountVerificationToken = '';
+
     const [user, newParticipant] = await this.prismaService.$transaction(
       async (prisma) => {
         try {
@@ -434,6 +437,15 @@ export class AuthService {
             data: createParticipantData,
           });
 
+          // Generate token verifikasi di dalam transaksi
+          const payload = { id: user.id };
+          accountVerificationToken = await this.verificationJwtService.signAsync(payload);
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { accountVerificationToken },
+          });
+          this.logger.debug(`Token verifikasi disimpan untuk user ${user.id}`);
+
           const updatedUser = await prisma.user.update({
             where: { id: user.id },
             data: { participantId: participant.id },
@@ -463,11 +475,9 @@ export class AuthService {
       data: { qrCode: qrCodeBuffer },
     });
 
-    // Generate token verifikasi
-    const payload = { id: user.id };
-    const accountVerificationToken = await this.verificationJwtService.signAsync(payload);
+    // accountVerificationToken dihasilkan di dalam transaksi di atas
 
-    // Ambil URL backend dari .env
+    // Ambil URL backend dari .env (link dibuat setelah transaksi)
     const backendUrl = this.getBaseUrl('backend');
     const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
 
@@ -485,7 +495,14 @@ export class AuthService {
       },
     };
 
-    await this.mailService.sendEmail(email);
+    try {
+      await this.mailService.sendEmail(email);
+      this.logger.log('Email verifikasi berhasil dikirim ke: ' + user.email);
+    } catch (emailError) {
+      // Log error tapi jangan gagalkan proses registrasi
+      this.logger.error('Error sending verification email:', emailError);
+      this.logger.warn('Registrasi tetap dilanjutkan meskipun email gagal terkirim');
+    }
 
     await this.prismaService.user.update({
       where: { id: user.id },
@@ -574,8 +591,11 @@ export class AuthService {
       );
     }
 
-    if (!user.verifiedAccount) {
-      throw new HttpException('Akun belum diverifikasi', 403);
+    const role = await this.prismaService.role.findUnique({
+      where: { id: user.roleId },
+    });
+    if (role?.name.toLowerCase() === 'user' && !user.verifiedAccount) {
+      throw new HttpException('ACCOUNT_NOT_VERIFIED', 403);
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -772,7 +792,7 @@ export class AuthService {
 
     if (user.verifiedAccount) {
       this.logger.warn(`Akun dengan email ${emailRequest} sudah terverifikasi`);
-      throw new HttpException('Akun anda sudah terverifikasi', 400);
+      return 'Akun sudah terverifikasi';
     }
 
     // Buat token verifikasi akun
@@ -802,22 +822,19 @@ export class AuthService {
       },
     };
 
-    await this.mailService.sendEmail(sendEmail);
+    try {
+      await this.mailService.sendEmail(sendEmail);
+      this.logger.debug(`Email verifikasi berhasil dikirim untuk pengguna: ${user.email}`);
+  this.logger.debug(`Token verifikasi tersimpan: ${accountVerificationToken.substring(0,20)}...`);
+    } catch (emailError) {
+      // Log error tapi jangan gagalkan proses registrasi
+      this.logger.error('Error sending verification email:', emailError);
+      this.logger.warn('Registrasi tetap dilanjutkan meskipun email gagal terkirim');
+    }
 
-    await this.prismaService.user.update({
-      where: {
-      id: user.id,
-      },
-      data: {
-      accountVerificationToken: accountVerificationToken,
-      },
-    });
-
-    this.logger.debug(`Email verifikasi berhasil dikirim untuk pengguna: ${user.email}`);
     return 'Email verifikasi sudah dikirim';
     }
 
-  // async passwordResetRequest(email: string): Promise<string> {
   //   const emailRequest = this.validationService.validate(
   //     AuthValidation.EMAIL,
   //     email,
@@ -909,7 +926,7 @@ export class AuthService {
       const resetPasswordLink = `${backendUrl}/auth/verify-reset-password/${passwordResetToken}`;
 
       // Kirim email reset password
-      await this.mailService.sendEmail({
+      const sendEmail = {
         from: {
           name: this.configService.get<string>('APP_NAME'),
           address: this.configService.get<string>('MAIL_USER'),
@@ -926,7 +943,16 @@ export class AuthService {
           username: user.name,
           verificationLink: resetPasswordLink,
         },
-      });
+      };
+      
+      try {
+        await this.mailService.sendEmail(sendEmail);
+        this.logger.debug(`Email reset password berhasil dikirim ke: ${email}`);
+      } catch (emailError) {
+        // Log error tapi jangan gagalkan proses reset password
+        this.logger.error('Error sending reset password email:', emailError);
+        this.logger.warn('Proses reset password tetap dilanjutkan meskipun email gagal terkirim');
+      }
 
       // Simpan token reset password di database
       await this.prismaService.user.update({
@@ -1069,7 +1095,14 @@ export class AuthService {
       },
     };
 
-    await this.mailService.sendEmail(sendEmail);
+    try {
+      await this.mailService.sendEmail(sendEmail);
+      this.logger.debug(`Email verifikasi untuk email baru ${emailRequest} berhasil dikirim`);
+    } catch (emailError) {
+      // Log error tapi jangan gagalkan proses registrasi
+      this.logger.error('Error sending verification email:', emailError);
+      this.logger.warn('Registrasi tetap dilanjutkan meskipun email gagal terkirim');
+    }
 
     await this.prismaService.user.update({
       where: {
@@ -1080,7 +1113,6 @@ export class AuthService {
       },
     });
 
-    this.logger.debug(`Email verifikasi untuk email baru ${emailRequest} berhasil dikirim`);
     return 'Email verifikasi email baru telah terkirim';
   }
 
@@ -1179,15 +1211,70 @@ export class AuthService {
 
   async logout(user: CurrentUserRequest): Promise<string> {
     await this.prismaService.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        refreshToken: null,
-      },
+      where: { id: user.id },
+      data: { refreshToken: null },
     });
-
     return 'Logout berhasil';
+  }
+
+  /**
+   * Menghapus user role 'user' yang belum terverifikasi setelah 20 menit
+   * @returns Jumlah user yang dihapus
+   */
+  async cleanupUnverifiedUsers(): Promise<number> {
+    this.logger.log('Memulai pembersihan user yang belum terverifikasi');
+    
+    // Cari role 'user'
+    const userRole = await this.prismaService.role.findFirst({
+      where: { name: { equals: 'user', mode: 'insensitive' } },
+    });
+    
+    if (!userRole) {
+      this.logger.warn('Role "user" tidak ditemukan, tidak ada yang dibersihkan');
+      return 0;
+    }
+    
+    // Hitung waktu 20 menit yang lalu
+    const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+    
+    // Cari user yang belum terverifikasi dan dibuat lebih dari 20 menit yang lalu
+    const usersToDelete = await this.prismaService.user.findMany({
+      where: {
+        roleId: userRole.id,
+        verifiedAccount: false,
+        createdAt: { lt: twentyMinutesAgo }
+      },
+      include: {
+        participant: true
+      }
+    });
+    
+    let deletedCount = 0;
+    
+    // Hapus user satu per satu untuk memastikan data terkait juga dihapus
+    for (const user of usersToDelete) {
+      try {
+        // Jika user memiliki data participant, hapus relasi terlebih dahulu
+        if (user.participant) {
+          await this.prismaService.user.update({
+            where: { id: user.id },
+            data: { participantId: null }
+          });
+        }
+        
+        // Hapus user
+        await this.prismaService.user.delete({
+          where: { id: user.id }
+        });
+        
+        deletedCount++;
+      } catch (error) {
+        this.logger.error(`Gagal menghapus user ${user.id}: ${error.message}`);
+      }
+    }
+    
+    this.logger.log(`Berhasil menghapus ${deletedCount} user role 'user' yang belum terverifikasi setelah 20 menit`);
+    return deletedCount;
   }
 
   private async checkUserExists(idNumber?: string, email?: string) {

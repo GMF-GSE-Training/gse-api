@@ -1,0 +1,90 @@
+[
+  {
+    "id": "8123a507-47f4-4dcc-9662-4b3e80efc51b",
+    "ratingCode": "BTT",
+    "totalDuration": "10",
+    "totalPracticeDurationCompetency": "5",
+    "totalPracticeDurationRegGse": "0",
+    "totalTheoryDurationCompetency": "0",
+    "totalTheoryDurationRegGse": "5",
+    "trainingCode": "TCT - 0535",
+    "trainingName": "Baggage Towing Tractor"
+  },
+  {
+    "id": "765fd57e-9645-4197-9bf5-b506c57f7f3c",
+    "ratingCode": "LSS",
+    "totalDuration": "10",
+    "totalPracticeDurationCompetency": "3",
+    "totalPracticeDurationRegGse": "1",
+    "totalTheoryDurationCompetency": "2",
+    "totalTheoryDurationRegGse": "4",
+    "trainingCode": "TCT - 0530",
+    "trainingName": "Lavatory Service System"
+  },
+  {
+    "id": "7d04302d-e0ef-4e2c-83a8-4b3d0961e562",
+    "ratingCode": "GPS",
+    "totalDuration": "15",
+    "totalPracticeDurationCompetency": "7",
+    "totalPracticeDurationRegGse": "1",
+    "totalTheoryDurationCompetency": "2",
+    "totalTheoryDurationRegGse": "5",
+    "trainingCode": "TCT - 0526",
+    "trainingName": "Ground Power System"
+  },
+  {
+    "id": "34e88d2c-144b-431d-83d8-9f81e9446726",
+    "ratingCode": "ATT",
+    "totalDuration": "10",
+    "totalPracticeDurationCompetency": "3",
+    "totalPracticeDurationRegGse": "1",
+    "totalTheoryDurationCompetency": "2",
+    "totalTheoryDurationRegGse": "4",
+    "trainingCode": "TCT - 0555",
+    "trainingName": "Aircraft Towing Tractor"
+  },
+  {
+    "id": "e6f865e1-a453-4e68-91c3-0abc3b11537d",
+    "ratingCode": "knknjkb",
+    "totalDuration": null,
+    "totalPracticeDurationCompetency": null,
+    "totalPracticeDurationRegGse": null,
+    "totalTheoryDurationCompetency": null,
+    "totalTheoryDurationRegGse": null,
+    "trainingCode": "jkkjhuihiu",
+    "trainingName": "kjnkjhn"
+  },
+  {
+    "id": "29564533-f24d-4642-be7e-16ac937ed091",
+    "ratingCode": "WSS",
+    "totalDuration": "17",
+    "totalPracticeDurationCompetency": "3",
+    "totalPracticeDurationRegGse": "7",
+    "totalTheoryDurationCompetency": "3",
+    "totalTheoryDurationRegGse": "4",
+    "trainingCode": "TCT - 0529",
+    "trainingName": "Water Service System "
+  },
+  {
+    "id": "47f0d83b-7fa4-434c-b45c-7ed2a26b6387",
+    "ratingCode": "MUV",
+    "totalDuration": "12",
+    "totalPracticeDurationCompetency": "4",
+    "totalPracticeDurationRegGse": "1",
+    "totalTheoryDurationCompetency": "2",
+    "totalTheoryDurationRegGse": "5",
+    "trainingCode": "TCT - 0537",
+    "trainingName": "Maintenance Unit Vehicle"
+  },
+  {
+    "id": "4142b004-9f41-4490-9507-b8a17dcd55dc",
+    "ratingCode": "FLT",
+    "totalDuration": "13",
+    "totalPracticeDurationCompetency": "5",
+    "totalPracticeDurationRegGse": "1",
+    "totalTheoryDurationCompetency": "4",
+    "totalTheoryDurationRegGse": "3",
+    "trainingCode": "TCT - 0536",
+    "trainingName": "Forklift"
+  }
+]

@@ -17,18 +17,20 @@ model User {
   id                        String        @id @default(uuid())
   participantId             String?       @unique
   idNumber                  String?       @unique @db.VarChar(20)
-  email                     String        @db.VarChar(255)
+  email                     String        @unique @db.VarChar(255)
   nik                       String?       @unique @db.VarChar(50)
   name                      String        @db.VarChar(255)
   password                  String        @db.VarChar(255)
-  refreshToken              String?       @db.VarChar(255)
-  accountVerificationToken  String?       @db.VarChar(255)
-  emailChangeToken          String?       @db.VarChar(255)
-  passwordResetToken        String?       @db.VarChar(255)
-  updateEmailToken          String?       @db.VarChar(255)
+  refreshToken              String?       @db.Text
+  accountVerificationToken  String?       @db.Text
+  emailChangeToken          String?       @db.Text
+  passwordResetToken        String?       @db.Text
+  updateEmailToken          String?       @db.Text
   roleId                    String
   dinas                     String?       @db.VarChar(50)
   verifiedAccount           Boolean       @default(false)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   role                      Role          @relation(fields: [roleId], references: [id])
   participant               Participant?  @relation(fields: [participantId], references: [id])
@@ -38,7 +40,7 @@ model User {
 
 model Role {
   id    String  @id @default(uuid())
-  name  String  @db.VarChar(50)
+  name  String  @unique @db.VarChar(50)
 
   users User[]
 

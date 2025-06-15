@@ -4,7 +4,7 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { RoleModule } from './role/role.module';
 import { ParticipantModule } from './participant/participant.module';
-import { ConfigModule } from './config/config.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CapabilityModule } from './capability/capability.module';
 import { CurriculumSyllabusModule } from './curriculum-syllabus/curriculum-syllabus.module';
 import { CotModule } from './cot/cot.module';
@@ -14,10 +14,17 @@ import { SharedModule } from './shared/shared.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { CertificateModule } from './certificate/certificate.module';
+import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
+import { MulterModule } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 
 @Module({
   imports: [
-    ConfigModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    NestScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'), // Mengarah ke folder 'public' di root proyek
     }),
@@ -33,6 +40,22 @@ import { CertificateModule } from './certificate/certificate.module';
     ParticipantCotModule,
     ESignModule,
     CertificateModule,
+    MulterModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        storage: diskStorage({
+          destination: './uploads',
+          filename: (req, file, cb) => {
+            const randomName = Array(32)
+              .fill(null)
+              .map(() => Math.round(Math.random() * 16).toString(16))
+              .join('');
+            return cb(null, `${randomName}${extname(file.originalname)}`);
+          },
+        }),
+      }),
+      inject: [ConfigService],
+    }),
   ],
   controllers: [],
   providers: [],

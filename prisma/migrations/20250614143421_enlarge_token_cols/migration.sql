@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "users" ALTER COLUMN "refreshToken" SET DATA TYPE TEXT,
+ALTER COLUMN "accountVerificationToken" SET DATA TYPE TEXT,
+ALTER COLUMN "emailChangeToken" SET DATA TYPE TEXT,
+ALTER COLUMN "passwordResetToken" SET DATA TYPE TEXT,
+ALTER COLUMN "updateEmailToken" SET DATA TYPE TEXT;

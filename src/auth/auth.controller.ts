@@ -1,14 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards, HttpException, Query } from "@nestjs/common";
 import { AuthGuard } from "../shared/guard/auth.guard";
 import { AuthResponse, CurrentUserRequest, LoginUserRequest, RegisterUserRequest, UpdatePassword } from "../model/auth.model";
 import { buildResponse, WebResponse } from "../model/web.model";
 import { AuthService } from "./auth.service";
-import { Response } from "express";
+import { Response, Request } from "express";
 import { ConfigService } from "@nestjs/config";
 import { Logger } from "@nestjs/common";
 import * as os from 'os';
 import { User } from "src/shared/decorator/user.decorator";
 import { GetCookie } from "src/shared/decorator/cookie.decorator";
+import { Cron } from '@nestjs/schedule';
 
 @Controller('/auth')
 export class AuthController {
@@ -261,5 +262,57 @@ export class AuthController {
         res.clearCookie('refresh_token');
         res.clearCookie('access_token');
         return buildResponse(HttpStatus.OK, result);
+    }
+
+    @Post('/verify')
+    @HttpCode(200)
+    async verifyToken(
+        @Body('token') token: string,
+        @Res({ passthrough: true }) res: Response,
+    ): Promise<WebResponse<string>> {
+        this.logger.debug(`Memulai verifikasi akun dengan token dari frontend: ${token}`);
+
+        if (!token || token.trim() === '') {
+            throw new HttpException('Token tidak valid', HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            // Lakukan verifikasi dan dapatkan token akses & refresh
+            const result = await this.authService.accountVerification(token);
+
+            // Pasang cookie agar user langsung ter‐login seperti flow /verify-account/:token
+            const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+            res.cookie('refresh_token', result.refreshToken, {
+                httpOnly: true,
+                secure: isProduction,
+                sameSite: isProduction ? 'strict' : 'lax',
+                path: '/',
+                maxAge: 1000 * 60 * 60 * 24, // 1 day
+            });
+            res.cookie('access_token', result.accessToken, {
+                httpOnly: true,
+                secure: isProduction,
+                sameSite: isProduction ? 'strict' : 'lax',
+                path: '/',
+                maxAge: 1000 * 60 * 60 * 24,
+            });
+
+            return buildResponse(HttpStatus.OK, 'Akun berhasil diverifikasi');
+        } catch (error) {
+            this.logger.error('Gagal memverifikasi akun', error instanceof Error ? error.stack : `${error}`);
+            throw error;
+        }
+    }
+
+    // Cron job untuk menghapus user yang belum terverifikasi setelah 20 menit
+    @Cron('0 17 * * *') // Jalankan setiap hari pada pukul 00:00 WIB (17:00 UTC)
+    async cleanupUnverifiedUsers() {
+        try {
+            this.logger.log('Menjalankan pembersihan user yang belum terverifikasi');
+            const result = await this.authService.cleanupUnverifiedUsers();
+            this.logger.log(`Berhasil menghapus ${result} user yang belum terverifikasi setelah 20 menit`);
+        } catch (error) {
+            this.logger.error('Gagal menjalankan pembersihan user:', error);
+        }
     }
 }

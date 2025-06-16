@@ -12,9 +12,12 @@ import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { RoleResponse } from 'src/model/role.model';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     private readonly validationService: ValidationService,
     private readonly prismaService: PrismaService,
@@ -248,19 +251,40 @@ export class UserService {
   }
 
   async delete(userId: string): Promise<string> {
+    this.logger.log(`Memulai penghapusan user dengan ID: ${userId}`);
     const findUser = await this.findUser(userId);
 
     if (!findUser) {
+      this.logger.warn(`User dengan ID ${userId} tidak ditemukan.`);
       throw new HttpException('User tidak ditemukan', 404);
     }
 
-    await this.prismaService.user.delete({
-      where: {
-        id: userId,
-      },
-    });
+    try {
+      await this.prismaService.$transaction(async (prisma) => {
+        this.logger.debug(`Memulai transaksi penghapusan untuk user ${userId}.`);
+        // Hapus participant terkait jika ada
+        if (findUser.participantId) {
+          this.logger.debug(`User ${userId} memiliki participantId: ${findUser.participantId}. Menghapus participant terkait.`);
+          const deletedParticipant = await prisma.participant.delete({
+            where: { id: findUser.participantId }
+          });
+          this.logger.debug(`Participant ${findUser.participantId} berhasil dihapus. Hasil: ${JSON.stringify(deletedParticipant)}`);
+        }
 
-    return 'User berhasil dihapus';
+        // Kemudian hapus user
+        const deletedUser = await prisma.user.delete({
+          where: {
+            id: userId,
+          },
+        });
+        this.logger.debug(`User ${userId} berhasil dihapus. Hasil: ${JSON.stringify(deletedUser)}`);
+      });
+      this.logger.log(`Penghapusan user ${userId} dan data terkait berhasil.`);
+      return 'User berhasil dihapus';
+    } catch (error) {
+      this.logger.error(`Gagal menghapus user ${userId} atau participant terkait: ${error.message}`, error.stack);
+      throw new HttpException('Gagal menghapus user atau data terkait', 500);
+    }
   }
 
   async listUsers(

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - backup/dev-2025-06-15
 
 jobs:
   deploy:

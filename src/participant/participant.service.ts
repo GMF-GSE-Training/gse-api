@@ -453,50 +453,65 @@ export class ParticipantService {
     }
 
     async deleteParticipant(participantId: string, user: CurrentUserRequest): Promise<string> {
+        this.logger.log(`Memulai penghapusan participant dengan ID: ${participantId} oleh user: ${user.email}`);
         const participant = await this.findOneParticipant(participantId);
-    
+
         if (!participant) {
+            this.logger.warn(`Participant dengan ID ${participantId} tidak ditemukan.`);
             throw new HttpException('Peserta tidak ditemukan', 404);
         }
-    
+
         if (user.dinas || user.dinas !== null) {
             this.validateDinasForLcuRequest(participant.dinas, user.dinas);
+            this.logger.debug(`Validasi dinas untuk LCU berhasil untuk participant ${participantId}.`);
         }
-    
-        // Gunakan Prisma Transaction
-        await this.prismaService.$transaction(async (prisma) => {
-            // Hapus user terkait (jika ada)
-            const findUser = await prisma.user.findFirst({
-                where: {
-                    participantId: participant.id,
-                },
-            });
-    
-            if (findUser) {
-                await prisma.user.delete({
+
+        try {
+            await this.prismaService.$transaction(async (prisma) => {
+                this.logger.debug(`Memulai transaksi penghapusan untuk participant ${participantId}.`);
+
+                // Hapus user terkait (jika ada)
+                const findUser = await prisma.user.findFirst({
                     where: {
-                        id: findUser.id,
+                        participantId: participant.id,
                     },
                 });
-            }
-    
-            // Hapus data terkait di tabel participantsCOT
-            await prisma.participantsCOT.deleteMany({
-                where: {
-                    participantId: participantId,
-                },
+
+                if (findUser) {
+                    this.logger.debug(`Participant ${participantId} memiliki user terkait dengan ID: ${findUser.id}. Menghapus user terkait.`);
+                    const deletedUser = await prisma.user.delete({
+                        where: {
+                            id: findUser.id,
+                        },
+                    });
+                    this.logger.debug(`User ${findUser.id} berhasil dihapus. Hasil: ${JSON.stringify(deletedUser)}`);
+                }
+
+                // Hapus data terkait di tabel participantsCOT
+                this.logger.debug(`Menghapus entri participantsCOT untuk participant ${participantId}.`);
+                const deletedParticipantsCot = await prisma.participantsCOT.deleteMany({
+                    where: {
+                        participantId: participantId,
+                    },
+                });
+                this.logger.debug(`${deletedParticipantsCot.count} entri participantsCOT berhasil dihapus untuk participant ${participantId}.`);
+
+                // Hapus data peserta
+                this.logger.debug(`Menghapus data participant dengan ID: ${participantId}.`);
+                const deletedParticipantData = await prisma.participant.delete({
+                    where: {
+                        id: participantId,
+                    },
+                });
+                this.logger.debug(`Participant ${participantId} berhasil dihapus. Hasil: ${JSON.stringify(deletedParticipantData)}`);
             });
-    
-            // Hapus data peserta
-            await prisma.participant.delete({
-                where: {
-                    id: participantId,
-                },
-            });
-        });
-    
-        return 'Berhasil menghapus participant';
-    }    
+            this.logger.log(`Penghapusan participant ${participantId} dan data terkait berhasil.`);
+            return 'Berhasil menghapus participant';
+        } catch (error) {
+            this.logger.error(`Gagal menghapus participant ${participantId} atau data terkait: ${error.message}`, error.stack);
+            throw new HttpException('Gagal menghapus participant atau data terkait', 500);
+        }
+    }
 
     async listParticipants(request: ListRequest, user: CurrentUserRequest):Promise<{ data: ParticipantResponse[], actions: ActionAccessRights, paging: Paging }> {
         const userRole = user.role.name.toLowerCase();

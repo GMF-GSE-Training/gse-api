@@ -76,7 +76,7 @@ export class AuthController {
                 maxAge: 1000 * 60 * 60 * 24,
             });
 
-            const redirectUrl = `${frontendUrl}/home`;
+            const redirectUrl = `${frontendUrl}/dashboard`;
             this.logger.debug(`Berhasil verifikasi, mengarahkan ke: ${redirectUrl}`);
             return res.redirect(redirectUrl);
         } catch (error) {
@@ -208,7 +208,7 @@ export class AuthController {
         if (!token || token.trim() === '') {
             this.logger.warn('Token tidak ada atau tidak valid');
             const frontendUrl = this.getBaseUrl('frontend');
-            const redirectUrl = `${frontendUrl}/home?error=${encodeURIComponent('Token tidak valid')}`;
+            const redirectUrl = `${frontendUrl}/dashboard?error=${encodeURIComponent('Token tidak valid')}`;
             return res.redirect(redirectUrl);
         }
 

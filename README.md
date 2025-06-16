@@ -44,13 +44,13 @@ $ pnpm install
 
 ```bash
 # development
-$ npm run start
+$ pnpm run start
 
 # watch mode
-$ npm run start:dev
+$ pnpm run start:dev
 
 # production mode
-$ npm run start:prod
+$ pnpm run start:prod
 ```
 
 ## Test
@@ -65,6 +65,34 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+
+## Troubleshooting
+
+### `bcrypt_lib.node` module not found error
+
+If you encounter an error like `Error: Cannot find module '.../bcrypt_lib.node'` when running `pnpm run seed`, it might be due to a compatibility issue with your Node.js version or a corrupted `node_modules` installation.
+
+**Solution:**
+
+1.  **Update bcrypt:**
+    ```bash
+    pnpm update bcrypt@latest
+    ```
+2.  **Re-generate Prisma Client:**
+    ```bash
+    pnpm prisma generate
+    ```
+3.  **If the above doesn't work, consider Node.js version compatibility:**
+    `bcrypt` might have compatibility issues with newer Node.js versions (e.g., Node.js 22.x with bcrypt 5.x.x). If updating `bcrypt` doesn't resolve the issue, consider using a Node.js version known to be compatible (e.g., Node.js 20.x).
+
+    To switch Node.js versions (requires `nvm`):
+    ```bash
+    nvm install 20 # Install Node.js 20 if not already installed
+    nvm use 20     # Switch to Node.js 20
+    rm -rf node_modules pnpm-lock.yaml && pnpm install # Clean reinstall dependencies
+    pnpm prisma generate # Re-generate Prisma Client
+    pnpm run seed # Try running seed again
+    ```
 
 ## Support
 

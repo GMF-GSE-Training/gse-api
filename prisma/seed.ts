@@ -8,6 +8,7 @@ import * as os from 'os';
 import { chain } from 'stream-chain';
 import { parser } from 'stream-json';
 import { streamArray } from 'stream-json/streamers/StreamArray';
+import { faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
 const dummyDir = path.join(__dirname, 'dummy-data');
@@ -37,8 +38,13 @@ const toDateObj = (d: string | null): Date | null => {
   return isNaN(dt.getTime()) ? null : dt;
 };
 
-function loadJson<T>(file: string): T {
-  return JSON.parse(fs.readFileSync(path.join(dummyDir, file), 'utf8')) as T;
+function loadJson<T>(file: string): T[] {
+  const filePath = path.join(dummyDir, file);
+  if (!fs.existsSync(filePath)) {
+    console.warn(`- Dummy data file not found: ${file}. Returning empty array.`);
+    return [] as T[];
+  }
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T[];
 }
 
 async function seedRoles() {
@@ -62,17 +68,68 @@ async function seedRoles() {
 }
 
 async function seedParticipants() {
-  console.log('--- Seeding participants (using stream for large file) ---');
+  console.log('--- Seeding participants ---');
   const participantsPath = path.join(dummyDir, 'participants.json');
-  const batchSize = 200;
-  let batch: any[] = [];
+  let rawParticipants: any[] = [];
 
-  const processBatch = async (items: any[]) => {
-    if (items.length === 0) return;
+  if (fs.existsSync(participantsPath)) {
+    // Use streaming for large files if the file exists
+    const pipeline = chain([
+      fs.createReadStream(participantsPath),
+      parser(),
+      streamArray(),
+    ]);
+    for await (const data of pipeline) {
+      rawParticipants.push(data.value);
+    }
+  }
+
+  if (rawParticipants.length === 0) {
+    console.warn('- Dummy data file not found or empty: participants.json. Generating dummy participants.');
+    // Generate 50 dummy participants
+    for (let i = 0; i < 50; i++) { // Generate 50 dummy participants
+      const gender = faker.helpers.arrayElement(['male', 'female']) as 'male' | 'female';
+      const name = faker.person.fullName({ sex: gender });
+      const email = faker.internet.email({ firstName: faker.person.firstName(gender), lastName: faker.person.lastName(gender) }).toLowerCase();
+      const nik = faker.string.numeric(16);
+      const phoneNumber = faker.phone.number('08##########');
+      const idNumber = `P${(i + 1).toString().padStart(3, '0')}`;
+      const dinas = faker.helpers.arrayElement(['TA', 'TB', 'TC', 'TF', 'TJ', 'TL', 'TM', 'TR', 'TU', 'TV', 'TZ']);
+
+      rawParticipants.push({
+        id: faker.string.uuid(),
+        idNumber: idNumber,
+        name: name,
+        nik: nik,
+        dinas: dinas,
+        bidang: faker.commerce.department(),
+        company: faker.company.name(),
+        email: email,
+        phoneNumber: phoneNumber,
+        nationality: 'Indonesia',
+        placeOfBirth: faker.location.city(),
+        dateOfBirth: faker.date.past({ years: 30, refDate: '2000-01-01' }).toISOString().split('T')[0], // YYYY-MM-DD
+        simAFileName: null,
+        simBFileName: null,
+        ktpFileName: null,
+        fotoFileName: null,
+        suratSehatButaWarnaFileName: null,
+        tglKeluarSuratSehatButaWarna: null,
+        suratBebasNarkobaFileName: null,
+        tglKeluarSuratBebasNarkoba: null,
+        gmfNonGmf: faker.helpers.arrayElement(['GMF', 'Non-GMF']),
+      });
+    }
+  }
+
+  if (rawParticipants.length === 0) {
+    console.log('No participants to seed.');
+    return;
+  }
     
-    const localIp = Object.values(os.networkInterfaces()).flat().find((x) => x?.family === 'IPv4' && !x.internal)?.address ?? 'localhost';
+  const localIp = Object.values(os.networkInterfaces()).flat().find((x) => x?.family === 'IPv4' && !x.internal)?.address ?? 'localhost';
 
-    await Promise.all(items.map(async (p) => {
+  const dataToSeed = await Promise.all(rawParticipants.map(async (p) => {
       // Sanitize: empty string or undefined -> null
       for (const key in p) {
         if (p[key] === '' || p[key] === undefined) p[key] = null;
@@ -97,53 +154,25 @@ async function seedParticipants() {
       p.ktp = img(p.ktpFileName);
       p.foto = img(p.fotoFileName);
       p.suratBebasNarkoba = img(p.suratBebasNarkobaFileName);
-      p.suratSehatButaWarna = img(p.suratSehatButaWarnaFileName);
+      p.suratSehatButaWarna = img(p.suratSehatButaWaktuFileName);
 
       const url = `http://${localIp}:4200/participant/detail/${p.id}`;
       const qrDataUrl = await QRCode.toDataURL(url);
       p.qrCode = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+
+    return p;
     }));
 
     try {
       await prisma.participant.createMany({
-        data: items,
+      data: dataToSeed,
         skipDuplicates: true,
       });
-      console.log(`✔ Inserted batch of ${items.length} participants.`);
+    console.log(`✔ Seeded ${dataToSeed.length} participants.`);
     } catch (e) {
       console.error('⚠ Failed inserting participant batch, logging to failed_participants.json');
-      fs.appendFileSync('failed_participants.json', JSON.stringify(items, null, 2) + ',\n');
-    }
-  };
-
-  const pipeline = chain([
-    fs.createReadStream(participantsPath),
-    parser(),
-    streamArray(),
-  ]);
-
-  for await (const data of pipeline) {
-    batch.push(data.value);
-    if (batch.length >= batchSize) {
-      try {
-        await processBatch(batch);
-      } catch (e) {
-        console.error('⚠ Failed processing a batch. Logging items to failed_batch_processing.json and continuing...', e);
-        fs.appendFileSync('failed_batch_processing.json', JSON.stringify(batch, null, 2) + ',\n');
+    fs.appendFileSync('failed_participants.json', JSON.stringify(dataToSeed, null, 2) + ',\n');
       }
-      batch = []; // Clear the batch
-    }
-  }
-
-  if (batch.length > 0) {
-    try {
-      await processBatch(batch);
-    } catch (e) {
-      console.error('⚠ Failed processing the final batch. Logging items to failed_batch_processing.json.', e);
-      fs.appendFileSync('failed_batch_processing.json', JSON.stringify(batch, null, 2) + ',\n');
-    }
-  }
-  console.log('--- Finished seeding participants ---');
 }
 
 async function seedUsers() {
@@ -280,7 +309,25 @@ async function seedUsers() {
 async function seedCapabilities() {
   console.log('--- Seeding capabilities ---');
   const raw: any[] = loadJson('capabilities.json');
+  let data: any[] = [];
 
+  if (raw.length === 0) {
+    console.warn('- No capabilities data found, generating dummy data');
+    // Generate some dummy capabilities
+    for (let i = 0; i < 10; i++) { // Generate 10 dummy capabilities
+      data.push({
+        id: faker.string.uuid(),
+        ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
+        trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
+        trainingName: faker.lorem.words({ min: 2, max: 5 }),
+        totalTheoryDurationRegGse: faker.number.int({ min: 10, max: 100 }),
+        totalPracticeDurationRegGse: faker.number.int({ min: 10, max: 100 }),
+        totalTheoryDurationCompetency: faker.number.int({ min: 10, max: 100 }),
+        totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
+        totalDuration: faker.number.int({ min: 50, max: 500 }),
+      });
+    }
+  } else {
   const numFields = [
     'totalDuration',
     'totalPracticeDurationCompetency',
@@ -289,7 +336,7 @@ async function seedCapabilities() {
     'totalTheoryDurationRegGse',
   ];
 
-  const data = raw.map((c) => {
+    data = raw.map((c) => {
     const item: any = { ...c };
     for (const f of numFields) {
       if (item[f] === '' || item[f] === undefined) {
@@ -301,6 +348,7 @@ async function seedCapabilities() {
     }
     return item;
   });
+  }
 
   await prisma.capability.createMany({ data, skipDuplicates: true });
   console.log(`✔ Seeded ${data.length} capabilities.`);
@@ -309,7 +357,26 @@ async function seedCapabilities() {
 async function seedCots() {
   console.log('--- Seeding COTs ---');
   const raw: any[] = loadJson('cots.json');
-  const data = raw.map((c) => ({
+  let data: any[] = [];
+
+  if (raw.length === 0) {
+    console.warn('- No COTs data found, generating dummy data');
+    // Generate some dummy COTs
+    for (let i = 0; i < 5; i++) { // Generate 5 dummy COTs
+      data.push({
+        id: faker.string.uuid(),
+        startDate: faker.date.recent({ days: 30 }),
+        endDate: faker.date.future({ years: 1, refDate: faker.date.recent({ days: 30 }) }),
+        trainingLocation: faker.location.city(),
+        theoryInstructorRegGse: faker.person.fullName(),
+        theoryInstructorCompetency: faker.person.fullName(),
+        practicalInstructor1: faker.person.fullName(),
+        practicalInstructor2: faker.person.fullName(),
+        status: faker.helpers.arrayElement(['pending', 'in-progress', 'completed']),
+      });
+    }
+  } else {
+    data = raw.map((c) => ({
     id: c.id,
     startDate: toDateObj(c.startDate) ?? new Date(),
     endDate: toDateObj(c.endDate) ?? new Date(),
@@ -320,6 +387,8 @@ async function seedCots() {
     practicalInstructor2: c.practicalInstructor2 ?? 'N/A',
     status: c.status ?? 'pending',
   }));
+  }
+
   await prisma.cOT.createMany({ data, skipDuplicates: true });
   console.log(`✔ Seeded ${data.length} cots.`);
 }
@@ -345,8 +414,6 @@ async function seedCapabilityCots() {
 
 async function seedSignatures() {
   console.log('--- Seeding signatures ---');
-  // Clear existing signatures to avoid leftover placeholder data
-  await prisma.signature.deleteMany();
   const raw: any[] = loadJson('signatures.json');
   let data = raw.map((s) => {
     // Determine which image file to use
@@ -497,6 +564,20 @@ async function seedCurriculumSyllabus() {
 
 async function main() {
   try {
+    console.log('--- Cleaning database ---');
+    // Delete in reverse dependency order
+    await prisma.certificate.deleteMany();
+    await prisma.participantsCOT.deleteMany();
+    await prisma.capabilityCOT.deleteMany();
+    await prisma.user.deleteMany();
+    await prisma.signature.deleteMany();
+    await prisma.participant.deleteMany();
+    await prisma.cOT.deleteMany();
+    await prisma.curriculumSyllabus.deleteMany();
+    await prisma.capability.deleteMany();
+    await prisma.role.deleteMany();
+    console.log('--- Database cleaned ---');
+
     await seedRoles();
     await seedCapabilities();
     await seedCots();

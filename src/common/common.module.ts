@@ -76,7 +76,7 @@ import { CoreHelper } from './helpers/core.helper';
         new JwtService({
           secret: configService.get<string>('VERIFICATION_TOKEN'),
           signOptions: {
-            expiresIn: '15m',
+            expiresIn: '24h',
           },
         }),
       inject: [ConfigService],

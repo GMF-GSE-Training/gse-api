@@ -22,7 +22,8 @@ model User {
   name                      String        @db.VarChar(255)
   password                  String        @db.VarChar(255)
   refreshToken              String?       @db.Text
-  accountVerificationToken  String?       @db.Text
+  accountVerificationToken  String?       @db.VarChar(512)
+  lastVerificationEmailSentAt DateTime?   @map("last_verification_email_sent_at")
   emailChangeToken          String?       @db.Text
   passwordResetToken        String?       @db.Text
   updateEmailToken          String?       @db.Text

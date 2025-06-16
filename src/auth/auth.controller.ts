@@ -89,7 +89,7 @@ export class AuthController {
 
     @Post('/login')
     @HttpCode(200)
-    async login(@Body() request: LoginUserRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
+    async login(@Body() request: LoginUserRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<AuthResponse>> {
         const result = await this.authService.login(request);
         res.cookie('refresh_token', result.refreshToken, {
             httpOnly: true,
@@ -109,7 +109,7 @@ export class AuthController {
             maxAge: 1000 * 60 * 60 * 24,
         });
         // const { refreshToken, ...response } = result;
-        return buildResponse(HttpStatus.OK, 'Login Berhasil');
+        return buildResponse(HttpStatus.OK, result);
     }
 
     @Get('/token')

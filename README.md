@@ -1,109 +1,119 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# GMF Utility Training Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Deskripsi Proyek
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Repositori ini berisi kode *backend* untuk aplikasi 'GMF Utility Training', yang dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL (Supabase).
 
-## Description
+## Instalasi
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
-
-```bash
-$ npm install -g npm
-```
-
-```bash
-$ npm install -g pnpm
-```
+Pastikan Anda memiliki [pnpm](https://pnpm.io/installation) terinstal. Kemudian, jalankan perintah berikut:
 
 ```bash
 $ pnpm install
 ```
 
-## Running the app
+## Konfigurasi Lingkungan (`.env`)
+
+Buat file `.env` di direktori `be-dev/` dengan variabel lingkungan berikut. Pastikan untuk mengisi nilai yang sesuai, terutama `DATABASE_URL` yang didapatkan dari Supabase.
+
+```
+DATABASE_URL="postgresql://postgres.ckyobbobvftqziemlccu:<YOUR_PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+NODE_ENV=development
+PROTOCOL=http
+HOST=0.0.0.0
+FRONTEND_URL=http://localhost:4200
+BACKEND_URL=http://localhost:3000
+QR_CODE_LINK=http://localhost:4200/participants/{id}/detail
+ACCESS_TOKEN=<YOUR_ACCESS_TOKEN>
+REFRESH_TOKEN=<YOUR_REFRESH_TOKEN>
+VERIFICATION_TOKEN=<YOUR_VERIFICATION_TOKEN>
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USER=<YOUR_MAIL_USER>
+MAIL_PASS=<YOUR_MAIL_PASS>
+APP_NAME="Admin GMF Training"
+```
+
+**Catatan Penting:**
+*   Ganti `<YOUR_PASSWORD>`, `<YOUR_ACCESS_TOKEN>`, `<YOUR_REFRESH_TOKEN>`, `<YOUR_VERIFICATION_TOKEN>`, `<YOUR_MAIL_USER>`, dan `<YOUR_MAIL_PASS>` dengan nilai yang sebenarnya.
+*   Untuk `DATABASE_URL`, pastikan Anda menggunakan string koneksi Supavisor (session mode) dari dashboard Supabase Anda.
+
+## Migrasi dan Seeding Database
+
+Setelah mengkonfigurasi `.env`, jalankan migrasi database dan *seeding* awal:
 
 ```bash
-# development
+pnpm prisma migrate deploy
+pnpm run seed
+```
+
+## Menjalankan Aplikasi
+
+```bash
+# Development
 $ pnpm run start
 
-# watch mode
+# Watch mode
 $ pnpm run start:dev
 
-# production mode
+# Production mode
 $ pnpm run start:prod
 ```
 
-## Test
+## Testing
 
 ```bash
-# unit tests
-$ npm run test
+# Unit tests
+$ pnpm run test
 
-# e2e tests
-$ npm run test:e2e
+# E2E tests
+$ pnpm run test:e2e
 
-# test coverage
-$ npm run test:cov
+# Test coverage
+$ pnpm run test:cov
 ```
 
-## Troubleshooting
+## Deployment
+
+Proyek ini dikonfigurasi untuk deployment *serverless* ke Google Cloud Run menggunakan GitHub Actions. Workflow deployment otomatis terpicu pada *push* ke *branch* `backup/dev-2025-06-15`.
+
+Pastikan [GitHub Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets) berikut dikonfigurasi di repositori GitHub Anda:
+*   `GCP_SA_KEY` (Kunci akun layanan Google Cloud dalam format JSON)
+*   `DATABASE_URL_DEV` (String koneksi database Supabase untuk lingkungan dev)
+*   `ACCESS_TOKEN_DEV`
+*   `REFRESH_TOKEN_DEV`
+*   `VERIFICATION_TOKEN_DEV`
+*   `MAIL_USER_DEV`
+*   `MAIL_PASS_DEV`
+
+## Pemecahan Masalah (`Troubleshooting`)
 
 ### `bcrypt_lib.node` module not found error
 
-If you encounter an error like `Error: Cannot find module '.../bcrypt_lib.node'` when running `pnpm run seed`, it might be due to a compatibility issue with your Node.js version or a corrupted `node_modules` installation.
+Jika Anda menemukan error seperti `Error: Cannot find module '.../bcrypt_lib.node'` saat menjalankan `pnpm run seed`, itu mungkin karena masalah kompatibilitas dengan versi Node.js Anda atau instalasi `node_modules` yang rusak.
 
-**Solution:**
+**Solusi:**
 
-1.  **Update bcrypt:**
+1.  **Perbarui bcrypt:**
     ```bash
     pnpm update bcrypt@latest
     ```
-2.  **Re-generate Prisma Client:**
+2.  **Regenerate Prisma Client:**
     ```bash
     pnpm prisma generate
     ```
-3.  **If the above doesn't work, consider Node.js version compatibility:**
-    `bcrypt` might have compatibility issues with newer Node.js versions (e.g., Node.js 22.x with bcrypt 5.x.x). If updating `bcrypt` doesn't resolve the issue, consider using a Node.js version known to be compatible (e.g., Node.js 20.x).
+3.  **Pertimbangkan Kompatibilitas Versi Node.js:**
+    `bcrypt` mungkin memiliki masalah kompatibilitas dengan versi Node.js yang lebih baru (misalnya, Node.js 22.x dengan bcrypt 5.x.x). Jika pembaruan `bcrypt` tidak menyelesaikan masalah, pertimbangkan untuk menggunakan versi Node.js yang diketahui kompatibel (misalnya, Node.js 20.x).
 
-    To switch Node.js versions (requires `nvm`):
+    Untuk beralih versi Node.js (membutuhkan `nvm`):
     ```bash
-    nvm install 20 # Install Node.js 20 if not already installed
-    nvm use 20     # Switch to Node.js 20
-    rm -rf node_modules pnpm-lock.yaml && pnpm install # Clean reinstall dependencies
-    pnpm prisma generate # Re-generate Prisma Client
-    pnpm run seed # Try running seed again
+    nvm install 20 # Instal Node.js 20 jika belum terinstal
+    nvm use 20     # Beralih ke Node.js 20
+    rm -rf node_modules pnpm-lock.yaml && pnpm install # Instal ulang dependensi
+    pnpm prisma generate # Regenerate Prisma Client
+    pnpm run seed # Coba jalankan seed lagi
     ```
 
-## Support
+## Lisensi
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](LICENSE).
+Proyek ini dilisensikan di bawah [MIT License](LICENSE).

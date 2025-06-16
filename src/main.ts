@@ -25,7 +25,7 @@ async function bootstrap() {
     const frontendUrl = (configService.get('FRONTEND_URL') as string) || process.env.FRONTEND_URL || 'http://localhost:4200';
 
     app.enableCors({
-      origin: [frontendUrl, `${protocol}://${host}:4200`],
+      origin: [frontendUrl, 'https://gmf-utility-training.github.io', `${protocol}://${host}:4200`],
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       allowedHeaders: 'Content-Type,Authorization,Cache-Control',
       credentials: true,

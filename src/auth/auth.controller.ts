@@ -112,7 +112,7 @@ export class AuthController {
         return buildResponse(HttpStatus.OK, result);
     }
 
-    @Get('/token')
+    @Post('/token')
     @HttpCode(200)
     async refreshTokens(@GetCookie('refresh_token') refreshToken: string, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
         const result = await this.authService.refreshTokens(refreshToken);

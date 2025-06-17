@@ -37,7 +37,7 @@ jobs:
           docker push gcr.io/gmf-training/dev-backend-web-server:latest
 
       - name: Deploy to Cloud Run
-        run: |
+        run: |-
           gcloud run deploy dev-backend-service \
             --image gcr.io/gmf-training/dev-backend-web-server:latest \
             --platform managed \

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Aplikasi *backend* untuk <b>GMF Utility Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL (Supabase)</b>.
+  Aplikasi *backend* untuk <b>GMF Utility Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL</b>.
 </p>
 
 <p align="center">
@@ -16,13 +16,13 @@
 
 ## Deskripsi Proyek
 
-Repositori ini berisi kode *backend* untuk aplikasi 'GMF Utility Training', yang dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL (Supabase). Ini menyediakan API untuk manajemen pengguna, otentikasi, otorisasi berdasarkan peran, dan fitur terkait pelatihan.
+Repositori ini berisi kode *backend* untuk aplikasi 'GMF Utility Training', yang dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL. Ini menyediakan API untuk manajemen pengguna, otentikasi, otorisasi berdasarkan peran, dan fitur terkait pelatihan.
 
 ## Fitur Utama
 
 *   **Autentikasi & Otorisasi:** Menggunakan JWT (JSON Web Tokens) dengan refresh token, verifikasi email, dan reset password. Mendukung otorisasi berbasis peran.
 *   **Manajemen Pengguna & Peran:** Pengelolaan data pengguna dan peran (`super admin`, `supervisor`, `lcu`, `user`).
-*   **Integrasi Database:** Menggunakan Prisma ORM untuk interaksi dengan database PostgreSQL di Supabase.
+*   **Integrasi Database:** Menggunakan Prisma ORM untuk interaksi dengan database PostgreSQL.
 *   **Sistem Notifikasi:** Pengiriman email untuk verifikasi akun dan reset password.
 *   **Manajemen Dokumen:** Fitur untuk mengelola dokumen dan sertifikat.
 *   **Logging:** Implementasi logging yang robust menggunakan Winston untuk pemantauan aplikasi.
@@ -67,7 +67,7 @@ $ pnpm install
 
 ## Konfigurasi Lingkungan (`.env`)
 
-Buat file `.env` di direktori `be-dev/` dengan variabel lingkungan berikut. Pastikan untuk mengisi nilai yang sesuai, terutama `DATABASE_URL` yang didapatkan dari Supabase.
+Buat file `.env` di direktori `be-dev/` dengan variabel lingkungan berikut. Pastikan untuk mengisi nilai yang sesuai, terutama `DATABASE_URL`.
 
 ```
 DATABASE_URL="postgresql://postgres.ckyobbobvftqziemlccu:<YOUR_PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true"
@@ -89,7 +89,7 @@ APP_NAME="Admin GMF Training"
 
 **Catatan Penting:**
 *   Ganti `<YOUR_PASSWORD>`, `<YOUR_ACCESS_TOKEN>`, `<YOUR_REFRESH_TOKEN>`, `<YOUR_VERIFICATION_TOKEN>`, `<YOUR_MAIL_USER>`, dan `<YOUR_MAIL_PASS>` dengan nilai yang sebenarnya.
-*   Untuk `DATABASE_URL`, pastikan Anda menggunakan string koneksi Supavisor (session mode) dari dashboard Supabase Anda, dan tambahkan `?pgbouncer=true` di akhir untuk kompatibilitas Cloud Run.
+*   Untuk `DATABASE_URL`, pastikan Anda menggunakan string koneksi Supavisor (session mode) dari dashboard Anda, dan tambahkan `?pgbouncer=true` di akhir untuk kompatibilitas Cloud Run.
 
 ## Migrasi dan Seeding Database
 
@@ -133,7 +133,7 @@ Proyek ini dikonfigurasi untuk deployment *serverless* otomatis ke Google Cloud 
 Pastikan [GitHub Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets) berikut dikonfigurasi di repositori GitHub Anda (terutama untuk lingkungan produksi/Cloud Run):
 
 *   `GCP_SA_KEY` (Kunci akun layanan Google Cloud dalam format JSON)
-*   `DATABASE_URL` (String koneksi database Supabase untuk lingkungan Cloud Run, harus menyertakan `?pgbouncer=true`)
+*   `DATABASE_URL` (String koneksi database PostgreSQL untuk lingkungan Cloud Run, harus menyertakan `?pgbouncer=true`)
 *   `ACCESS_TOKEN`
 *   `REFRESH_TOKEN`
 *   `VERIFICATION_TOKEN`

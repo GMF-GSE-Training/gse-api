@@ -8,7 +8,7 @@
   Aplikasi *backend* untuk <b>GMF Utility Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL</b>.
 </p>
 
-<p align="center">
+    <p align="center">
   <a href="https://www.npmjs.com/package/@nestjs/core" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
   <a href="https://www.npmjs.com/package/@nestjs/core" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
   <a href="https://www.npmjs.com/package/@nestjs/common" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>

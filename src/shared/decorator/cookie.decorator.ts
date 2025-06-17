@@ -8,10 +8,11 @@ export const SetCookie = createParamDecorator(
     const response = ctx.switchToHttp().getResponse();
 
     if (data) {
+      const isProduction = process.env.NODE_ENV === 'production';
       response.cookie(data.name, data.value, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         path: '/',
         maxAge: 1000 * 60 * 60 * 24,
         ...data.options,

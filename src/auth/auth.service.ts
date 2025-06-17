@@ -419,6 +419,8 @@ export class AuthService {
       verifiedAccount: findUser.verifiedAccount || undefined,
       role: findUser.role ? { id: findUser.role.id, name: findUser.role.name } : undefined,
       participant: findUser.participant || undefined,
+      accessToken: await this.accessJwtService.signAsync({ id: findUser.id }), // Generate new access token
+      refreshToken: findUser.refreshToken || undefined, // Ambil refresh token dari user di DB
     };
 
     if (findUser.role.name === 'user' && findUser.participant) {

@@ -10,6 +10,8 @@ import * as os from 'os';
 import { User } from "src/shared/decorator/user.decorator";
 import { GetCookie } from "src/shared/decorator/cookie.decorator";
 import { Cron } from '@nestjs/schedule';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { Public } from './public.decorator';
 
 @Controller('/auth')
 export class AuthController {
@@ -113,9 +115,10 @@ export class AuthController {
     }
 
     @Post('/token')
+    @Public()
     @HttpCode(200)
-    async refreshTokens(@GetCookie('refresh_token') refreshToken: string, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
-        const result = await this.authService.refreshTokens(refreshToken);
+    async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
+        const result = await this.authService.refreshTokens(refreshTokenDto.refreshToken);
         res.cookie('access_token', result.accessToken, {
             httpOnly: true,
             secure: this.configService.get<string>('NODE_ENV') === 'production',

@@ -8,15 +8,21 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { PrismaService } from '../../common/service/prisma.service';
+import { Reflector } from '@nestjs/core';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private prismaService: PrismaService,
     @Inject('ACCESS_JWT_SERVICE') private readonly accessJwtService: JwtService,
+    private reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.get<boolean>('isPublic', context.getHandler());
+    if (isPublic) {
+      return true;
+    }
     const request = context.switchToHttp().getRequest();
     const accessToken = this.extractTokenFromCookie(request);
 

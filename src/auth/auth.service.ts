@@ -419,8 +419,6 @@ export class AuthService {
       verifiedAccount: findUser.verifiedAccount || undefined,
       role: findUser.role ? { id: findUser.role.id, name: findUser.role.name } : undefined,
       participant: findUser.participant || undefined,
-      accessToken: undefined, // Akses token tidak relevan di sini, akan diisi di frontend
-      refreshToken: undefined, // Refresh token tidak relevan di sini
     };
 
     if (findUser.role.name === 'user' && findUser.participant) {

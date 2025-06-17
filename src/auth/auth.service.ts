@@ -19,6 +19,7 @@ import * as os from 'os';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import * as QRCode from 'qrcode';
 import { HttpStatus } from '@nestjs/common';
+import { UrlHelper } from '../common/helpers/url.helper';
 
 @Injectable()
 export class AuthService {
@@ -34,23 +35,8 @@ export class AuthService {
     private readonly refreshJwtService: JwtService,
     @Inject('VERIFICATION_JWT_SERVICE')
     private readonly verificationJwtService: JwtService,
+    private readonly urlHelper: UrlHelper,
   ) {}
-
-  private getBaseUrl(type: 'frontend' | 'backend'): string {
-    const protocol = this.configService.get<string>('PROTOCOL') || 'http';
-    const host = this.configService.get<string>('HOST') || 'localhost';
-    const port = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_PORT' : 'PORT') || '4200';
-
-    const envUrl = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_URL' : 'BACKEND_URL');
-    if (envUrl) {
-        this.logger.debug(`Menggunakan ${type} URL dari .env: ${envUrl}`);
-        return envUrl;
-    }
-
-    const constructedUrl = `${protocol}://${host}:${port}`;
-    this.logger.warn(`Tidak ada ${type} URL di .env, menggunakan URL default: ${constructedUrl}`);
-    return constructedUrl;
-}
 
   async register(req: RegisterUserRequest): Promise<string> {
     this.logger.debug('Memulai registrasi pengguna');
@@ -164,23 +150,8 @@ export class AuthService {
     );
 
     // Generate QR code di luar transaksi
-    const link = this.configService
-      .get<string>('QR_CODE_LINK')
-      .replace('{id}', newParticipant.id);
-    const qrCodeBase64 = await QRCode.toDataURL(link, { width: 500 });
-    const qrCodeBuffer = Buffer.from(
-      qrCodeBase64.replace(/^data:image\/png;base64,/, ''),
-      'base64',
-    );
-
-    await this.prismaService.participant.update({
-      where: { id: newParticipant.id },
-      data: { qrCode: qrCodeBuffer },
-    });
-
-    // Ambil URL backend dari .env (link dibuat setelah transaksi)
-    const backendUrl = this.getBaseUrl('backend');
-    const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
+    const link = this.urlHelper.getBaseUrl('backend');
+    const verificationLink = `${link}/auth/verify-account/${accountVerificationToken}`;
 
     const email: SendEmail = {
       from: {
@@ -508,7 +479,7 @@ export class AuthService {
     const accountVerificationToken = await this.verificationJwtService.signAsync(payload);
 
     // Ambil URL backend dari .env (link dibuat setelah transaksi)
-    const backendUrl = this.getBaseUrl('backend');
+    const backendUrl = this.urlHelper.getBaseUrl('backend');
     const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
 
     const sendEmail: SendEmail = {
@@ -576,7 +547,7 @@ export class AuthService {
       const passwordResetToken = await this.verificationJwtService.signAsync(payload);
 
       // Ambil URL backend dari .env
-      const backendUrl = this.getBaseUrl('backend');
+      const backendUrl = this.urlHelper.getBaseUrl('backend');
       const resetPasswordLink = `${backendUrl}/auth/verify-reset-password/${passwordResetToken}`;
 
       // Kirim email reset password
@@ -726,7 +697,7 @@ export class AuthService {
     const updateEmailToken = await this.verificationJwtService.signAsync(payload);
 
     // Ambil BACKEND_URL dari .env
-    const backendUrl = this.getBaseUrl('backend');
+    const backendUrl = this.urlHelper.getBaseUrl('backend');
     const verificationLink = `${backendUrl}/auth/update-email/verify/${updateEmailToken}`;
 
     const sendEmail: SendEmail = {

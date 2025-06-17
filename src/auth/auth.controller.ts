@@ -12,6 +12,7 @@ import { GetCookie } from "src/shared/decorator/cookie.decorator";
 import { Cron } from '@nestjs/schedule';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from './public.decorator';
+import { UrlHelper } from '../common/helpers/url.helper';
 
 @Controller('/auth')
 export class AuthController {
@@ -19,23 +20,8 @@ export class AuthController {
     constructor(
         private readonly authService: AuthService,
         private readonly configService: ConfigService,
+        private readonly urlHelper: UrlHelper,
     ) {}
-
-    private getBaseUrl(type: 'frontend' | 'backend'): string {
-        const protocol = this.configService.get<string>('PROTOCOL') || 'http';
-        const host = this.configService.get<string>('HOST') || 'localhost';
-        const port = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_PORT' : 'PORT') || '4200';
-
-        const envUrl = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_URL' : 'BACKEND_URL');
-        if (envUrl) {
-            this.logger.debug(`Menggunakan ${type} URL dari .env: ${envUrl}`);
-            return envUrl;
-        }
-
-        const constructedUrl = `${protocol}://${host}:${port}`;
-        this.logger.warn(`Tidak ada ${type} URL di .env, menggunakan URL default: ${constructedUrl}`);
-        return constructedUrl;
-    }
 
     @Post('/register')
     @HttpCode(200)
@@ -51,12 +37,12 @@ export class AuthController {
         // Validasi token awal
         if (!token || token.trim() === '') {
             this.logger.warn('Token tidak ada atau tidak valid');
-            const frontendUrl = this.getBaseUrl('frontend');
+            const frontendUrl = this.urlHelper.getBaseUrl('frontend');
             const redirectUrl = `${frontendUrl}/verification?error=${encodeURIComponent('Token tidak valid')}`;
             return res.redirect(redirectUrl);
         }
 
-        const frontendUrl = this.getBaseUrl('frontend');
+        const frontendUrl = this.urlHelper.getBaseUrl('frontend');
 
         try {
             const result = await this.authService.accountVerification(token);
@@ -65,7 +51,7 @@ export class AuthController {
             res.cookie('refresh_token', result.refreshToken, {
                 httpOnly: true,
                 secure: isProduction,
-                sameSite: isProduction ? 'strict' : 'lax',
+                sameSite: isProduction ? 'none' : 'lax',
                 path: '/',
                 maxAge: 1000 * 60 * 60 * 24,
             });
@@ -73,7 +59,7 @@ export class AuthController {
             res.cookie('access_token', result.accessToken, {
                 httpOnly: true,
                 secure: isProduction,
-                sameSite: isProduction ? 'strict' : 'lax',
+                sameSite: isProduction ? 'none' : 'lax',
                 path: '/',
                 maxAge: 1000 * 60 * 60 * 24,
             });
@@ -93,20 +79,21 @@ export class AuthController {
     @HttpCode(200)
     async login(@Body() request: LoginUserRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<AuthResponse>> {
         const result = await this.authService.login(request);
+        const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
         res.cookie('refresh_token', result.refreshToken, {
             httpOnly: true,
-            secure: this.configService.get<string>('NODE_ENV') === 'production',
+            secure: isProduction,
             // domain: this.configService.get<string>('HOST'),
-            sameSite: 'lax',
+            sameSite: isProduction ? 'none' : 'lax',
             path: '/',
             maxAge: 1000 * 60 * 60 * 24,
         });
 
         res.cookie('access_token', result.accessToken, {
             httpOnly: true,
-            secure: this.configService.get<string>('NODE_ENV') === 'production',
+            secure: isProduction,
             // domain: this.configService.get<string>('HOST'),
-            sameSite: 'lax',
+            sameSite: isProduction ? 'none' : 'lax',
             path: '/',
             maxAge: 1000 * 60 * 60 * 24,
         });
@@ -119,11 +106,12 @@ export class AuthController {
     @HttpCode(200)
     async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
         const result = await this.authService.refreshTokens(refreshTokenDto.refreshToken);
+        const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
         res.cookie('access_token', result.accessToken, {
             httpOnly: true,
-            secure: this.configService.get<string>('NODE_ENV') === 'production',
+            secure: isProduction,
             // domain: this.configService.get<string>('HOST'),
-            sameSite: 'lax',
+            sameSite: isProduction ? 'none' : 'lax',
             path: '/',
             maxAge: 1000 * 60 * 60 * 24,
         });
@@ -162,13 +150,13 @@ export class AuthController {
         // Validasi token
         if (!token || token.trim() === '') {
             this.logger.warn('Token tidak ada atau tidak valid');
-            const frontendUrl = this.getBaseUrl('frontend');
+            const frontendUrl = this.urlHelper.getBaseUrl('frontend');
             const redirectUrl = `${frontendUrl}/password-reset?error=${encodeURIComponent('Token tidak diberikan')}`;
             return res.redirect(redirectUrl);
         }
 
         // Ambil URL frontend dari .env
-        const frontendUrl = this.getBaseUrl('frontend');
+        const frontendUrl = this.urlHelper.getBaseUrl('frontend');
 
         try {
             await this.authService.verifyPasswordResetRequestToken(token);
@@ -210,13 +198,13 @@ export class AuthController {
         // Validasi token
         if (!token || token.trim() === '') {
             this.logger.warn('Token tidak ada atau tidak valid');
-            const frontendUrl = this.getBaseUrl('frontend');
+            const frontendUrl = this.urlHelper.getBaseUrl('frontend');
             const redirectUrl = `${frontendUrl}/dashboard?error=${encodeURIComponent('Token tidak valid')}`;
             return res.redirect(redirectUrl);
         }
 
         // Ambil URL frontend dari .env
-        const frontendUrl = this.getBaseUrl('frontend');
+        const frontendUrl = this.urlHelper.getBaseUrl('frontend');
 
         try {
             const result = await this.authService.verifyUpdateEmailRequestToken(token, user);
@@ -242,7 +230,7 @@ export class AuthController {
                     redirectUrl = `${frontendUrl}/users/${user.id}/account?error=${encodeURIComponent(errorMessage)}`;
                 }
             } else {
-                redirectUrl = `${frontendUrl}/home`;
+                redirectUrl = `${frontendUrl}/dashboard`;
             }
 
             return res.redirect(redirectUrl);
@@ -288,14 +276,14 @@ export class AuthController {
             res.cookie('refresh_token', result.refreshToken, {
                 httpOnly: true,
                 secure: isProduction,
-                sameSite: isProduction ? 'strict' : 'lax',
+                sameSite: isProduction ? 'none' : 'lax',
                 path: '/',
                 maxAge: 1000 * 60 * 60 * 24, // 1 day
             });
             res.cookie('access_token', result.accessToken, {
                 httpOnly: true,
                 secure: isProduction,
-                sameSite: isProduction ? 'strict' : 'lax',
+                sameSite: isProduction ? 'none' : 'lax',
                 path: '/',
                 maxAge: 1000 * 60 * 60 * 24,
             });

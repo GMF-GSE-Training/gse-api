@@ -14,6 +14,7 @@ import { PDFDocument, PDFImage } from "pdf-lib";
 import { join } from "path";
 import * as ejs from 'ejs';
 import * as os from 'os';
+import { UrlHelper } from '../common/helpers/url.helper';
 
 @Injectable()
 export class ParticipantService {
@@ -23,23 +24,8 @@ export class ParticipantService {
         private readonly validationService: ValidationService,
         private readonly configService: ConfigService,
         private readonly coreHelper: CoreHelper,
+        private readonly urlHelper: UrlHelper,
     ) {}
-
-    private getBaseUrl(type: 'frontend' | 'backend'): string {
-        const protocol = this.configService.get<string>('PROTOCOL') || 'http';
-        const host = this.configService.get<string>('HOST') || 'localhost';
-        const port = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_PORT' : 'PORT') || '4200';
-    
-        const envUrl = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_URL' : 'BACKEND_URL');
-        if (envUrl) {
-            this.logger.debug(`Menggunakan ${type} URL dari .env: ${envUrl}`);
-            return envUrl;
-        }
-    
-        const constructedUrl = `${protocol}://${host}:${port}`;
-        this.logger.warn(`Tidak ada ${type} URL di .env, menggunakan URL default: ${constructedUrl}`);
-        return constructedUrl;
-    }
 
     async uploadParticipantFile(buffer: Buffer): Promise<void> {
         const mediaType = this.coreHelper.getMediaType(buffer);
@@ -116,7 +102,7 @@ export class ParticipantService {
         });
     
         // Modifikasi qrCodeLink dengan ID peserta
-        const link = this.configService.get<string>('QR_CODE_LINK').replace('{id}', participant.id);
+        const link = this.urlHelper.getBaseUrl('backend').replace('{id}', participant.id);
     
         // Generate QR code
         const qrCodeBase64 = await QRCode.toDataURL(link, { width: 500 });
@@ -192,7 +178,7 @@ export class ParticipantService {
         }
 
         // Konfigurasi URL dan konversi data
-        const backendUrl = this.getBaseUrl('backend');
+        const backendUrl = this.urlHelper.getBaseUrl('backend');
         const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
         const photoBase64 = Buffer.from(participant.foto).toString('base64');
         const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
@@ -350,7 +336,7 @@ export class ParticipantService {
         const qrCodeType = this.coreHelper.getMediaType(Buffer.from(participant.qrCode));
 
         // Konfigurasi URL
-        const backendUrl = this.getBaseUrl('backend');
+        const backendUrl = this.urlHelper.getBaseUrl('backend');
         const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
 
         // Render template EJS

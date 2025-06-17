@@ -223,6 +223,7 @@ export class AuthService {
         where: {
           id: verifyToken.id,
         },
+        include: { role: true },
       });
 
       if (!user) {
@@ -261,13 +262,11 @@ export class AuthService {
           accountVerificationToken: null,
           verifiedAccount: true,
         },
+        include: { role: true },
       });
       this.logger.debug(`Verifikasi Akun: Akun ${user.id} berhasil diverifikasi. Token verifikasi dihapus, status verifikasi diatur ke true.`);
 
-      return this.toAuthResponse({
-        refreshToken,
-        accessToken,
-      });
+      return this.toAuthResponse(user, accessToken, refreshToken);
     } catch (error) {
       this.logger.error(`Verifikasi Akun: Gagal memverifikasi token. Error: ${error.message}. Stack: ${error.stack}`);
       throw new HttpException('Token tidak valid atau telah kadaluarsa', 400);
@@ -287,12 +286,14 @@ export class AuthService {
         where: {
           email: loginRequest.identifier,
         },
+        include: { role: true },
       });
     } else {
       user = await this.prismaService.user.findFirst({
         where: {
           idNumber: loginRequest.identifier,
         },
+        include: { role: true },
       });
     }
 
@@ -334,13 +335,10 @@ export class AuthService {
         data: {
           refreshToken: refreshToken,
         },
+        include: { role: true },
       });
 
-      return this.toAuthResponse({
-        id: user.id,
-        accessToken,
-        refreshToken,
-      });
+      return this.toAuthResponse(user, accessToken, refreshToken);
     } catch (error) {
       console.log(error);
       throw new HttpException('Failed to generate token', 500);
@@ -354,6 +352,7 @@ export class AuthService {
 
       const user = await this.prismaService.user.findUnique({
         where: { id: verifyRefreshToken.id },
+        include: { role: true },
       });
 
       if (!user || user.refreshToken !== refreshToken) {
@@ -363,10 +362,7 @@ export class AuthService {
       const payload = { id: user.id };
       const newAccessToken = await this.accessJwtService.signAsync(payload);
 
-      return this.toAuthResponse({
-        id: user.id,
-        accessToken: newAccessToken,
-      });
+      return this.toAuthResponse(user, newAccessToken, refreshToken);
     } catch (error) {
       console.log(error);
       throw new HttpException('Unauthorized', 401);
@@ -412,8 +408,21 @@ export class AuthService {
       throw new HttpException('User tidak ditemukan', 404);
     }
 
-    const { refreshToken, ...data } = findUser;
-    const result: AuthResponse = data;
+    // Bangun AuthResponse secara langsung di sini
+    const authResponse: AuthResponse = {
+      id: findUser.id,
+      email: findUser.email || undefined,
+      name: findUser.name || undefined,
+      idNumber: findUser.idNumber || undefined,
+      dinas: findUser.dinas || undefined,
+      roleId: findUser.roleId || undefined,
+      verifiedAccount: findUser.verifiedAccount || undefined,
+      role: findUser.role ? { id: findUser.role.id, name: findUser.role.name } : undefined,
+      participant: findUser.participant || undefined,
+      accessToken: undefined, // Akses token tidak relevan di sini, akan diisi di frontend
+      refreshToken: undefined, // Refresh token tidak relevan di sini
+    };
+
     if (findUser.role.name === 'user' && findUser.participant) {
       const requiredFields = [
         'name',
@@ -433,16 +442,15 @@ export class AuthService {
         'tglKeluarSuratBebasNarkoba',
       ];
 
-      // Check if all required fields are not null or undefined
       const isComplete = requiredFields.every(
         (field) =>
           findUser.participant[field] !== null &&
           findUser.participant[field] !== undefined,
       );
-      result.isDataComplete = isComplete;
+      authResponse.isDataComplete = isComplete;
     }
 
-    return this.toAuthResponse(result);
+    return authResponse; // Kembalikan objek AuthResponse yang sudah lengkap
   }
 
   async resendVerificationLink(email: string): Promise<string> {
@@ -983,18 +991,24 @@ export class AuthService {
     };
   }
 
-  private toAuthResponse(user: AuthResponse): AuthResponse {
-    return {
+  private toAuthResponse(
+    user: (User & { role?: { id: string; name: string; }; participant?: any; }),
+    accessToken?: string,
+    refreshToken?: string,
+  ): AuthResponse {
+    const result: AuthResponse = {
       id: user.id,
-      idNumber: user.idNumber,
-      email: user.email,
-      name: user.name,
-      dinas: user.dinas,
-      refreshToken: user.refreshToken,
-      accessToken: user.accessToken,
-      role: user.role,
-      participant: user.participant,
-      isDataComplete: user.isDataComplete,
+      accessToken: accessToken, // Gunakan accessToken dari parameter
+      refreshToken: refreshToken, // Gunakan refreshToken dari parameter
+      verifiedAccount: user.verifiedAccount || undefined,
+      email: user.email || undefined,
+      name: user.name || undefined,
+      idNumber: user.idNumber || undefined,
+      dinas: user.dinas || undefined,
+      roleId: user.roleId || undefined,
+      role: user.role ? { id: user.role.id, name: user.role.name } : undefined,
+      participant: user.participant || undefined,
     };
+    return result;
   }
 }

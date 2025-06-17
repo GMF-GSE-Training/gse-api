@@ -21,7 +21,7 @@ import { CoreHelper } from './helpers/core.helper';
         const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
         const logLevel = nodeEnv === 'production' ? 'debug' : 'silly';
         return {
-          format: winston.format.json(),
+      format: winston.format.json(),
           transports: [
             new winston.transports.Console({
               level: logLevel,

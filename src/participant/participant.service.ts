@@ -1,7 +1,6 @@
 import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../common/service/prisma.service";
 import { CreateParticipantRequest, ParticipantResponse, UpdateParticipantRequest } from "../model/participant.model";
-import * as QRCode from 'qrcode';
 import { ValidationService } from "../common/service/validation.service";
 import { ParticipantValidation } from "./participant.validation";
 import * as puppeteer from 'puppeteer';
@@ -13,8 +12,8 @@ import { CoreHelper } from "src/common/helpers/core.helper";
 import { PDFDocument, PDFImage } from "pdf-lib";
 import { join } from "path";
 import * as ejs from 'ejs';
-import * as os from 'os';
 import { UrlHelper } from '../common/helpers/url.helper';
+import { QrCodeService } from "src/qrcode/qrcode.service";
 
 @Injectable()
 export class ParticipantService {
@@ -25,6 +24,7 @@ export class ParticipantService {
         private readonly configService: ConfigService,
         private readonly coreHelper: CoreHelper,
         private readonly urlHelper: UrlHelper,
+        private readonly qrCodeService: QrCodeService,
     ) {}
 
     async uploadParticipantFile(buffer: Buffer): Promise<void> {
@@ -96,27 +96,21 @@ export class ParticipantService {
                 suratBebasNarkoba: createRequest.suratBebasNarkoba,
                 suratBebasNarkobaFileName: createRequest.suratBebasNarkobaFileName,
                 tglKeluarSuratBebasNarkoba: createRequest.tglKeluarSuratBebasNarkoba,
-                qrCode: null,
                 gmfNonGmf: createRequest.gmfNonGmf,
             },
         });
     
-        // Modifikasi qrCodeLink dengan ID peserta
-        const link = this.urlHelper.getBaseUrl('backend').replace('{id}', participant.id);
+        // Hasilkan QR code perdana menggunakan service baru
+        await this.qrCodeService.getOrRegenerateQrCodeForParticipant(participant.id);
     
-        // Generate QR code
-        const qrCodeBase64 = await QRCode.toDataURL(link, { width: 500 });
-        const qrCodeBuffer = Buffer.from(qrCodeBase64.replace(/^data:image\/png;base64,/, ''), 'base64');
-
-        // Update peserta dengan QR code dan link
-        const result = await this.prismaService.participant.update({
-            where: { id: participant.id },
-            data: {
-                qrCode: qrCodeBuffer,
-            },
-        });
-    
+        const result = await this.findOneParticipant(participant.id);
         return this.toParticipantResponse(result);
+    }
+
+    async getQrCode(participantId: string): Promise<Buffer> {
+        return this.qrCodeService.getOrRegenerateQrCodeForParticipant(
+          participantId,
+        );
     }
 
     async streamFile(participantId: string, fileName: string, user: CurrentUserRequest): Promise<Buffer> {
@@ -160,13 +154,15 @@ export class ParticipantService {
     async downloadIdCard(participantId: string): Promise<{ pdfBuffer: Buffer; participantName: string }> {
         this.logger.debug(`Mengunduh ID Card untuk participant ID: ${participantId}`);
 
-        // Ambil data peserta
+        // Ambil data peserta dan pastikan QR code terbaru
+        const qrCodeBuffer = await this.qrCodeService.getOrRegenerateQrCodeForParticipant(participantId);
         const participant = await this.findOneParticipant(participantId);
+        
         const requiredFields = {
             foto: participant.foto,
             company: participant.company,
             nationality: participant.nationality,
-            qrCode: participant.qrCode,
+            qrCode: qrCodeBuffer,
         };
         const missingFields = Object.entries(requiredFields)
             .filter(([_, value]) => !value)
@@ -181,9 +177,9 @@ export class ParticipantService {
         const backendUrl = this.urlHelper.getBaseUrl('backend');
         const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
         const photoBase64 = Buffer.from(participant.foto).toString('base64');
-        const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
+        const qrCodeBase64 = Buffer.from(qrCodeBuffer).toString('base64');
         const photoType = this.coreHelper.getMediaType(Buffer.from(participant.foto));
-        const qrCodeType = this.coreHelper.getMediaType(Buffer.from(participant.qrCode));
+        const qrCodeType = this.coreHelper.getMediaType(qrCodeBuffer);
 
         // Render template EJS
         const templatePath = join(__dirname, '..', 'templates', 'id-card', 'id-card.ejs');
@@ -312,13 +308,15 @@ export class ParticipantService {
             throw new HttpException('ID peserta tidak valid', 400);
         }
 
-        // Ambil data peserta
+        // Pastikan QR code terbaru
+        const qrCodeBuffer = await this.qrCodeService.getOrRegenerateQrCodeForParticipant(participantId);
         const participant = await this.findOneParticipant(participantId);
+        
         const requiredFields = {
             foto: participant.foto,
             company: participant.company,
             nationality: participant.nationality,
-            qrCode: participant.qrCode,
+            qrCode: qrCodeBuffer,
         };
         const missingFields = Object.entries(requiredFields)
             .filter(([_, value]) => !value)
@@ -331,9 +329,9 @@ export class ParticipantService {
 
         // Konversi data ke base64
         const photoBase64 = Buffer.from(participant.foto).toString('base64');
-        const qrCodeBase64 = Buffer.from(participant.qrCode).toString('base64');
+        const qrCodeBase64 = qrCodeBuffer.toString('base64');
         const photoType = this.coreHelper.getMediaType(Buffer.from(participant.foto));
-        const qrCodeType = this.coreHelper.getMediaType(Buffer.from(participant.qrCode));
+        const qrCodeType = this.coreHelper.getMediaType(qrCodeBuffer);
 
         // Konfigurasi URL
         const backendUrl = this.urlHelper.getBaseUrl('backend');

@@ -77,6 +77,7 @@ model Participant {
   suratBebasNarkobaFileName     String?             @db.VarChar(255)
   tglKeluarSuratBebasNarkoba    DateTime?           @db.Date
   qrCode                        Bytes?
+  qrCodeLink                    String?             @db.Text
   gmfNonGmf                     String?             @db.VarChar(20)
 
   participantsCots              ParticipantsCOT[]

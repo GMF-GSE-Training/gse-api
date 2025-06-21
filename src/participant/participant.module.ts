@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from '../common/service/prisma.service';
 import { ParticipantService } from './participant.service';
 import { ParticipantController } from './participant.controller';
-import { CommonModule } from '../common/common.module';
+import { CommonModule } from 'src/common/common.module';
+import { QrCodeModule } from 'src/qrcode/qrcode.module';
 
 @Module({
-  imports: [CommonModule],
+  imports: [CommonModule, QrCodeModule],
   providers: [PrismaService, ParticipantService],
   controllers: [ParticipantController],
   exports: [ParticipantService],

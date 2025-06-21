@@ -11,10 +11,10 @@ import {
   AuthResponse,
   LoginUserRequest,
   RegisterUserRequest,
-  UpdatePassword,
-  CurrentUserRequest,
-} from '../model/auth.model';
-import { SendEmail } from '../model/mail.model';
+} from './model/auth.model';
+import { CurrentUserRequest } from './model/current-user.model';
+import { SendEmail } from 'src/mail/model/mail.model';
+import { UpdatePassword } from './model/update-password.model';
 import { JwtService } from '@nestjs/jwt';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { UrlHelper } from 'src/common/helpers/url.helper';

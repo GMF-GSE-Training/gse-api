@@ -16,44 +16,44 @@ import { CotStatus } from '../../model/cot.model.js';
 export class CreateCotDto {
   @IsNotEmpty()
   @IsUUID()
-  capabilityId: string;
+  capabilityId!: string;
 
   @IsNotEmpty()
   @IsDateString()
-  startDate: string;
+  startDate!: string;
 
   @IsNotEmpty()
   @IsDateString()
-  endDate: string;
+  endDate!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(255)
-  trainingLocation: string;
+  trainingLocation!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
-  theoryInstructorRegGse: string;
+  theoryInstructorRegGse!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
-  theoryInstructorCompetency: string;
+  theoryInstructorCompetency!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
-  practicalInstructor1: string;
+  practicalInstructor1!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
-  practicalInstructor2: string;
+  practicalInstructor2!: string;
 
   @IsNotEmpty()
   @IsEnum(CotStatus)
-  status: CotStatus;
+  status!: CotStatus;
 }
 
 /**

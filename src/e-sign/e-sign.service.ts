@@ -311,8 +311,8 @@ export class ESignService {
     this.logger.log(`Listing E-Signs for user: ${user.email}`);
 
     const whereClause: any = {};
-    if (request.searchQuery) {
-      const sanitizedQuery = sanitizeHtml(request.searchQuery);
+    if (request.search) {
+      const sanitizedQuery = sanitizeHtml(request.search);
       whereClause.OR = [
         { idNumber: { contains: sanitizedQuery, mode: 'insensitive' } },
         { role: { contains: sanitizedQuery, mode: 'insensitive' } },

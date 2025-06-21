@@ -8,6 +8,7 @@ import {
 } from '../model/curriculum-syllabus.model.js';
 
 import { CurriculumSyllabusValidation } from './curriculum-syllabus.validation.js';
+import { CurriculumSyllabusEntryDto } from './dto/curriculum-syllabus.dto';
 
 /**
  *
@@ -35,47 +36,72 @@ export class CurriculumSyllabusService {
       CurriculumSyllabusValidation.CREATE,
       request
     );
-    const { curriculumSyllabus } = curriculumSyllabusRequest;
+    const {
+      curriculumSyllabus,
+    }: { curriculumSyllabus: CurriculumSyllabusEntryDto[] } =
+      curriculumSyllabusRequest;
 
     await this.prismaService.curriculumSyllabus.createMany({
-      data: curriculumSyllabus.map(curriculumSyllabus => ({
-        capabilityId: curriculumSyllabus.capabilityId,
-        name: curriculumSyllabus.name,
-        theoryDuration: curriculumSyllabus.theoryDuration,
-        practiceDuration: curriculumSyllabus.practiceDuration,
-        type: curriculumSyllabus.type,
-      })),
+      data: curriculumSyllabus.map(
+        (curriculumSyllabus: CurriculumSyllabusEntryDto) => ({
+          capabilityId: curriculumSyllabus.capabilityId,
+          name: curriculumSyllabus.name,
+          theoryDuration: curriculumSyllabus.theoryDuration,
+          practiceDuration: curriculumSyllabus.practiceDuration,
+          type: curriculumSyllabus.type,
+        })
+      ),
     });
 
     const capabilityId = curriculumSyllabus[0].capabilityId;
 
     // Menghitung total theoryDuration dari semua item di curriculumSyllabus
     const totalTheoryDurationRegGse = curriculumSyllabus
-      .filter(item => item.type.toLocaleLowerCase() === 'regulasi gse')
-      .reduce((total, item) => {
-        return total + item.theoryDuration;
-      }, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLocaleLowerCase() === 'regulasi gse'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.theoryDuration || 0),
+        0
+      );
 
     // Menghitung total practiceDuration dari semua item di curriculumSyllabus
     const totalPracticeDurationRegGse = curriculumSyllabus
-      .filter(item => item.type.toLocaleLowerCase() === 'regulasi gse')
-      .reduce((total, item) => {
-        return total + item.practiceDuration;
-      }, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLocaleLowerCase() === 'regulasi gse'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.practiceDuration || 0),
+        0
+      );
 
     // Menghitung total practiceDuration dari semua item di curriculumSyllabus
     const totalTheoryDurationCompetency = curriculumSyllabus
-      .filter(item => item.type.toLocaleLowerCase() === 'kompetensi')
-      .reduce((total, item) => {
-        return total + item.theoryDuration;
-      }, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLocaleLowerCase() === 'kompetensi'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.theoryDuration || 0),
+        0
+      );
 
     // Menghitung total practiceDuration dari semua item di curriculumSyllabus
     const totalPracticeDurationCompetency = curriculumSyllabus
-      .filter(item => item.type.toLocaleLowerCase() === 'kompetensi')
-      .reduce((total, item) => {
-        return total + item.practiceDuration;
-      }, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLocaleLowerCase() === 'kompetensi'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.practiceDuration || 0),
+        0
+      );
 
     const totalDuration =
       totalTheoryDurationRegGse +
@@ -112,6 +138,10 @@ export class CurriculumSyllabusService {
       CurriculumSyllabusValidation.UPDATE,
       request
     );
+    const {
+      curriculumSyllabus,
+    }: { curriculumSyllabus: CurriculumSyllabusEntryDto[] } =
+      updateCurriculumSyllabusRequest;
 
     const capability = await this.prismaService.capability.findUnique({
       where: {
@@ -123,8 +153,6 @@ export class CurriculumSyllabusService {
       throw new HttpException('Capability tidak ditemukan', 404);
     }
 
-    const { curriculumSyllabus } = updateCurriculumSyllabusRequest;
-
     // Dapatkan semua data yang ada di database untuk capabilityId ini
     const existingSyllabus =
       await this.prismaService.curriculumSyllabus.findMany({
@@ -132,12 +160,16 @@ export class CurriculumSyllabusService {
       });
 
     // Simpan semua ID yang ada dalam request
-    const requestIds = curriculumSyllabus.map(item => item.id);
+    const requestIds = curriculumSyllabus.map(
+      (item: CurriculumSyllabusEntryDto) => item.id
+    );
 
     // Hapus data di database yang tidak ada di request
     const idsToDelete = existingSyllabus
-      .filter(item => !requestIds.includes(item.id)) // Cari data yang tidak ada di request
-      .map(item => item.id);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) => !requestIds.includes(item.id)
+      )
+      .map((item: CurriculumSyllabusEntryDto) => item.id);
 
     await this.prismaService.curriculumSyllabus.deleteMany({
       where: { id: { in: idsToDelete } },
@@ -175,20 +207,48 @@ export class CurriculumSyllabusService {
 
     // Hitung total durasi dan perbarui capability
     const totalTheoryDurationRegGse = curriculumSyllabus
-      .filter(item => item.type.toLowerCase() === 'regulasi gse')
-      .reduce((total, item) => total + item.theoryDuration, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLowerCase() === 'regulasi gse'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.theoryDuration || 0),
+        0
+      );
 
     const totalPracticeDurationRegGse = curriculumSyllabus
-      .filter(item => item.type.toLowerCase() === 'regulasi gse')
-      .reduce((total, item) => total + item.practiceDuration, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLowerCase() === 'regulasi gse'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.practiceDuration || 0),
+        0
+      );
 
     const totalTheoryDurationCompetency = curriculumSyllabus
-      .filter(item => item.type.toLowerCase() === 'kompetensi')
-      .reduce((total, item) => total + item.theoryDuration, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLowerCase() === 'kompetensi'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.theoryDuration || 0),
+        0
+      );
 
     const totalPracticeDurationCompetency = curriculumSyllabus
-      .filter(item => item.type.toLowerCase() === 'kompetensi')
-      .reduce((total, item) => total + item.practiceDuration, 0);
+      .filter(
+        (item: CurriculumSyllabusEntryDto) =>
+          item.type.toLowerCase() === 'kompetensi'
+      )
+      .reduce(
+        (total: number, item: CurriculumSyllabusEntryDto) =>
+          total + (item.practiceDuration || 0),
+        0
+      );
 
     const totalDuration =
       totalTheoryDurationRegGse +

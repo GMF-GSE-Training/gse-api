@@ -7,5 +7,5 @@ export class AddParticipantToCotDto {
   @IsArray()
   @IsNotEmpty()
   @IsUUID(undefined, { each: true })
-  participantIds: string[];
+  participantIds!: string[];
 }

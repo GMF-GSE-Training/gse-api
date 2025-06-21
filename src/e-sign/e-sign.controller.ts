@@ -360,7 +360,7 @@ export class ESignController {
       message: `Mengambil daftar E-Sign untuk pengguna: ${user.email}`,
     });
     const query: ListRequest = {
-      searchQuery: q,
+      search: q,
       page: page || 1,
       size: size || 10,
     };

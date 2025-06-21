@@ -16,8 +16,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { CurrentUserRequest } from '../model/auth.model.js';
-import {
+import type { CurrentUserRequest } from '../model/auth.model.js';
+import type {
   CapabilityResponse,
   CreateCapability,
   UpdateCapability,
@@ -53,7 +53,7 @@ export class CapabilityController {
     @Body() request: CreateCapability
   ): Promise<WebResponse<CapabilityResponse>> {
     const result = await this.capabilityService.createCapability(request);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -68,7 +68,7 @@ export class CapabilityController {
     @Param('capabilityId', ParseUUIDPipe) capabilityId: string
   ): Promise<WebResponse<CapabilityResponse>> {
     const result = await this.capabilityService.getCapabilityById(capabilityId);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -84,7 +84,7 @@ export class CapabilityController {
   ): Promise<WebResponse<CapabilityResponse>> {
     const result =
       await this.capabilityService.getCurriculumSyllabus(capabilityId);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -104,7 +104,7 @@ export class CapabilityController {
       capabilityId,
       req
     );
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -119,7 +119,7 @@ export class CapabilityController {
     @Param('capabilityId', ParseUUIDPipe) capabilityId: string
   ): Promise<WebResponse<string>> {
     const result = await this.capabilityService.deleteCapability(capabilityId);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -131,7 +131,7 @@ export class CapabilityController {
   @UseGuards(AuthGuard, RoleGuard)
   async getAll(): Promise<WebResponse<CapabilityResponse[]>> {
     const result = await this.capabilityService.getAllCapability();
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -168,15 +168,15 @@ export class CapabilityController {
     size?: number
   ): Promise<WebResponse<CapabilityResponse[]>> {
     const query: ListRequest = {
-      searchQuery: q,
+      search: q,
       page: page || 1,
       size: size || 10,
     };
     const result = await this.capabilityService.listCapability(user, query);
     return buildResponse(
-      HttpStatus.OK,
       result.data,
-      null,
+      undefined,
+      'success',
       result.actions,
       result.paging
     );

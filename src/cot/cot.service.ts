@@ -301,8 +301,8 @@ export class CotService {
     }
 
     let whereClauseCapability: any = {};
-    if (request.searchQuery) {
-      const searchQuery = request.searchQuery;
+    if (request.search) {
+      const searchQuery = request.search;
       whereClauseCapability.OR = [
         { ratingCode: { contains: searchQuery, mode: 'insensitive' } },
         { trainingName: { contains: searchQuery, mode: 'insensitive' } },
@@ -341,6 +341,10 @@ export class CotService {
     });
 
     // Ambil data dengan paginasi
+    const page = request.page ?? 1;
+    const size = request.size ?? 10;
+    const skip = (page - 1) * size;
+
     const cot = await this.prismaService.cOT.findMany({
       where: whereCondition,
       include: {
@@ -360,14 +364,14 @@ export class CotService {
           },
         },
       },
-      skip: (request.page - 1) * request.size,
-      take: request.size,
+      skip,
+      take: size,
     });
 
     // Mapping hasil query ke bentuk CotResponse
     const cotResponses: CotResponse[] = cot.map(this.formatCotList);
 
-    const totalPage = Math.ceil(totalCot / request.size);
+    const totalPage = Math.ceil(totalCot / size);
 
     const actions = this.validateActions(userRole);
 
@@ -375,9 +379,9 @@ export class CotService {
       data: cotResponses,
       actions: actions,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }

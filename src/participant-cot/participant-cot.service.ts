@@ -3,7 +3,7 @@ import { HttpException, Injectable } from '@nestjs/common';
 import { CoreHelper } from '../common/helpers/core.helper.js';
 import { PrismaService } from '../common/service/prisma.service.js';
 import { ValidationService } from '../common/service/validation.service.js';
-import { CurrentUserRequest } from '../model/auth.model.js';
+import type { CurrentUserRequest } from '../model/auth.model.js';
 import {
   addParticipantToCot,
   ParticipantCotResponse,
@@ -71,16 +71,23 @@ export class ParticipantCotService {
       }),
     };
 
-    if (request.searchQuery) {
+    if (request.search) {
+      if (!Array.isArray(baseWhereClause.AND)) {
+        baseWhereClause.AND = [];
+      }
       baseWhereClause.AND.push({
         OR: [
-          { idNumber: { contains: request.searchQuery, mode: 'insensitive' } },
-          { name: { contains: request.searchQuery, mode: 'insensitive' } },
-          { dinas: { contains: request.searchQuery, mode: 'insensitive' } },
-          { company: { contains: request.searchQuery, mode: 'insensitive' } },
+          { idNumber: { contains: request.search, mode: 'insensitive' } },
+          { name: { contains: request.search, mode: 'insensitive' } },
+          { dinas: { contains: request.search, mode: 'insensitive' } },
+          { company: { contains: request.search, mode: 'insensitive' } },
         ],
       });
     }
+
+    const page = request.page ?? 1;
+    const size = request.size ?? 10;
+    const skip = (page - 1) * size;
 
     const [unregisteredParticipants, totalParticipants] = await Promise.all([
       this.prismaService.participant.findMany({
@@ -93,20 +100,20 @@ export class ParticipantCotService {
           bidang: true,
           company: true,
         },
-        skip: (request.page - 1) * request.size,
-        take: request.size,
+        skip: skip,
+        take: size,
       }),
       this.prismaService.participant.count({ where: baseWhereClause }),
     ]);
 
-    const totalPage = Math.ceil(totalParticipants / request.size);
+    const totalPage = Math.ceil(totalParticipants / size);
 
     return {
       data: unregisteredParticipants,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }
@@ -270,8 +277,8 @@ export class ParticipantCotService {
     const isUser = userRole === 'user';
 
     let participantCotWhereClause: any = {};
-    if (request.searchQuery) {
-      const query = request.searchQuery.toLowerCase();
+    if (request.search) {
+      const query = request.search.toLowerCase();
       participantCotWhereClause = {
         OR: [
           { idNumber: { contains: query, mode: 'insensitive' } },
@@ -316,8 +323,8 @@ export class ParticipantCotService {
               select: participantSelect,
             },
           },
-          skip: (request.page - 1) * request.size,
-          take: request.size,
+          skip: ((request.page ?? 1) - 1) * (request.size ?? 10),
+          take: request.size ?? 10,
         },
         _count: {
           select: {
@@ -373,7 +380,7 @@ export class ParticipantCotService {
     }
 
     const totalParticipants = participantCot._count.participantsCots;
-    const totalPage = Math.ceil(totalParticipants / request.size);
+    const totalPage = Math.ceil(totalParticipants / (request.size ?? 10));
 
     const participants = participantCot.participantsCots
       .map(pc => pc.participant)
@@ -406,7 +413,7 @@ export class ParticipantCotService {
         theoryInstructorCompetency: participantCot.theoryInstructorCompetency,
         practicalInstructor1: participantCot.practicalInstructor1,
         practicalInstructor2: participantCot.practicalInstructor2,
-        totalParticipants,
+        numberOfParticipants: totalParticipants,
         status: participantCot.status,
         capability: {
           ratingCode: capability.ratingCode,
@@ -415,9 +422,9 @@ export class ParticipantCotService {
         participants: {
           data: participants,
           paging: {
-            currentPage: request.page,
+            currentPage: request.page ?? 1,
             totalPage,
-            size: request.size,
+            size: request.size ?? 10,
           },
           actions,
         },

@@ -14,9 +14,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { CurrentUserRequest } from '../model/auth.model.js';
-import {
-  addParticipantToCot,
+import type { CurrentUserRequest } from '../model/auth.model.js';
+import type {
+  AddParticipantToCot,
   ParticipantCotResponse,
   AddParticipantResponse,
 } from '../model/participant-cot.model.js';
@@ -76,7 +76,7 @@ export class ParticipantCotController {
     size?: number
   ): Promise<WebResponse<ListParticipantResponse[]>> {
     const query: ListRequest = {
-      searchQuery: q,
+      search: q,
       page: page || 1,
       size: size || 10,
     };
@@ -86,7 +86,13 @@ export class ParticipantCotController {
       user,
       query
     );
-    return buildResponse(HttpStatus.OK, result.data, null, null, result.paging);
+    return buildResponse(
+      HttpStatus.OK,
+      result.data,
+      undefined,
+      undefined,
+      result.paging
+    );
   }
 
   /**
@@ -102,7 +108,7 @@ export class ParticipantCotController {
   async addParticipantToCot(
     @Param('cotId', ParseUUIDPipe) cotId: string,
     @User() user: CurrentUserRequest,
-    @Body() request: addParticipantToCot
+    @Body() request: AddParticipantToCot
   ): Promise<WebResponse<AddParticipantResponse>> {
     const result = await this.participantCotService.addParticipantToCot(
       cotId,
@@ -168,7 +174,7 @@ export class ParticipantCotController {
     size?: number
   ): Promise<WebResponse<ParticipantCotResponse>> {
     const query: ListRequest = {
-      searchQuery: q,
+      search: q,
       page: page || 1,
       size: size || 10,
     };

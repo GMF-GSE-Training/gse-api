@@ -7,17 +7,17 @@ export class CreateCapabilityDto {
   @IsNotEmpty()
   @IsString()
   @MaxLength(50)
-  ratingCode: string;
+  ratingCode!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(50)
-  trainingCode: string;
+  trainingCode!: string;
 
   @IsNotEmpty()
   @IsString()
   @MaxLength(255)
-  trainingName: string;
+  trainingName!: string;
 }
 
 /**

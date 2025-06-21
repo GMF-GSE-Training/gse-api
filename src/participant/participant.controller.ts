@@ -12,7 +12,6 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   Res,
   StreamableFile,
   UploadedFiles,
@@ -21,19 +20,22 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
-import { Response } from 'express';
+import type { Response } from 'express';
 
-import { CurrentUserRequest } from '../model/auth.model.js';
-import {
+import { Roles } from '../auth/decorators/roles.decorator.js';
+import { Role } from '../auth/enums/role.enum.js';
+import { RolesGuard } from '../auth/guards/roles.guard.js';
+import type { CurrentUserRequest } from '../model/auth.model.js';
+import type {
   CreateParticipantRequest,
   ParticipantResponse,
   UpdateParticipantRequest,
+  ListParticipantResponse,
 } from '../model/participant.model.js';
-import { buildResponse, ListRequest, WebResponse } from '../model/web.model.js';
-import { Roles } from '../shared/decorator/role.decorator.js';
+import type { WebResponse, ListRequest } from '../model/web.model.js';
+import { buildResponse } from '../model/web.model.js';
 import { User } from '../shared/decorator/user.decorator.js';
 import { AuthGuard } from '../shared/guard/auth.guard.js';
-import { RoleGuard } from '../shared/guard/role.guard.js';
 
 import { ParticipantService } from './participant.service.js';
 
@@ -62,8 +64,8 @@ export class ParticipantController {
    */
   @Post()
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU)
+  @UseGuards(AuthGuard, RolesGuard)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'simA', maxCount: 1 },
@@ -78,46 +80,35 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Body() createParticipantDto: CreateParticipantRequest,
     @UploadedFiles()
-    files: {
-      simA?: Express.Multer.File[];
-      simB?: Express.Multer.File[];
-      ktp?: Express.Multer.File[];
-      foto?: Express.Multer.File[];
-      suratSehatButaWarna?: Express.Multer.File[];
-      suratBebasNarkoba?: Express.Multer.File[];
-    }
+    files: Record<string, Express.Multer.File[]>
   ): Promise<WebResponse<ParticipantResponse>> {
-    let participantData: CreateParticipantRequest;
-    try {
-      participantData = {
-        ...createParticipantDto,
-        dateOfBirth: createParticipantDto.dateOfBirth
-          ? new Date(createParticipantDto.dateOfBirth)
+    // Konversi tanggal ke string/null/undefined dan filter file null
+    const dto: any = {
+      ...createParticipantDto,
+      dateOfBirth: createParticipantDto.dateOfBirth
+        ? String(createParticipantDto.dateOfBirth)
+        : undefined,
+      tglKeluarSuratSehatButaWarna:
+        createParticipantDto.tglKeluarSuratSehatButaWarna
+          ? String(createParticipantDto.tglKeluarSuratSehatButaWarna)
           : undefined,
-        tglKeluarSuratSehatButaWarna:
-          createParticipantDto.tglKeluarSuratSehatButaWarna
-            ? new Date(createParticipantDto.tglKeluarSuratSehatButaWarna)
-            : undefined,
-        tglKeluarSuratBebasNarkoba:
-          createParticipantDto.tglKeluarSuratBebasNarkoba
-            ? new Date(createParticipantDto.tglKeluarSuratBebasNarkoba)
-            : undefined,
-        simA: files.simA?.[0], // Sudah sesuai dengan tipe
-        simB: files.simB?.[0],
-        ktp: files.ktp?.[0],
-        foto: files.foto?.[0],
-        suratSehatButaWarna: files.suratSehatButaWarna?.[0],
-        suratBebasNarkoba: files.suratBebasNarkoba?.[0],
-      };
-    } catch (error) {
-      throw new HttpException('Semua file/image tidak boleh kosong', 400);
+      tglKeluarSuratBebasNarkoba:
+        createParticipantDto.tglKeluarSuratBebasNarkoba
+          ? String(createParticipantDto.tglKeluarSuratBebasNarkoba)
+          : undefined,
+    };
+    // Hapus property file yang null
+    for (const key of [
+      'simA',
+      'simB',
+      'ktp',
+      'foto',
+      'suratSehatButaWarna',
+      'suratBebasNarkoba',
+    ]) {
+      if (dto[key] === null) delete dto[key];
     }
-
-    const participant = await this.participantService.createParticipant(
-      participantData,
-      user
-    );
-    return buildResponse(HttpStatus.OK, participant);
+    return await this.participantService.create(dto, files);
   }
 
   /**
@@ -135,8 +126,8 @@ export class ParticipantController {
    */
   @Patch('/:participantId')
   @HttpCode(200)
-  @Roles('super admin', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'simA', maxCount: 1 },
@@ -150,71 +141,30 @@ export class ParticipantController {
   async update(
     @User() user: CurrentUserRequest,
     @Param('participantId', ParseUUIDPipe) participantId: string,
-    @Body()
-    req: Omit<
-      UpdateParticipantRequest,
-      | 'simA'
-      | 'simB'
-      | 'ktp'
-      | 'foto'
-      | 'suratSehatButaWarna'
-      | 'suratBebasNarkoba'
-    >,
-    @UploadedFiles()
-    files: {
-      simA?: Express.Multer.File[];
-      simB?: Express.Multer.File[];
-      ktp?: Express.Multer.File[];
-      foto?: Express.Multer.File[];
-      suratSehatButaWarna?: Express.Multer.File[];
-      suratBebasNarkoba?: Express.Multer.File[];
-    }
-  ): Promise<WebResponse<string>> {
-    const maxSize = 2 * 1024 * 1024; // 2 MB
-
-    const fileNames = {
-      simA: 'SIM A',
-      simB: 'SIM B',
-      ktp: 'KTP',
-      foto: 'Foto',
-      suratSehatButaWarna: 'Surat Sehat Buta Warna',
-      suratBebasNarkoba: 'Surat Bebas Narkoba',
-    };
-
-    const fileKeys = Object.keys(files);
-    fileKeys.forEach(field => {
-      if (files[field] && files[field][0].size > maxSize) {
-        const fieldName = fileNames[field] || field;
-        throw new HttpException(
-          `File ${fieldName} melebihi ukuran maksimum 2MB.`,
-          400
-        );
-      }
-    });
-
-    const participantData: UpdateParticipantRequest = {
+    @Body() req: UpdateParticipantRequest,
+    @UploadedFiles() files: Record<string, Express.Multer.File[]>
+  ): Promise<WebResponse<ParticipantResponse>> {
+    const dto: any = {
       ...req,
-      dateOfBirth: req.dateOfBirth ? new Date(req.dateOfBirth) : undefined,
+      dateOfBirth: req.dateOfBirth ? String(req.dateOfBirth) : undefined,
       tglKeluarSuratSehatButaWarna: req.tglKeluarSuratSehatButaWarna
-        ? new Date(req.tglKeluarSuratSehatButaWarna)
+        ? String(req.tglKeluarSuratSehatButaWarna)
         : undefined,
       tglKeluarSuratBebasNarkoba: req.tglKeluarSuratBebasNarkoba
-        ? new Date(req.tglKeluarSuratBebasNarkoba)
+        ? String(req.tglKeluarSuratBebasNarkoba)
         : undefined,
-      simA: files?.simA?.[0],
-      simB: files?.simB?.[0],
-      ktp: files?.ktp?.[0],
-      foto: files?.foto?.[0],
-      suratSehatButaWarna: files?.suratSehatButaWarna?.[0],
-      suratBebasNarkoba: files?.suratBebasNarkoba?.[0],
     };
-
-    const result = await this.participantService.updateParticipant(
-      participantId,
-      participantData,
-      user
-    );
-    return buildResponse(HttpStatus.OK, result);
+    for (const key of [
+      'simA',
+      'simB',
+      'ktp',
+      'foto',
+      'suratSehatButaWarna',
+      'suratBebasNarkoba',
+    ]) {
+      if (dto[key] === null) delete dto[key];
+    }
+    return await this.participantService.update(participantId, dto);
   }
 
   /**
@@ -224,21 +174,18 @@ export class ParticipantController {
    */
   @Get('/:participantId/sim-a')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getSimA(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'simA',
-      user
+      'simA'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
-  x;
 
   /**
    *
@@ -247,19 +194,17 @@ export class ParticipantController {
    */
   @Get('/:participantId/sim-b')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getSimB(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'simB',
-      user
+      'simB'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -269,19 +214,17 @@ export class ParticipantController {
    */
   @Get('/:participantId/foto')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getFoto(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'foto',
-      user
+      'foto'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -291,19 +234,17 @@ export class ParticipantController {
    */
   @Get('/:participantId/ktp')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getKTP(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'ktp',
-      user
+      'ktp'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -313,19 +254,17 @@ export class ParticipantController {
    */
   @Get('/:participantId/surat-sehat-buta-warna')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getSuratSehat(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'suratSehatButaWarna',
-      user
+      'suratSehatButaWarna'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -335,19 +274,17 @@ export class ParticipantController {
    */
   @Get('/:participantId/surat-bebas-narkoba')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getSuratKetBebasNarkoba(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'suratBebasNarkoba',
-      user
+      'suratBebasNarkoba'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -357,19 +294,17 @@ export class ParticipantController {
    */
   @Get('/:participantId/qr-code')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async getQrCode(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<string>> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
-      'qrCode',
-      user
+      'qrCode'
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    const result = fileBuffer.stream.read().toString('base64');
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -379,34 +314,33 @@ export class ParticipantController {
    */
   @Get('/:participantId')
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU, Role.USER)
+  @UseGuards(AuthGuard, RolesGuard)
   async get(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
+    @Param('participantId', ParseUUIDPipe) participantId: string
   ): Promise<WebResponse<ParticipantResponse>> {
-    const result = await this.participantService.getParticipant(
-      participantId,
-      user
-    );
-    return buildResponse(HttpStatus.OK, result);
+    return await this.participantService.get(participantId);
   }
 
   /**
    *
    * @param participantId
+   * @param user
    */
   @Get('/:participantId/id-card')
-  @Roles('super admin', 'lcu', 'supervisor')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.LCU, Role.SUPERVISOR)
+  @UseGuards(AuthGuard, RolesGuard)
   @HttpCode(200)
   async getIdCard(
     @Param('participantId', ParseUUIDPipe) participantId: string
-  ): Promise<string> {
+  ): Promise<{ pdfBuffer: Buffer; participantName: string }> {
     try {
       return await this.participantService.getIdCard(participantId);
     } catch (error) {
-      throw new HttpException(error.message, error.status || 500);
+      throw new HttpException(
+        (error as any).message,
+        (error as any).status || 500
+      );
     }
   }
 
@@ -416,8 +350,8 @@ export class ParticipantController {
    * @param res
    */
   @Get('/:participantId/id-card/download')
-  @Roles('super admin', 'lcu')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.LCU)
+  @UseGuards(AuthGuard, RolesGuard)
   @HttpCode(200)
   async downloadIdCard(
     @Param('participantId', ParseUUIDPipe) participantId: string,
@@ -431,73 +365,20 @@ export class ParticipantController {
         .replace(/\s+/g, '_')
         .replace(/[^a-zA-Z0-9_-]/g, '');
       const filename = `ID_Card_${sanitizedName}_${participantId}.pdf`;
-
-      console.log(`Generated filename: ${filename}`);
       const encodedFilename = encodeURIComponent(filename);
-      const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`;
-
-      // Set header secara langsung pada respons
+      const disposition = `attachment; filename=\"${filename}\"; filename*=UTF-8''${encodedFilename}`;
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': disposition,
         'X-Participant-Name': sanitizedName,
       });
-
-      console.log(`Sending X-Participant-Name: ${sanitizedName}`);
-      // Kirim buffer langsung ke client
       res.send(pdfBuffer);
     } catch (error) {
-      throw new HttpException(error.message, error.status || 500);
+      throw new HttpException(
+        (error as any).message,
+        (error as any).status || 500
+      );
     }
-  }
-
-  /**
-   *
-   * @param participantId
-   */
-  @Get('/:participantId/download-document')
-  @Roles('super admin')
-  @UseGuards(AuthGuard, RoleGuard)
-  @HttpCode(200)
-  async downloadDocument(
-    @Param('participantId', ParseUUIDPipe) participantId: string
-  ): Promise<StreamableFile> {
-    try {
-      const { pdfBuffer, participantName } =
-        await this.participantService.downloadDocument(participantId);
-      const sanitizedName = participantName
-        .trim()
-        .replace(/\s+/g, '_')
-        .replace(/[^a-zA-Z0-9_-]/g, '');
-      const filename = `Document_${sanitizedName}_${participantId}.pdf`;
-
-      return new StreamableFile(pdfBuffer, {
-        type: 'application/pdf',
-        disposition: `attachment; filename="${filename}"`,
-      });
-    } catch (error) {
-      throw new HttpException(error.message, error.status || 500);
-    }
-  }
-
-  /**
-   *
-   * @param participantId
-   * @param user
-   */
-  @Delete('/:participantId')
-  @HttpCode(200)
-  @Roles('super admin', 'lcu')
-  @UseGuards(AuthGuard, RoleGuard)
-  async delete(
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest
-  ): Promise<WebResponse<string>> {
-    const result = await this.participantService.deleteParticipant(
-      participantId,
-      user
-    );
-    return buildResponse(HttpStatus.OK, result);
   }
 
   /**
@@ -508,42 +389,19 @@ export class ParticipantController {
    * @param size
    */
   @Get('/list/result')
-  @Roles('super admin', 'supervisor', 'lcu')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.SUPERVISOR, Role.LCU)
+  @UseGuards(AuthGuard, RolesGuard)
   async list(
     @User() user: CurrentUserRequest,
     @Query('q') q?: string,
-    @Query(
-      'page',
-      new ParseIntPipe({
-        optional: true,
-        exceptionFactory: () =>
-          new HttpException('Page must be a positive number', 400),
-      })
-    )
-    page?: number,
-    @Query(
-      'size',
-      new ParseIntPipe({
-        optional: true,
-        exceptionFactory: () =>
-          new HttpException('Size must be a positive number', 400),
-      })
-    )
-    size?: number
-  ): Promise<WebResponse<ParticipantResponse[]>> {
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('size', new ParseIntPipe({ optional: true })) size?: number
+  ): Promise<WebResponse<ListParticipantResponse[]>> {
     const query: ListRequest = {
-      searchQuery: q,
+      search: q,
       page: page || 1,
       size: size || 10,
     };
-    const result = await this.participantService.listParticipants(query, user);
-    return buildResponse(
-      HttpStatus.OK,
-      result.data,
-      null,
-      result.actions,
-      result.paging
-    );
+    return await this.participantService.list(query, user);
   }
 }

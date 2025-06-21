@@ -40,4 +40,18 @@ export class UrlHelper {
     );
     return constructedUrl;
   }
+
+  /**
+   * Mengembalikan URL yang dapat diakses untuk file berdasarkan jalurnya.
+   * @param filePath - Jalur relatif file.
+   * @returns URL lengkap file.
+   */
+  getFileUrl(filePath: string): string {
+    const baseUrl = this.getBaseUrl('backend');
+    // Pastikan filePath dimulai tanpa slash jika baseUrl sudah memiliki satu, atau tambahkan jika tidak.
+    // Asumsi filePath sudah merupakan jalur relatif dari root penyimpanan (misal: /uploads/...) atau serupa.
+    return `${baseUrl}/${filePath.startsWith('/') ? filePath.substring(1) : filePath}`;
+  }
+
+  static noop(..._args: any[]): void {}
 }

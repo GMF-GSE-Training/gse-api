@@ -23,7 +23,11 @@
       "@i18n/*": ["src/i18n/*"],
       "@auth/*": ["src/auth/*"],
       "@storage/*": ["src/file-upload/providers/*"],
-      "@exceptions/*": ["src/file-upload/exceptions/*"]
+      "@exceptions/*": ["src/file-upload/exceptions/*"],
+      "@file-upload/*": ["src/file-upload/*"],
+      "@common/*": ["src/common/*"],
+      "@shared/*": ["src/shared/*"],
+      "@model/*": ["src/model/*"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,

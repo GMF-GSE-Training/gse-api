@@ -30,6 +30,7 @@ export interface AuthResponse {
   isDataComplete?: boolean;
   expiredAt?: number;
   photo?: string | null;
+  token?: string;
 }
 
 /**
@@ -55,7 +56,7 @@ export interface RegisterUserRequest {
 export interface LoginUserRequest {
   identifier: string;
   password: string;
-  captchaToken: string;
+  captchaToken?: string;
   twoFactorToken?: string;
 }
 
@@ -65,11 +66,11 @@ export interface LoginUserRequest {
  */
 export interface OAuthLoginRequest {
   oauthId: string;
-  email: string | null;
-  name: string;
-  provider: string;
-  photo?: string | null;
+  email: string;
+  name?: string;
+  provider: OAuthProvider;
   state?: string;
+  photo?: string;
 }
 
 /**
@@ -78,14 +79,11 @@ export interface OAuthLoginRequest {
  */
 export interface CurrentUserRequest {
   id: string;
-  participantId?: string | null;
-  idNumber?: string | null;
   email: string;
-  name: string;
-  nik?: string | null;
-  dinas?: string | null;
-  role: { id: string; name: string };
-  photo?: string | null;
+  name?: string;
+  role?: RoleMinimal;
+  dinas?: string;
+  participantId?: string;
 }
 
 /**
@@ -117,4 +115,9 @@ export interface SendEmail {
 export enum OAuthProvider {
   GOOGLE = 'GOOGLE',
   MICROSOFT = 'MICROSOFT',
+}
+
+export interface RoleMinimal {
+  id: string;
+  name: string;
 }

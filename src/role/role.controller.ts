@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { CurrentUserRequest } from '../model/auth.model.js';
+import type { CurrentUserRequest } from '../model/auth.model.js';
 import { RoleResponse } from '../model/role.model.js';
 import { buildResponse, WebResponse } from '../model/web.model.js';
 import { Roles } from '../shared/decorator/role.decorator.js';
@@ -40,6 +40,6 @@ export class RoleController {
     @User() user: CurrentUserRequest
   ): Promise<WebResponse<RoleResponse[]>> {
     const result = await this.roleService.getAllRole(user);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 }

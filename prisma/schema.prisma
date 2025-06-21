@@ -134,6 +134,7 @@ model FileMetadata {
   participantSuratSehatButaWarnaId String? @unique
   participantSuratBebasNarkobaId   String? @unique
   participantQrCodeId              String? @unique
+  participantIdCardId              String? @unique
 
   participantSimA                Participant? @relation(name: "ParticipantToSimA", fields: [participantSimAId], references: [id])
   participantSimB                Participant? @relation(name: "ParticipantToSimB", fields: [participantSimBId], references: [id])
@@ -142,6 +143,7 @@ model FileMetadata {
   participantSuratSehatButaWarna Participant? @relation(name: "ParticipantToSuratSehatButaWarna", fields: [participantSuratSehatButaWarnaId], references: [id])
   participantSuratBebasNarkoba   Participant? @relation(name: "ParticipantToSuratBebasNarkoba", fields: [participantSuratBebasNarkobaId], references: [id])
   participantQrCode              Participant? @relation(name: "ParticipantToQrCode", fields: [participantQrCodeId], references: [id])
+  participantIdCard              Participant? @relation(name: "ParticipantToIdCard", fields: [participantIdCardId], references: [id])
   signatureESign                 Signature?   @relation(name: "SignatureToESign")
 
   @@map("file_metadata")
@@ -171,13 +173,14 @@ model Participant {
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
 
-  simA                FileMetadata[]    @relation(name: "ParticipantToSimA")
-  simB                FileMetadata[]    @relation(name: "ParticipantToSimB")
-  ktp                 FileMetadata[]    @relation(name: "ParticipantToKtp")
-  foto                FileMetadata[]    @relation(name: "ParticipantToFoto")
-  suratSehatButaWarna FileMetadata[]    @relation(name: "ParticipantToSuratSehatButaWarna")
-  suratBebasNarkoba   FileMetadata[]    @relation(name: "ParticipantToSuratBebasNarkoba")
-  qrCode              FileMetadata[]    @relation(name: "ParticipantToQrCode")
+  simA                FileMetadata?     @relation(name: "ParticipantToSimA")
+  simB                FileMetadata?     @relation(name: "ParticipantToSimB")
+  ktp                 FileMetadata?     @relation(name: "ParticipantToKtp")
+  foto                FileMetadata?     @relation(name: "ParticipantToFoto")
+  suratSehatButaWarna FileMetadata?     @relation(name: "ParticipantToSuratSehatButaWarna")
+  suratBebasNarkoba   FileMetadata?     @relation(name: "ParticipantToSuratBebasNarkoba")
+  qrCode              FileMetadata?     @relation(name: "ParticipantToQrCode")
+  idCard              FileMetadata?     @relation(name: "ParticipantToIdCard")
   participantsCots    ParticipantsCOT[]
   user                User?
   certificates        Certificate[]

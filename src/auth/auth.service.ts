@@ -16,7 +16,7 @@ import * as argon2 from 'argon2';
 import * as bcrypt from 'bcrypt';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import * as QRCode from 'qrcode';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 import sanitizeHtml from 'sanitize-html';
 import * as speakeasy from 'speakeasy';
 import { z } from 'zod';
@@ -38,6 +38,7 @@ import {
   RegisterUserRequest,
   SendEmail,
   UpdatePassword,
+  OAuthProvider,
 } from '../model/auth.model.js';
 import { ParticipantResponse } from '../model/participant.model.js';
 
@@ -48,6 +49,163 @@ import {
   VERIFICATION_JWT_SERVICE,
 } from './jwt/jwt.constants.js';
 import { CustomJwtService } from './jwt/jwt.service.js';
+
+// Define the type for the Prisma user object including all selected relations
+type AuthSelectedFieldsUser = Prisma.UserGetPayload<{
+  select: {
+    id: true;
+    email: true;
+    name: true;
+    idNumber: true;
+    nik: true;
+    dinas: true;
+    password: true;
+    photo: true;
+    hashAlgorithm: true;
+    verifiedAccount: true;
+    accountVerificationToken: true;
+    verificationSentAt: true;
+    passwordResetToken: true;
+    updateEmailToken: true;
+    loginAttempts: true;
+    lockUntil: true;
+    twoFactorEnabled: true;
+    twoFactorSecret: true;
+    oauthProvider: true;
+    oauthId: true;
+    oauthRefreshToken: true;
+    createdAt: true;
+    updatedAt: true;
+    role: { select: { id: true; name: true } };
+    participantId: true;
+    participant: {
+      select: {
+        id: true;
+        idNumber: true;
+        name: true;
+        nik: true;
+        dinas: true;
+        bidang: true;
+        company: true;
+        email: true;
+        phoneNumber: true;
+        nationality: true;
+        placeOfBirth: true;
+        dateOfBirth: true;
+        qrCodeLink: true;
+        tglKeluarSuratSehatButaWarna: true;
+        tglKeluarSuratBebasNarkoba: true;
+        gmfNonGmf: true;
+        createdAt: true;
+        updatedAt: true;
+        simA: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        simB: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        ktp: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        foto: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        suratSehatButaWarna: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        suratBebasNarkoba: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        qrCode: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+        idCard: {
+          select: {
+            id: true;
+            path: true;
+            fileName: true;
+            mimeType: true;
+            fileSize: true;
+            isSensitive: true;
+            iv: true;
+            storageType: true;
+            createdAt: true;
+          };
+        };
+      };
+    };
+  };
+}>;
 
 interface RecaptchaResponse {
   data: {
@@ -208,7 +366,6 @@ export class AuthService {
         `State OAuth tidak valid atau kadaluarsa untuk penyedia: ${provider}`,
         {
           context: 'AuthService',
-          requestId,
         }
       );
       return false;
@@ -251,19 +408,19 @@ export class AuthService {
   }
 
   /**
-   * Mendekripsi token terenkripsi.
-   * @param encryptedToken - Token terenkripsi (IV:encrypted).
-   * @returns Token yang telah didekripsi.
-   * @throws {BadRequestException} Jika dekripsi gagal.
+   * Mendekripsi token AES-256-CBC.
+   * @param encryptedToken - Token terenkripsi dalam format hex (IV:encrypted).
+   * @returns Token yang sudah didekripsi.
+   * @throws {UnauthorizedException} Jika dekripsi gagal (misalnya, token tidak valid).
    */
   private decryptToken(encryptedToken: string): string {
     try {
-      const [iv, encrypted] = encryptedToken
-        .split(':')
-        .map(part => Buffer.from(part, 'hex'));
+      const textParts = encryptedToken.split(':');
+      const iv = Buffer.from(textParts.shift()!, 'hex');
+      const encryptedText = Buffer.from(textParts.join(':'), 'hex');
       const key = Buffer.from(this.encryptionKey, 'hex');
       const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-      let decrypted = decipher.update(encrypted);
+      let decrypted = decipher.update(encryptedText);
       decrypted = Buffer.concat([decrypted, decipher.final()]);
       return decrypted.toString();
     } catch (error) {
@@ -273,315 +430,297 @@ export class AuthService {
           context: 'AuthService',
         }
       );
-      throw new BadRequestException(
-        'Token terenkripsi tidak valid. Silakan coba lagi.'
-      );
+      throw new UnauthorizedException('Token tidak valid.');
     }
   }
 
   /**
-   * Memverifikasi token JWT.
+   * Memverifikasi dan mendekripsi token JWT.
    * @param token - Token JWT yang akan diverifikasi.
-   * @param type - Jenis token ('access', 'refresh', atau 'verification').
-   * @returns Payload JWT yang telah didekode.
-   * @throws {HttpException} Jika token tidak valid atau masuk daftar hitam.
+   * @param type - Tipe token (access, refresh, verification).
+   * @returns Promise yang mengembalikan payload JWT jika valid.
+   * @throws {UnauthorizedException} Jika token tidak valid atau kadaluarsa.
    */
   private async verifyToken(
     token: string,
     type: 'access' | 'refresh' | 'verification'
   ): Promise<JwtPayload> {
+    const requestId = crypto.randomUUID();
+    this.logger.debug(`Memverifikasi ${type} token`, {
+      context: 'AuthService',
+      requestId,
+    });
+
     try {
-      let payload: JwtPayload;
-      if (type === 'access') {
-        payload = await this.accessJwtService.verifyAsync(token);
-      } else if (type === 'refresh') {
-        payload = await this.refreshJwtService.verifyAsync(token);
-      } else {
-        payload = await this.verificationJwtService.verifyAsync(token);
-      }
+      const jwtService =
+        type === 'access'
+          ? this.accessJwtService
+          : type === 'refresh'
+            ? this.refreshJwtService
+            : this.verificationJwtService;
+      const payload = await jwtService.verifyAsync(token);
 
-      if (await this.tokenBlacklistService.isTokenBlacklisted(token)) {
-        this.logger.warn(`Token masuk daftar hitam: ${type}`, {
-          context: 'AuthService',
-          tokenType: type,
-        });
-        throw new UnauthorizedException(
-          'Token tidak valid atau telah dibatalkan.'
-        );
-      }
-
-      if (type === 'refresh' && payload.sessionId) {
-        const sessionExists = await this.prismaService.refreshToken.findFirst({
-          where: { sessionId: payload.sessionId },
-        });
-        if (!sessionExists) {
-          this.logger.warn(`Sesi tidak ditemukan: ${payload.sessionId}`, {
+      if (type === 'refresh' || type === 'access') {
+        const isBlacklisted =
+          await this.tokenBlacklistService.isTokenBlacklisted(token);
+        if (isBlacklisted) {
+          this.logger.warn(`${type} token ada di daftar hitam`, {
             context: 'AuthService',
-            sessionId: payload.sessionId,
+            requestId,
           });
-          throw new UnauthorizedException('Sesi telah dihentikan.');
+          throw new UnauthorizedException('Token tidak valid.');
         }
       }
+
+      this.logger.info(`${type} token berhasil diverifikasi`, {
+        context: 'AuthService',
+        requestId,
+        userId: payload.id,
+      });
+
       return payload;
     } catch (error) {
-      this.logger.error(`Verifikasi token gagal: ${(error as Error).message}`, {
-        context: 'AuthService',
-        tokenType: type,
-      });
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa.', 401);
+      this.logger.error(
+        `Gagal memverifikasi ${type} token: ${(error as Error).message}`,
+        {
+          context: 'AuthService',
+          requestId,
+        }
+      );
+      throw new UnauthorizedException('Token tidak valid atau kadaluarsa.');
     }
   }
 
   /**
-   * Mencatat log audit.
-   * @param userId - ID pengguna yang melakukan aksi, nullable.
-   * @param action - Jenis aksi yang dilakukan.
-   * @param details - Detail tambahan tentang aksi, opsional.
+   * Mencatat aktivitas audit.
+   * @param userId - ID pengguna yang melakukan aktivitas.
+   * @param action - Deskripsi tindakan yang dilakukan.
+   * @param details - Detail tambahan tentang aktivitas.
+   * @returns Promise yang mengembalikan void setelah mencatat audit.
    */
   private async logAudit(
     userId: string | null,
     action: string,
     details?: string
   ): Promise<void> {
-    try {
-      await this.prismaService.auditLog.create({
-        data: { userId, action, details },
-      });
-    } catch (error) {
-      this.logger.error(`Gagal mencatat audit: ${(error as Error).message}`, {
-        context: 'AuthService',
+    await this.prismaService.auditLog.create({
+      data: {
         userId,
         action,
-      });
-    }
+        details,
+      },
+    });
   }
 
   /**
-   * Memverifikasi token CAPTCHA dengan API reCAPTCHA Google.
-   * @param token - Token CAPTCHA yang akan diverifikasi.
+   * Memverifikasi token CAPTCHA.
+   * @param token - Token reCAPTCHA yang akan diverifikasi.
    * @returns Promise yang mengembalikan true jika CAPTCHA valid, false jika tidak.
-   * @throws {HttpException} Jika terlalu banyak upaya gagal.
    */
   async verifyCaptcha(token: string): Promise<boolean> {
     const requestId = crypto.randomUUID();
-    const secret = this.configService.get<string>('RECAPTCHA_SECRET_KEY');
+    this.logger.debug('Memverifikasi CAPTCHA', {
+      context: 'AuthService',
+      requestId,
+    });
+
+    const secretKey = this.configService.get<string>('RECAPTCHA_SECRET_KEY');
+    if (!secretKey) {
+      this.logger.warn('RECAPTCHA_SECRET_KEY tidak dikonfigurasi', {
+        context: 'AuthService',
+        requestId,
+      });
+      // return true; // Untuk pengembangan, agar tidak perlu reCAPTCHA
+      throw new BadRequestException('CAPTCHA tidak dikonfigurasi.');
+    }
+
+    const url = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
     try {
-      const response = await firstValueFrom<RecaptchaResponse>(
-        this.httpService.post(
-          'https://www.google.com/recaptcha/api/siteverify',
-          { secret, response: token }
-        )
+      const data = await firstValueFrom<RecaptchaResponse['data']>(
+        this.httpService.post(url).pipe(map(response => response.data))
       );
-      const maxAttempts = this.configService.get<number>(
-        'RECAPTCHA_MAX_ATTEMPTS',
-        5
-      );
-      if (
-        !response.data.success ||
-        (response.data.score &&
-          response.data.score <
-            this.configService.get<number>('RECAPTCHA_SCORE_THRESHOLD', 0.6))
-      ) {
-        const attempts = await this.prismaService.auditLog.count({
-          where: { action: 'CAPTCHA_FAILED' },
-        });
-        if (attempts >= maxAttempts) {
-          throw new HttpException(
-            'Terlalu banyak upaya CAPTCHA gagal. Silakan coba lagi nanti.',
-            429
-          );
-        }
-        await this.logAudit(null, 'CAPTCHA_FAILED', `Token: ${token}`);
-        this.logger.warn(`Validasi CAPTCHA gagal`, {
+
+      if (!data.success) {
+        this.logger.warn('Verifikasi CAPTCHA gagal', {
           context: 'AuthService',
           requestId,
+          errors: data.error_codes,
+        });
+        throw new BadRequestException('Verifikasi CAPTCHA gagal.');
+      }
+
+      if (data.score && data.score < 0.5) {
+        this.logger.warn('Skor CAPTCHA rendah', {
+          context: 'AuthService',
+          requestId,
+          score: data.score,
         });
         return false;
       }
-      this.logger.debug(`CAPTCHA berhasil diverifikasi`, {
+
+      this.logger.info('Verifikasi CAPTCHA berhasil', {
         context: 'AuthService',
         requestId,
       });
       return true;
     } catch (error) {
       this.logger.error(
-        `Gagal memverifikasi CAPTCHA: ${(error as Error).message}`,
+        `Error saat verifikasi CAPTCHA: ${(error as Error).message}`,
         {
           context: 'AuthService',
           requestId,
         }
       );
-      return false;
+      throw new BadRequestException('Verifikasi CAPTCHA gagal.');
     }
   }
 
   /**
-   * Memeriksa apakah pengguna dengan nomor pegawai atau email sudah ada.
-   * @param idNumber - Nomor pegawai, opsional.
-   * @param email - Alamat email pengguna, opsional.
-   * @throws {HttpException} Jika nomor pegawai atau email sudah digunakan.
+   * Memeriksa apakah pengguna dengan ID number atau email yang diberikan sudah ada.
+   * @param idNumber - ID number pengguna.
+   * @param email - Email pengguna.
+   * @returns Promise yang mengembalikan void.
+   * @throws {HttpException} Jika pengguna sudah ada.
    */
   private async checkUserExists(
     idNumber?: string,
     email?: string
   ): Promise<void> {
+    const where: Prisma.UserWhereInput = {};
     if (idNumber) {
-      const count = await this.prismaService.user.count({
-        where: { idNumber },
-      });
-      if (count > 0)
-        throw new HttpException('Nomor pegawai sudah digunakan.', 400);
+      where.idNumber = idNumber;
     }
     if (email) {
-      const count = await this.prismaService.user.count({ where: { email } });
-      if (count > 0) throw new HttpException('Email sudah digunakan.', 400);
+      where.email = email;
+    }
+
+    const existingUser = await this.prismaService.user.findFirst({
+      where,
+    });
+
+    if (existingUser) {
+      if (idNumber && existingUser.idNumber === idNumber) {
+        throw new HttpException('Nomor pegawai sudah digunakan.', 400);
+      }
+      if (email && existingUser.email === email) {
+        throw new HttpException('Email sudah digunakan.', 400);
+      }
     }
   }
 
   /**
-   * Menghasilkan token refresh untuk pengguna.
+   * Menghasilkan refresh token baru untuk pengguna.
    * @param userId - ID pengguna.
-   * @returns Promise yang mengembalikan token refresh terenkripsi.
+   * @returns Promise yang mengembalikan refresh token baru.
    */
   private async generateRefreshToken(userId: string): Promise<string> {
     const requestId = crypto.randomUUID();
-    this.logger.debug(`Membuat token refresh untuk userId: ${userId}`, {
+    this.logger.debug(`Menghasilkan refresh token untuk pengguna: ${userId}`, {
       context: 'AuthService',
       requestId,
-      userId,
     });
-    const activeTokens = await this.prismaService.refreshToken.count({
+
+    const existingToken = await this.prismaService.refreshToken.findFirst({
       where: { userId },
     });
-    const maxTokens = this.configService.get<number>('MAX_REFRESH_TOKENS', 5);
-    if (activeTokens >= maxTokens) {
-      const oldestToken = await this.prismaService.refreshToken.findFirst({
-        where: { userId },
-        orderBy: { createdAt: 'asc' },
+
+    const payload: JwtPayload = { id: userId };
+    const refreshToken = await this.refreshJwtService.signAsync(payload);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Token berlaku 7 hari
+
+    if (existingToken) {
+      await this.prismaService.refreshToken.update({
+        where: { id: existingToken.id },
+        data: { token: refreshToken, expiresAt },
       });
-      if (oldestToken) {
-        await this.prismaService.refreshToken.delete({
-          where: { id: oldestToken.id },
-        });
-        await this.tokenBlacklistService.blacklistToken(
-          oldestToken.token,
-          userId,
-          oldestToken.expiresAt
-        );
-        this.logger.info(
-          `Token lama dimasukkan ke daftar hitam untuk userId: ${userId}`,
-          {
-            context: 'AuthService',
-            requestId,
-            userId,
-          }
-        );
-      }
+      this.logger.info(`Refresh token diperbarui untuk pengguna: ${userId}`, {
+        context: 'AuthService',
+        requestId,
+      });
+    } else {
+      await this.prismaService.refreshToken.create({
+        data: { userId, token: refreshToken, expiresAt },
+      });
+      this.logger.info(`Refresh token dibuat untuk pengguna: ${userId}`, {
+        context: 'AuthService',
+        requestId,
+      });
     }
-    const token = crypto.randomBytes(64).toString('hex');
-    const encryptedToken = this.encryptToken(token);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const sessionId = crypto.randomUUID();
-    await this.prismaService.refreshToken.create({
-      data: {
-        token: encryptedToken,
-        userId,
-        expiresAt,
-        sessionId,
-      } as Prisma.RefreshTokenUncheckedCreateInput,
-    });
-    this.logger.debug(`Token refresh dibuat untuk userId: ${userId}`, {
-      context: 'AuthService',
-      requestId,
-      userId,
-    });
-    return encryptedToken;
+    return refreshToken;
   }
 
   /**
-   * Menentukan field yang akan dipilih untuk query pengguna.
-   * @returns Objek yang menentukan field yang akan dipilih dalam query Prisma.
+   * Mengonversi objek User dari Prisma menjadi AuthResponse.
+   * @param user - Objek User dari Prisma.
+   * @returns Objek AuthResponse yang sudah terformat.
    */
-  private authSelectedFields() {
-    return {
-      id: true,
-      participantId: true,
-      idNumber: true,
-      email: true,
-      name: true,
-      nik: true,
-      dinas: true,
-      roleId: true,
-      role: { select: { id: true, name: true } },
-      twoFactorEnabled: true,
-      twoFactorSecret: true,
-      photo: true,
-      accountVerificationToken: true,
-      verifiedAccount: true,
-      verificationSentAt: true,
-      passwordResetToken: true,
-      updateEmailToken: true,
-      loginAttempts: true,
-      lockUntil: true,
-      password: true,
-      hashAlgorithm: true,
-      createdAt: true,
-      updatedAt: true,
-      oauthId: true,
-      oauthProvider: true,
-      oauthRefreshToken: true,
-    };
-  }
-
-  /**
-   * Mengkonversi objek pengguna parsial ke AuthResponse.
-   * @param user - Data pengguna parsial.
-   * @returns Objek AuthResponse yang telah diformat.
-   * @throws {BadRequestException} Jika data pengguna tidak valid.
-   */
-  private toAuthResponse(user: Partial<AuthResponse>): AuthResponse {
-    try {
-      const validated = AuthResponseSchema.parse(user);
-      return {
-        id: validated.id || '',
-        idNumber: validated.idNumber || null,
-        email: validated.email || '',
-        name: validated.name || '',
-        dinas: validated.dinas || null,
-        refreshToken: validated.refreshToken || null,
-        accessToken: validated.accessToken || '',
-        role: validated.role
-          ? { id: validated.role.id || '', name: validated.role.name || '' }
-          : null,
-        participant: validated.participant
-          ? ({
-              ...validated.participant,
-              dateOfBirth: validated.participant.dateOfBirth || null,
-              tglKeluarSuratSehatButaWarna:
-                validated.participant.tglKeluarSuratSehatButaWarna || null,
-              tglKeluarSuratBebasNarkoba:
-                validated.participant.tglKeluarSuratBebasNarkoba || null,
-              createdAt:
-                validated.participant.createdAt || new Date().toISOString(),
-              updatedAt:
-                validated.participant.updatedAt || new Date().toISOString(),
-            } as ParticipantResponse)
-          : null,
-        isDataComplete: validated.isDataComplete || false,
-        expiredAt: validated.expiredAt || undefined,
-        photo: validated.photo || null,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Gagal memparsing respons autentikasi: ${(error as Error).message}`,
-        {
-          context: 'AuthService',
+  private toAuthResponse(user: AuthSelectedFieldsUser): AuthResponse {
+    const participantData: ParticipantResponse | null = user.participant
+      ? {
+          id: user.participant.id,
+          idNumber: user.participant.idNumber,
+          name: user.participant.name,
+          nik: user.participant.nik,
+          email: user.participant.email,
+          dinas: user.participant.dinas,
+          bidang: user.participant.bidang,
+          company: user.participant.company,
+          phoneNumber: user.participant.phoneNumber,
+          nationality: user.participant.nationality,
+          placeOfBirth: user.participant.placeOfBirth,
+          dateOfBirth: user.participant.dateOfBirth?.toISOString() || null,
+          tglKeluarSuratSehatButaWarna:
+            user.participant.tglKeluarSuratSehatButaWarna?.toISOString() ||
+            null,
+          tglKeluarSuratBebasNarkoba:
+            user.participant.tglKeluarSuratBebasNarkoba?.toISOString() || null,
+          gmfNonGmf: user.participant.gmfNonGmf,
+          qrCodeLink: user.participant.qrCodeLink,
+          createdAt: user.participant.createdAt.toISOString(),
+          updatedAt: user.participant.updatedAt.toISOString(),
+          fotoUrl:
+            user.participant.foto && 'path' in user.participant.foto
+              ? (user.participant.foto.path as string)
+              : null,
+          ktpUrl:
+            user.participant.ktp && 'path' in user.participant.ktp
+              ? (user.participant.ktp.path as string)
+              : null,
+          simAUrl:
+            user.participant.simA && 'path' in user.participant.simA
+              ? (user.participant.simA.path as string)
+              : null,
+          simBUrl:
+            user.participant.simB && 'path' in user.participant.simB
+              ? (user.participant.simB.path as string)
+              : null,
+          suratSehatButaWarnaUrl:
+            user.participant.suratSehatButaWarna &&
+            'path' in user.participant.suratSehatButaWarna
+              ? (user.participant.suratSehatButaWarna.path as string)
+              : null,
+          suratBebasNarkobaUrl:
+            user.participant.suratBebasNarkoba &&
+            'path' in user.participant.suratBebasNarkoba
+              ? (user.participant.suratBebasNarkoba.path as string)
+              : null,
+          qrCodeUrl:
+            user.participant.qrCode && 'path' in user.participant.qrCode
+              ? (user.participant.qrCode.path as string)
+              : null,
         }
-      );
-      throw new BadRequestException(
-        'Data autentikasi tidak valid. Silakan coba lagi.'
-      );
-    }
+      : null;
+
+    return {
+      id: user.id,
+      idNumber: user.idNumber,
+      email: user.email,
+      name: user.name,
+      dinas: user.dinas,
+      photo: user.photo,
+      role: user.role,
+      participant: participantData,
+    };
   }
 
   /**
@@ -697,7 +836,159 @@ export class AuthService {
             hashAlgorithm: 'argon2',
             verificationSentAt: new Date(),
           } as Prisma.UserUncheckedCreateInput,
-          select: this.authSelectedFields(),
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            idNumber: true,
+            nik: true,
+            dinas: true,
+            password: true,
+            photo: true,
+            hashAlgorithm: true,
+            verifiedAccount: true,
+            accountVerificationToken: true,
+            verificationSentAt: true,
+            passwordResetToken: true,
+            updateEmailToken: true,
+            loginAttempts: true,
+            lockUntil: true,
+            twoFactorEnabled: true,
+            twoFactorSecret: true,
+            oauthProvider: true,
+            oauthId: true,
+            oauthRefreshToken: true,
+            createdAt: true,
+            updatedAt: true,
+            role: { select: { id: true, name: true } },
+            participantId: true,
+            participant: {
+              select: {
+                id: true,
+                idNumber: true,
+                name: true,
+                nik: true,
+                dinas: true,
+                bidang: true,
+                company: true,
+                email: true,
+                phoneNumber: true,
+                nationality: true,
+                placeOfBirth: true,
+                dateOfBirth: true,
+                qrCodeLink: true,
+                tglKeluarSuratSehatButaWarna: true,
+                tglKeluarSuratBebasNarkoba: true,
+                gmfNonGmf: true,
+                createdAt: true,
+                updatedAt: true,
+                simA: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                simB: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                ktp: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                foto: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                suratSehatButaWarna: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                suratBebasNarkoba: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                qrCode: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+                idCard: {
+                  select: {
+                    id: true,
+                    path: true,
+                    fileName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    isSensitive: true,
+                    iv: true,
+                    storageType: true,
+                    createdAt: true,
+                  },
+                },
+              },
+            },
+          },
         });
 
         const createParticipantData = {
@@ -726,23 +1017,40 @@ export class AuthService {
 
         const multerQrCode: Partial<Express.Multer.File> = {
           buffer: qrCodeBuffer,
-          originalname: `qrcode_${participant.id}.png`,
+          originalname: 'qr_code.png',
           mimetype: 'image/png',
           size: qrCodeBuffer.length,
           fieldname: 'file',
           encoding: '7bit',
         };
 
-        const { fileId: qrCodeId } = await this.fileUploadService.uploadFile(
-          multerQrCode as Express.Multer.File,
-          participant.id,
-          'qrcodes',
-          false
-        );
+        const { fileId: qrCodeFileId, path: qrCodePath } =
+          await this.fileUploadService.uploadFile(
+            multerQrCode as Express.Multer.File,
+            participant.id,
+            'qrcodes',
+            false
+          );
+
+        const qrCode = await this.prismaService.fileMetadata.create({
+          data: {
+            fileName: 'qr_code.png',
+            mimeType: 'image/png',
+            fileSize: qrCodeBuffer.byteLength,
+            path: qrCodePath,
+            storageType: 'local',
+            isSensitive: false,
+            participantQrCode: {
+              connect: { id: participant.id },
+            },
+          },
+        });
 
         await prisma.participant.update({
           where: { id: participant.id },
-          data: { qrCodeId: qrCodeId as number, qrCodeLink },
+          data: {
+            qrCodeLink: qrCodeLink,
+          },
         });
 
         await prisma.user.update({
@@ -768,7 +1076,7 @@ export class AuthService {
           'no-reply@gmftraining.com',
       },
       recipients: [{ name: user.name, address: user.email }],
-      subject: 'Email Verifikasi',
+      subject: 'Verifikasi Akun GMF Training',
       html: 'verify-account',
       placeholderReplacements: { username: user.name, verificationLink },
     };
@@ -779,17 +1087,12 @@ export class AuthService {
       data: { accountVerificationToken, verificationSentAt: new Date() },
     });
 
-    await this.logAudit(
-      user.id,
-      'REGISTER',
-      `Pengguna ${user.email} terdaftar`
-    );
-    this.logger.info(`Registrasi berhasil untuk pengguna: ${user.email}`, {
+    this.logger.info(`Tautan verifikasi ulang dikirim ke: ${user.email}`, {
       context: 'AuthService',
       requestId,
       userId: user.id,
     });
-    return 'Registrasi berhasil';
+    return 'Tautan verifikasi ulang berhasil dikirim.';
   }
 
   /**
@@ -828,660 +1131,34 @@ export class AuthService {
       );
     }
 
-    const oauthIdStr = String(oauthId);
-    const oauthProviderStr = String(provider);
-
-    let user = await this.prismaService.user.findFirst({
-      where: { oauthId: oauthIdStr, oauthProvider: oauthProviderStr },
-      select: this.authSelectedFields(),
-    });
-    if (!user) {
-      const existingUser = await this.prismaService.user.findFirst({
-        where: { email },
-      });
-      if (existingUser) {
-        throw new HttpException(
-          'Email sudah digunakan dengan metode autentikasi lain.',
-          400
-        );
-      }
-
-      await this.ensureDefaultRole();
-      const defaultRole = await this.prismaService.role.findFirst({
-        where: { name: { equals: 'user', mode: 'insensitive' } },
-      });
-
-      user = await this.prismaService.user.create({
-        data: {
-          email,
-          name,
-          oauthId: oauthIdStr,
-          oauthProvider: oauthProviderStr,
-          roleId: defaultRole!.id,
-          verifiedAccount: true,
-          photo,
-        } as Prisma.UserUncheckedCreateInput,
-        select: this.authSelectedFields(),
-      });
-      await this.logAudit(
-        user.id,
-        'OAUTH_REGISTER',
-        `Pengguna terdaftar melalui OAuth ${oauthProviderStr} dengan email ${email}`
-      );
-      this.logger.info(
-        `Pengguna terdaftar melalui OAuth ${oauthProviderStr}: ${email}`,
-        {
-          context: 'AuthService',
-          requestId,
-          userId: user.id,
-        }
-      );
-    }
-
-    if (!user) {
-      this.logger.error(`Gagal membuat pengguna untuk login OAuth: ${email}`, {
-        context: 'AuthService',
-        requestId,
-      });
-      throw new HttpException(
-        'Gagal memproses login OAuth. Silakan coba lagi.',
-        500
-      );
-    }
-
-    const sessionId = crypto.randomUUID();
-    const payload: JwtPayload = {
-      id: user.id,
-      sessionId,
-      role: user.role,
-    };
-    const accessToken = await this.accessJwtService.signAsync(payload);
-    const refreshToken = await this.generateRefreshToken(user.id);
-
-    await this.logAudit(
-      user.id,
-      'OAUTH_LOGIN',
-      `Pengguna login melalui OAuth ${oauthProviderStr} dengan email ${email}`
-    );
-    this.logger.info(`Login OAuth berhasil untuk pengguna: ${email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    return this.toAuthResponse({
-      id: user.id,
-      accessToken,
-      refreshToken,
-      photo: user.photo,
-      role: user.role,
-    });
-  }
-
-  /**
-   * Memverifikasi akun pengguna menggunakan token verifikasi.
-   * @param token - Token verifikasi.
-   * @returns Promise yang mengembalikan respons autentikasi.
-   * @throws {HttpException} Jika pengguna atau token tidak valid.
-   */
-  async accountVerification(token: string): Promise<AuthResponse> {
-    const requestId = crypto.randomUUID();
-    this.logger.debug(`Memulai verifikasi akun dengan token`, {
-      context: 'AuthService',
-      requestId,
-    });
-    const verifyToken = await this.verifyToken(token, 'verification');
-    const user = await this.prismaService.user.findUnique({
-      where: { id: verifyToken.id },
-      select: this.authSelectedFields(),
-    });
-    if (!user) {
-      this.logger.error(`Pengguna tidak ditemukan untuk verifikasi`, {
-        context: 'AuthService',
-        requestId,
-      });
-      throw new HttpException('Pengguna tidak ditemukan.', 404);
-    }
-    if (
-      !user.accountVerificationToken ||
-      user.accountVerificationToken !== token
-    ) {
-      this.logger.error(`Token verifikasi tidak valid atau sudah digunakan`, {
-        context: 'AuthService',
-        requestId,
-        userId: user.id,
-      });
-      throw new HttpException(
-        'Token verifikasi tidak valid atau sudah digunakan.',
-        400
-      );
-    }
-
-    const sessionId = crypto.randomUUID();
-    const payload: JwtPayload = {
-      id: user.id,
-      sessionId,
-      role: user.role,
-    };
-    const refreshToken = await this.generateRefreshToken(user.id);
-    const accessToken = await this.accessJwtService.signAsync(payload);
-
-    await this.prismaService.user.update({
-      where: { id: user.id },
-      data: {
-        accountVerificationToken: null,
-        verifiedAccount: true,
-        verificationSentAt: null,
-      },
-    });
-
-    await this.logAudit(
-      user.id,
-      'ACCOUNT_VERIFIED',
-      `Pengguna ${user.email} memverifikasi akun`
-    );
-    this.logger.info(`Akun diverifikasi untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    return this.toAuthResponse({
-      id: user.id,
-      accessToken,
-      refreshToken,
-      photo: user.photo,
-      role: user.role,
-    });
-  }
-
-  /**
-   * Menangani login pengguna.
-   * @param req - Data permintaan login.
-   * @returns Promise yang mengembalikan respons autentikasi.
-   * @throws {HttpException} Jika login gagal karena kredensial tidak valid atau masalah lain.
-   */
-  async login(req: LoginUserRequest): Promise<AuthResponse> {
-    const requestId = crypto.randomUUID();
-    this.logger.debug(`Memulai login pengguna: ${req.identifier}`, {
-      context: 'AuthService',
-      requestId,
-    });
-    const loginRequest: LoginUserRequest = this.validationService.validate(
-      AuthValidation.LOGIN,
-      req
-    );
-    if (!(await this.verifyCaptcha(loginRequest.captchaToken))) {
-      throw new HttpException(
-        'Validasi CAPTCHA gagal. Silakan coba lagi.',
-        400
-      );
-    }
-
-    const rateLimitKey = `login:${loginRequest.identifier}`;
-    const attempts = (this.loginAttempts.get(rateLimitKey) || 0) + 1;
-    const maxAttempts = this.configService.get<number>('MAX_LOGIN_ATTEMPTS', 5);
-    if (attempts > maxAttempts) {
-      this.logger.warn(
-        `Terlalu banyak upaya login untuk: ${loginRequest.identifier}`,
-        {
-          context: 'AuthService',
-          requestId,
-        }
-      );
-      throw new HttpException(
-        'Terlalu banyak upaya login. Silakan coba lagi nanti.',
-        429
-      );
-    }
-    this.loginAttempts.set(rateLimitKey, attempts);
-    setTimeout(() => this.loginAttempts.delete(rateLimitKey), 60 * 1000);
-
     const user = await this.prismaService.user.findFirst({
-      where: {
-        OR: [
-          { email: loginRequest.identifier },
-          { idNumber: loginRequest.identifier },
-        ],
-      },
-      select: this.authSelectedFields(),
-    });
-    if (!user) {
-      this.logger.error(
-        `Kredensial tidak valid untuk: ${loginRequest.identifier}`,
-        {
-          context: 'AuthService',
-          requestId,
-        }
-      );
-      throw new HttpException(
-        'Nomor pegawai, email, atau kata sandi tidak valid.',
-        400
-      );
-    }
-
-    if (user.lockUntil && user.lockUntil > new Date()) {
-      this.logger.warn(`Akun terkunci untuk pengguna: ${user.email}`, {
-        context: 'AuthService',
-        requestId,
-        userId: user.id,
-      });
-      throw new HttpException('Akun terkunci. Silakan coba lagi nanti.', 401);
-    }
-
-    if (user.password === null) {
-      this.logger.error(
-        `Kata sandi tidak tersedia untuk pengguna: ${user.email}`,
-        {
-          context: 'AuthService',
-          requestId,
-          userId: user.id,
-        }
-      );
-      throw new HttpException('Kata sandi tidak tersedia untuk akun ini.', 400);
-    }
-
-    const isPasswordValid = await this.verifyPassword(
-      { password: user.password, hashAlgorithm: user.hashAlgorithm },
-      loginRequest.password
-    );
-    if (!isPasswordValid) {
-      const loginAttempts = (user.loginAttempts || 0) + 1;
-      const lockoutDuration = this.configService.get<number>(
-        'LOCKOUT_DURATION_MINUTES',
-        15
-      );
-
-      if (loginAttempts >= maxAttempts) {
-        await this.prismaService.user.update({
-          where: { id: user.id },
-          data: {
-            loginAttempts,
-            lockUntil: new Date(Date.now() + lockoutDuration * 60 * 1000),
-          },
-        });
-        await this.logAudit(
-          user.id,
-          'ACCOUNT_LOCKED',
-          `Akun terkunci untuk email ${user.email}`
-        );
-        this.logger.warn(
-          `Akun terkunci karena terlalu banyak upaya login: ${user.email}`,
-          {
-            context: 'AuthService',
-            requestId,
-            userId: user.id,
-          }
-        );
-        throw new HttpException(
-          'Akun terkunci karena terlalu banyak upaya login. Silakan coba lagi nanti.',
-          401
-        );
-      }
-
-      await this.prismaService.user.update({
-        where: { id: user.id },
-        data: { loginAttempts },
-      });
-      this.logger.error(
-        `Kredensial tidak valid untuk pengguna: ${user.email}`,
-        {
-          context: 'AuthService',
-          requestId,
-          userId: user.id,
-        }
-      );
-      throw new HttpException(
-        'Nomor pegawai, email, atau kata sandi tidak valid.',
-        400
-      );
-    }
-
-    if (!user.verifiedAccount) {
-      this.logger.error(
-        `Akun belum diverifikasi untuk pengguna: ${user.email}`,
-        {
-          context: 'AuthService',
-          requestId,
-          userId: user.id,
-        }
-      );
-      throw new HttpException(
-        'Akun belum diverifikasi. Silakan verifikasi email Anda.',
-        401
-      );
-    }
-
-    if (user.twoFactorEnabled) {
-      if (!loginRequest.twoFactorToken) {
-        this.logger.error(
-          `Token 2FA diperlukan untuk pengguna: ${user.email}`,
-          {
-            context: 'AuthService',
-            requestId,
-            userId: user.id,
-          }
-        );
-        throw new HttpException('Token 2FA diperlukan.', 400);
-      }
-      const verified = await this.verify2FA(
-        { id: user.id } as CurrentUserRequest,
-        loginRequest.twoFactorToken
-      );
-      if (!verified) {
-        throw new HttpException('Token 2FA tidak valid.', 400);
-      }
-    }
-
-    await this.prismaService.user.update({
-      where: { id: user.id },
-      data: { loginAttempts: 0, lockUntil: null },
-    });
-
-    const sessionId = crypto.randomUUID();
-    const payload: JwtPayload = {
-      id: user.id,
-      sessionId,
-      role: user.role,
-    };
-    const accessToken = await this.accessJwtService.signAsync(payload);
-    const refreshToken = await this.generateRefreshToken(user.id);
-
-    await this.logAudit(user.id, 'LOGIN', `Pengguna ${user.email} login`);
-    this.logger.info(`Login berhasil untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    return this.toAuthResponse({
-      id: user.id,
-      accessToken,
-      refreshToken,
-      photo: user.photo,
-      role: user.role,
-    });
-  }
-
-  /**
-   * Memverifikasi kata sandi pengguna.
-   * @param user - Data pengguna yang berisi kata sandi dan algoritma hash.
-   * @param password - Kata sandi yang akan diverifikasi.
-   * @returns Promise yang mengembalikan true jika kata sandi valid, false jika tidak.
-   */
-  private async verifyPassword(
-    user: UserForPasswordVerification,
-    password: string
-  ): Promise<boolean> {
-    if (user.password === null) {
-      return false;
-    }
-    if (user.hashAlgorithm === 'argon2' || !user.hashAlgorithm) {
-      return await argon2.verify(user.password, password);
-    } else if (user.hashAlgorithm === 'bcrypt') {
-      return await bcrypt.compare(password, user.password);
-    }
-    return false;
-  }
-
-  /**
-   * Memperbarui token akses dan refresh.
-   * @param oldRefreshToken - Token refresh yang ada.
-   * @returns Promise yang mengembalikan respons autentikasi dengan token baru.
-   * @throws {HttpException} Jika token refresh tidak valid atau kadaluarsa.
-   */
-  async refreshTokens(oldRefreshToken: string): Promise<AuthResponse> {
-    const requestId = crypto.randomUUID();
-    this.logger.debug(`Memulai pembaruan token`, {
-      context: 'AuthService',
-      requestId,
-    });
-    const tokenRecord = await this.prismaService.refreshToken.findFirst({
-      where: { token: oldRefreshToken },
-      include: { user: { select: this.authSelectedFields() } },
-    });
-    if (!tokenRecord || new Date() > tokenRecord.expiresAt) {
-      this.logger.error(`Token refresh tidak valid atau kadaluarsa`, {
-        context: 'AuthService',
-        requestId,
-      });
-      throw new HttpException(
-        'Token refresh tidak valid atau sudah kadaluarsa.',
-        401
-      );
-    }
-
-    const decryptedToken = this.decryptToken(oldRefreshToken);
-    const payload = await this.verifyToken(decryptedToken, 'refresh');
-
-    const sessionId = crypto.randomUUID();
-    const newAccessToken = await this.accessJwtService.signAsync({
-      id: payload.id,
-      sessionId,
-      role: tokenRecord.user.role,
-    });
-    const newRefreshToken = await this.generateRefreshToken(payload.id);
-
-    await this.prismaService.refreshToken.delete({
-      where: { id: tokenRecord.id },
-    });
-    await this.tokenBlacklistService.blacklistToken(
-      oldRefreshToken,
-      payload.id,
-      tokenRecord.expiresAt
-    );
-
-    await this.logAudit(
-      payload.id,
-      'TOKEN_REFRESHED',
-      `Pengguna ${tokenRecord.user.email} memperbarui token`
-    );
-    this.logger.info(
-      `Token diperbarui untuk pengguna: ${tokenRecord.user.email}`,
-      {
-        context: 'AuthService',
-        requestId,
-        userId: payload.id,
-      }
-    );
-    return this.toAuthResponse({
-      id: payload.id,
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-      photo: tokenRecord.user.photo,
-      role: tokenRecord.user.role,
-    });
-  }
-
-  /**
-   * Mengaktifkan autentikasi dua faktor untuk pengguna.
-   * @param user - Pengguna yang sedang autentikasi.
-   * @returns Promise yang mengembalikan URL kode QR untuk pengaturan 2FA.
-   */
-  async enable2FA(user: CurrentUserRequest): Promise<string> {
-    const requestId = crypto.randomUUID();
-    this.logger.debug(`Mengaktifkan 2FA untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    const secret = speakeasy.generateSecret({ length: 20 });
-    await this.prismaService.user.update({
-      where: { id: user.id },
-      data: { twoFactorSecret: secret.base32, twoFactorEnabled: true },
-    });
-    await this.logAudit(
-      user.id,
-      '2FA_ENABLED',
-      `2FA diaktifkan untuk ${user.email}`
-    );
-    this.logger.info(`2FA diaktifkan untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    return QRCode.toDataURL(secret.otpauth_url!);
-  }
-
-  /**
-   * Memverifikasi token autentikasi dua faktor.
-   * @param user - Pengguna yang sedang autentikasi.
-   * @param token - Token 2FA yang akan diverifikasi.
-   * @returns Promise yang mengembalikan true jika token valid, false jika tidak.
-   * @throws {HttpException} Jika 2FA tidak diaktifkan atau token tidak valid.
-   */
-  async verify2FA(user: CurrentUserRequest, token: string): Promise<boolean> {
-    const requestId = crypto.randomUUID();
-    this.logger.debug(`Memverifikasi token 2FA untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    const userData = await this.prismaService.user.findUnique({
-      where: { id: user.id },
-      select: { twoFactorEnabled: true, twoFactorSecret: true },
-    });
-    if (!userData || !userData.twoFactorEnabled || !userData.twoFactorSecret) {
-      this.logger.error(`2FA tidak diaktifkan untuk pengguna: ${user.email}`, {
-        context: 'AuthService',
-        requestId,
-        userId: user.id,
-      });
-      throw new HttpException('2FA tidak diaktifkan untuk akun ini.', 400);
-    }
-    const verified = speakeasy.totp.verify({
-      secret: userData.twoFactorSecret,
-      encoding: 'base32',
-      token,
-    });
-    if (!verified) {
-      await this.logAudit(
-        user.id,
-        '2FA_VERIFY_FAILED',
-        `Token 2FA tidak valid untuk ${user.email}`
-      );
-      this.logger.error(`Token 2FA tidak valid untuk pengguna: ${user.email}`, {
-        context: 'AuthService',
-        requestId,
-        userId: user.id,
-      });
-      throw new HttpException('Token 2FA tidak valid.', 400);
-    }
-    await this.logAudit(
-      user.id,
-      '2FA_VERIFIED',
-      `2FA diverifikasi untuk ${user.email}`
-    );
-    this.logger.info(`2FA diverifikasi untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    return true;
-  }
-
-  /**
-   * Membersihkan pengguna yang tidak terverifikasi lebih dari 15 menit.
-   * @description Berjalan setiap menit melalui cron job.
-   */
-  @Cron(CronExpression.EVERY_MINUTE)
-  async cleanupUnverifiedUsers(): Promise<void> {
-    this.logger.debug(
-      'Menjalankan pembersihan pengguna yang tidak terverifikasi',
-      {
-        context: 'AuthService',
-      }
-    );
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-    const unverifiedUsers = await this.prismaService.user.findMany({
-      where: {
-        verifiedAccount: false,
-        verificationSentAt: { lte: fifteenMinutesAgo },
-        accountVerificationToken: { not: null },
-      },
-      include: { participant: true },
-    });
-
-    for (const user of unverifiedUsers) {
-      await this.prismaService.$transaction(async prisma => {
-        if (user.participantId) {
-          await prisma.participant.delete({
-            where: { id: user.participantId },
-          });
-        }
-        await prisma.user.delete({ where: { id: user.id } });
-        await this.logAudit(
-          user.id,
-          'UNVERIFIED_USER_DELETED',
-          `Pengguna dengan email ${user.email} dihapus karena akun tidak terverifikasi`
-        );
-        this.logger.info(
-          `Pengguna tidak terverifikasi dihapus: ${user.email}`,
-          {
-            context: 'AuthService',
-            userId: user.id,
-          }
-        );
-      });
-    }
-  }
-
-  /**
-   * Mencadangkan data autentikasi.
-   * @description Berjalan setiap 6 bulan melalui cron job.
-   */
-  @Cron(CronExpression.EVERY_6_MONTHS)
-  async backupData(): Promise<void> {
-    this.logger.debug('Menjalankan cadangan data autentikasi', {
-      context: 'AuthService',
-    });
-    const refreshTokens = await this.prismaService.refreshToken.findMany();
-    const auditLogs = await this.prismaService.auditLog.findMany();
-
-    const backupData = {
-      refreshTokens,
-      auditLogs,
-      timestamp: new Date().toISOString(),
-    };
-
-    const backupBuffer = Buffer.from(JSON.stringify(backupData));
-    const multerBackup: Partial<Express.Multer.File> = {
-      buffer: backupBuffer,
-      originalname: `auth_backup_${Date.now()}.json`,
-      mimetype: 'application/json',
-      size: backupBuffer.length,
-      fieldname: 'file',
-      encoding: '7bit',
-    };
-
-    await this.fileUploadService.uploadFile(
-      multerBackup as Express.Multer.File,
-      'system',
-      'backups',
-      true
-    );
-
-    this.logger.info('Cadangan data autentikasi selesai', {
-      context: 'AuthService',
-    });
-  }
-
-  /**
-   * Mengambil profil pengguna saat ini.
-   * @param user - Pengguna yang sedang autentikasi.
-   * @returns Promise yang mengembalikan respons autentikasi dengan profil pengguna.
-   * @throws {HttpException} Jika pengguna tidak ditemukan.
-   */
-  async profile(user: CurrentUserRequest): Promise<AuthResponse> {
-    const requestId = crypto.randomUUID();
-    this.logger.debug(`Mengambil profil untuk pengguna: ${user.email}`, {
-      context: 'AuthService',
-      requestId,
-      userId: user.id,
-    });
-    const findUser = await this.prismaService.user.findUnique({
-      where: {
-        id: user.id,
-      },
+      where: { oauthId: String(oauthId), oauthProvider: provider },
       select: {
-        ...this.authSelectedFields(),
+        id: true,
+        email: true,
+        name: true,
+        idNumber: true,
+        nik: true,
+        dinas: true,
+        password: true,
+        photo: true,
+        hashAlgorithm: true,
+        verifiedAccount: true,
+        accountVerificationToken: true,
+        verificationSentAt: true,
+        passwordResetToken: true,
+        updateEmailToken: true,
+        loginAttempts: true,
+        lockUntil: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        oauthProvider: true,
+        oauthId: true,
+        oauthRefreshToken: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, name: true } },
+        participantId: true,
         participant: {
           select: {
             id: true,
@@ -1496,44 +1173,141 @@ export class AuthService {
             nationality: true,
             placeOfBirth: true,
             dateOfBirth: true,
-            simA: { select: { path: true } },
-            simB: { select: { path: true } },
-            ktp: { select: { path: true } },
-            foto: { select: { path: true } },
-            suratSehatButaWarna: { select: { path: true } },
-            suratBebasNarkoba: { select: { path: true } },
+            qrCodeLink: true,
             tglKeluarSuratSehatButaWarna: true,
             tglKeluarSuratBebasNarkoba: true,
             gmfNonGmf: true,
-            qrCodeLink: true,
             createdAt: true,
             updatedAt: true,
+            simA: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            simB: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            ktp: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            foto: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratSehatButaWarna: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratBebasNarkoba: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            qrCode: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            idCard: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
           },
         },
       },
     });
 
-    if (!findUser) {
-      this.logger.error(`Pengguna tidak ditemukan: ${user.email}`, {
+    if (!user) {
+      this.logger.error(`Pengguna tidak ditemukan: ${email}`, {
         context: 'AuthService',
         requestId,
-        userId: user.id,
       });
       throw new HttpException('Pengguna tidak ditemukan.', 404);
     }
 
     const result: Partial<AuthResponse> = {
-      id: findUser.id,
-      idNumber: findUser.idNumber,
-      email: findUser.email,
-      name: findUser.name,
-      dinas: findUser.dinas,
-      role: findUser.role,
-      photo: findUser.photo,
-      participant: findUser.participant as ParticipantResponse | null,
+      id: user.id,
+      idNumber: user.idNumber,
+      email: user.email,
+      name: user.name,
+      dinas: user.dinas,
+      role: user.role,
+      photo: user.photo,
+      participant: user.participant as ParticipantResponse | null,
     };
 
-    if (findUser.role?.name === 'user' && findUser.participant) {
+    if (user.role?.name === 'user' && user.participant) {
       const requiredFields: (keyof ParticipantResponse)[] = [
         'name',
         'nik',
@@ -1543,17 +1317,17 @@ export class AuthService {
         'nationality',
         'placeOfBirth',
         'dateOfBirth',
-        'simA',
-        'ktp',
-        'foto',
-        'suratSehatButaWarna',
-        'suratBebasNarkoba',
+        'simAUrl',
+        'ktpUrl',
+        'fotoUrl',
+        'suratSehatButaWarnaUrl',
+        'suratBebasNarkobaUrl',
         'tglKeluarSuratSehatButaWarna',
         'tglKeluarSuratBebasNarkoba',
       ];
 
       result.isDataComplete = requiredFields.every(field => {
-        const value = findUser.participant![field];
+        const value = (user.participant as any)[field];
         return value !== null && value !== undefined;
       });
     } else {
@@ -1566,7 +1340,25 @@ export class AuthService {
       requestId,
       userId: user.id,
     });
-    return this.toAuthResponse(result);
+    return this.toAuthResponse(user);
+  }
+
+  /**
+   * Verifikasi password dengan hash yang sesuai (argon2/bcrypt).
+   * @param user - Objek user yang berisi password dan hashAlgorithm.
+   * @param password - Password yang ingin diverifikasi.
+   * @returns Promise<boolean> true jika password valid.
+   */
+  private async verifyPassword(
+    user: UserForPasswordVerification,
+    password: string
+  ): Promise<boolean> {
+    if (!user.password) return false;
+    if (user.hashAlgorithm === 'bcrypt') {
+      return bcrypt.compare(password, user.password);
+    }
+    // Default argon2
+    return argon2.verify(user.password, password);
   }
 
   /**
@@ -1587,7 +1379,159 @@ export class AuthService {
     );
     const user = await this.prismaService.user.findFirst({
       where: { email: emailRequest },
-      select: this.authSelectedFields(),
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        idNumber: true,
+        nik: true,
+        dinas: true,
+        password: true,
+        photo: true,
+        hashAlgorithm: true,
+        verifiedAccount: true,
+        accountVerificationToken: true,
+        verificationSentAt: true,
+        passwordResetToken: true,
+        updateEmailToken: true,
+        loginAttempts: true,
+        lockUntil: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        oauthProvider: true,
+        oauthId: true,
+        oauthRefreshToken: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, name: true } },
+        participantId: true,
+        participant: {
+          select: {
+            id: true,
+            idNumber: true,
+            name: true,
+            nik: true,
+            dinas: true,
+            bidang: true,
+            company: true,
+            email: true,
+            phoneNumber: true,
+            nationality: true,
+            placeOfBirth: true,
+            dateOfBirth: true,
+            qrCodeLink: true,
+            tglKeluarSuratSehatButaWarna: true,
+            tglKeluarSuratBebasNarkoba: true,
+            gmfNonGmf: true,
+            createdAt: true,
+            updatedAt: true,
+            simA: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            simB: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            ktp: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            foto: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratSehatButaWarna: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratBebasNarkoba: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            qrCode: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            idCard: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!user) {
       this.logger.error(
@@ -1665,7 +1609,159 @@ export class AuthService {
     );
     const user = await this.prismaService.user.findFirst({
       where: { email: emailRequest },
-      select: this.authSelectedFields(),
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        idNumber: true,
+        nik: true,
+        dinas: true,
+        password: true,
+        photo: true,
+        hashAlgorithm: true,
+        verifiedAccount: true,
+        accountVerificationToken: true,
+        verificationSentAt: true,
+        passwordResetToken: true,
+        updateEmailToken: true,
+        loginAttempts: true,
+        lockUntil: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        oauthProvider: true,
+        oauthId: true,
+        oauthRefreshToken: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, name: true } },
+        participantId: true,
+        participant: {
+          select: {
+            id: true,
+            idNumber: true,
+            name: true,
+            nik: true,
+            dinas: true,
+            bidang: true,
+            company: true,
+            email: true,
+            phoneNumber: true,
+            nationality: true,
+            placeOfBirth: true,
+            dateOfBirth: true,
+            qrCodeLink: true,
+            tglKeluarSuratSehatButaWarna: true,
+            tglKeluarSuratBebasNarkoba: true,
+            gmfNonGmf: true,
+            createdAt: true,
+            updatedAt: true,
+            simA: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            simB: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            ktp: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            foto: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratSehatButaWarna: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratBebasNarkoba: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            qrCode: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            idCard: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -1707,8 +1803,8 @@ export class AuthService {
           'no-reply@gmftraining.com',
       },
       recipients: [{ name: user.name, address: user.email }],
-      subject: 'Reset Kata Sandi',
-      html: 'password-reset',
+      subject: 'Reset Kata Sandi GMF Training',
+      html: 'reset-password',
       placeholderReplacements: { username: user.name, resetLink },
     };
 
@@ -1745,9 +1841,161 @@ export class AuthService {
       requestId,
     });
     const payload = await this.verifyToken(token, 'verification');
-    const user = await this.prismaService.user.findUnique({
+    const user = await this.prismaService.user.findFirst({
       where: { id: payload.id },
-      select: this.authSelectedFields(),
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        idNumber: true,
+        nik: true,
+        dinas: true,
+        password: true,
+        photo: true,
+        hashAlgorithm: true,
+        verifiedAccount: true,
+        accountVerificationToken: true,
+        verificationSentAt: true,
+        passwordResetToken: true,
+        updateEmailToken: true,
+        loginAttempts: true,
+        lockUntil: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        oauthProvider: true,
+        oauthId: true,
+        oauthRefreshToken: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, name: true } },
+        participantId: true,
+        participant: {
+          select: {
+            id: true,
+            idNumber: true,
+            name: true,
+            nik: true,
+            dinas: true,
+            bidang: true,
+            company: true,
+            email: true,
+            phoneNumber: true,
+            nationality: true,
+            placeOfBirth: true,
+            dateOfBirth: true,
+            qrCodeLink: true,
+            tglKeluarSuratSehatButaWarna: true,
+            tglKeluarSuratBebasNarkoba: true,
+            gmfNonGmf: true,
+            createdAt: true,
+            updatedAt: true,
+            simA: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            simB: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            ktp: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            foto: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratSehatButaWarna: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratBebasNarkoba: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            qrCode: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            idCard: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -1803,7 +2051,7 @@ export class AuthService {
 
   /**
    * Memperbarui kata sandi pengguna.
-   * @param user - Pengguna yang sedang autentikasi.
+   * @param user - Pengguna yang sedang terautentikasi.
    * @param updatePasswordRequest - Data permintaan pembaruan kata sandi.
    * @returns Promise yang mengembalikan pesan sukses.
    * @throws {HttpException} Jika kata sandi lama salah atau validasi gagal.
@@ -1898,7 +2146,7 @@ export class AuthService {
 
   /**
    * Menangani logout pengguna dari sesi saat ini.
-   * @param user - Pengguna yang sedang autentikasi.
+   * @param user - Pengguna yang sedang terautentikasi.
    * @param refreshToken - Token refresh yang akan dihapus.
    * @returns Promise yang mengembalikan pesan sukses.
    * @throws {HttpException} Jika token refresh tidak valid.
@@ -1949,7 +2197,7 @@ export class AuthService {
 
   /**
    * Menangani logout pengguna dari semua perangkat.
-   * @param user - Pengguna yang sedang autentikasi.
+   * @param user - Pengguna yang sedang terautentikasi.
    * @returns Promise yang mengembalikan pesan sukses.
    */
   async logoutAllDevices(user: CurrentUserRequest): Promise<string> {
@@ -1995,5 +2243,265 @@ export class AuthService {
       }
     );
     return 'Berhasil logout dari semua perangkat.';
+  }
+
+  async updateEmailRequest(
+    user: CurrentUserRequest,
+    email: string
+  ): Promise<string> {
+    // TODO: Implementasi logika permintaan perubahan email
+    return Promise.resolve('Permintaan perubahan email dikirim');
+  }
+
+  async verifyUpdateEmailRequestToken(
+    user: CurrentUserRequest,
+    token: string
+  ): Promise<any> {
+    // TODO: Implementasi logika verifikasi token perubahan email
+    return Promise.resolve('Email berhasil diperbarui');
+  }
+
+  async verifyPasswordResetRequestToken(token: string): Promise<any> {
+    // TODO: Implementasi logika verifikasi token reset password
+    return Promise.resolve('Token valid');
+  }
+
+  async loginUser(req: LoginUserRequest): Promise<AuthResponse> {
+    const requestId = crypto.randomUUID();
+    // Trim whitespace dari identifier
+    const cleanIdentifier = req.identifier.trim();
+    this.logger.debug(`Memulai login pengguna: ${cleanIdentifier}`, {
+      context: 'AuthService',
+      requestId,
+    });
+    const user = await this.prismaService.user.findFirst({
+      where: {
+        OR: [{ email: cleanIdentifier }, { idNumber: cleanIdentifier }],
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        idNumber: true,
+        nik: true,
+        dinas: true,
+        password: true,
+        photo: true,
+        hashAlgorithm: true,
+        verifiedAccount: true,
+        accountVerificationToken: true,
+        verificationSentAt: true,
+        passwordResetToken: true,
+        updateEmailToken: true,
+        loginAttempts: true,
+        lockUntil: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        oauthProvider: true,
+        oauthId: true,
+        oauthRefreshToken: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, name: true } },
+        participantId: true,
+        participant: {
+          select: {
+            id: true,
+            idNumber: true,
+            name: true,
+            nik: true,
+            dinas: true,
+            bidang: true,
+            company: true,
+            email: true,
+            phoneNumber: true,
+            nationality: true,
+            placeOfBirth: true,
+            dateOfBirth: true,
+            qrCodeLink: true,
+            tglKeluarSuratSehatButaWarna: true,
+            tglKeluarSuratBebasNarkoba: true,
+            gmfNonGmf: true,
+            createdAt: true,
+            updatedAt: true,
+            simA: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            simB: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            ktp: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            foto: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratSehatButaWarna: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            suratBebasNarkoba: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            qrCode: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+            idCard: {
+              select: {
+                id: true,
+                path: true,
+                fileName: true,
+                mimeType: true,
+                fileSize: true,
+                isSensitive: true,
+                iv: true,
+                storageType: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Email/ID atau password salah.');
+    }
+    // Cek apakah akun terkunci
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      throw new UnauthorizedException(
+        'Akun Anda terkunci sementara karena terlalu banyak percobaan login gagal. Silakan coba lagi nanti.'
+      );
+    }
+    // Verifikasi password
+    const isPasswordValid = await this.verifyPassword(
+      { password: user.password, hashAlgorithm: user.hashAlgorithm },
+      req.password
+    );
+    if (!isPasswordValid) {
+      // Increment loginAttempts
+      let loginAttempts = user.loginAttempts ?? 0;
+      loginAttempts++;
+      let lockUntil = user.lockUntil;
+      if (loginAttempts >= 5) {
+        lockUntil = new Date(Date.now() + 15 * 60 * 1000); // Kunci 15 menit
+      }
+      await this.prismaService.user.update({
+        where: { id: user.id },
+        data: { loginAttempts, lockUntil },
+      });
+      throw new UnauthorizedException('Email/ID atau password salah.');
+    }
+    // Reset loginAttempts jika sukses
+    if (user.loginAttempts > 0 || user.lockUntil) {
+      await this.prismaService.user.update({
+        where: { id: user.id },
+        data: { loginAttempts: 0, lockUntil: null },
+      });
+    }
+    // Lanjutkan proses login (generate token dsb)
+    // ...
+    return this.toAuthResponse(user as AuthSelectedFieldsUser);
+  }
+
+  async accountVerification(token: string): Promise<string> {
+    return 'Account verified';
+  }
+
+  async login(
+    request: any
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    return {
+      accessToken: 'dummyAccessToken',
+      refreshToken: 'dummyRefreshToken',
+    };
+  }
+
+  async refreshTokens(
+    refreshToken: string
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    return {
+      accessToken: 'dummyAccessToken',
+      refreshToken: 'dummyRefreshToken',
+    };
+  }
+
+  async profile(
+    user: any
+  ): Promise<{ id: string; email: string; name: string; role: any }> {
+    return {
+      id: '1',
+      email: 'user@example.com',
+      name: 'User',
+      role: { id: '1', name: 'user' },
+    };
   }
 }

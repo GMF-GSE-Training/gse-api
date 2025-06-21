@@ -1,18 +1,13 @@
-import type { StreamableFile } from '@nestjs/common';
-import { HttpStatus } from '@nestjs/common';
+// import type { StreamableFile } from '@nestjs/common';
+// import { HttpStatus } from '@nestjs/common';
 
 /**
  * Generic API response structure.
  */
-export interface WebResponse<T> {
-  statusCode: number;
-  status: string;
+export interface WebResponse<T = any> {
+  data: T;
   message?: string;
-  data?: T;
-  errors?: string[];
-  actions?: ActionAccessRights;
-  paging?: Paging;
-  fileStream?: StreamableFile;
+  status?: string;
 }
 
 /**
@@ -42,8 +37,9 @@ export interface ListRequest {
   searchQuery?: string;
   page?: number;
   size?: number;
-  startDate?: Date;
-  endDate?: Date;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 /**
@@ -58,25 +54,9 @@ export interface ListRequest {
  * @returns Standardized WebResponse object.
  */
 export function buildResponse<T>(
-  statusCode: number,
-  data?: T,
-  errors?: string[] | string,
-  actions?: ActionAccessRights,
-  paging?: Paging,
-  fileStream?: StreamableFile,
-  message?: string
+  data: T,
+  message?: string,
+  status: string = 'success'
 ): WebResponse<T> {
-  const statusMessage = HttpStatus[statusCode] || 'UNKNOWN_STATUS';
-  const normalizedErrors = typeof errors === 'string' ? [errors] : errors;
-
-  return {
-    statusCode,
-    status: statusMessage,
-    message,
-    data,
-    errors: normalizedErrors,
-    actions,
-    paging,
-    fileStream,
-  };
+  return { data, message, status };
 }

@@ -9,10 +9,17 @@ import { ZodType } from 'zod';
 export class ValidationService {
   /**
    *
-   * @param zodType
+   * @param zodTypeOrValue
    * @param data
    */
-  validate<T>(zodType: ZodType, data: T): T {
-    return zodType.parse(data);
+  validate<T>(zodTypeOrValue: ZodType | any, data?: any): any {
+    if (
+      zodTypeOrValue &&
+      typeof zodTypeOrValue.parse === 'function' &&
+      data !== undefined
+    ) {
+      return (zodTypeOrValue as ZodType).parse(data);
+    }
+    return true;
   }
 }

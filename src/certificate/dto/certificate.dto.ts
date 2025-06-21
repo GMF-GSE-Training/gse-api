@@ -6,9 +6,9 @@ import { IsNotEmpty, IsNumber } from 'class-validator';
 export class CreateCertificateDto {
   @IsNotEmpty()
   @IsNumber()
-  theoryScore: number;
+  theoryScore!: number;
 
   @IsNotEmpty()
   @IsNumber()
-  practiceScore: number;
+  practiceScore!: number;
 }

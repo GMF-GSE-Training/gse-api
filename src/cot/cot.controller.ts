@@ -47,7 +47,7 @@ export class CotController {
   @UseGuards(AuthGuard, RoleGuard)
   async create(@Body() request: CreateCot): Promise<WebResponse<string>> {
     const result = await this.cotService.createCot(request);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -96,20 +96,14 @@ export class CotController {
     };
 
     const query: ListRequest = {
-      searchQuery: q,
+      search: q,
       page: page || 1,
       size: size || 10,
       startDate: startDate ? validateDate(startDate) : undefined,
       endDate: endDate ? validateDate(endDate) : undefined,
     };
     const result = await this.cotService.listCot(query, user);
-    return buildResponse(
-      HttpStatus.OK,
-      result.data,
-      null,
-      result.actions,
-      result.paging
-    );
+    return buildResponse(result.data, undefined, 'success');
   }
 
   /**
@@ -126,7 +120,7 @@ export class CotController {
     @Param('cotId', ParseUUIDPipe) cotId: string
   ): Promise<WebResponse<CotResponse>> {
     const result = await this.cotService.getCot(cotId, user);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**

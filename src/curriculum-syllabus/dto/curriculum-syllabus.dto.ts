@@ -14,12 +14,12 @@ import {
 export class CurriculumSyllabusEntryDto {
   @IsUUID()
   @IsNotEmpty()
-  capabilityId: string;
+  capabilityId!: string;
 
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  name: string;
+  name!: string;
 
   @IsNumber()
   @IsOptional()
@@ -32,7 +32,11 @@ export class CurriculumSyllabusEntryDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
-  type: string;
+  type!: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  id!: string;
 }
 
 /**
@@ -41,7 +45,7 @@ export class CurriculumSyllabusEntryDto {
 export class CreateCurriculumSyllabusDto {
   @IsArray()
   @IsNotEmpty()
-  curriculumSyllabus: CurriculumSyllabusEntryDto[];
+  curriculumSyllabus!: CurriculumSyllabusEntryDto[];
 }
 
 /**

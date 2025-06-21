@@ -404,7 +404,7 @@ export class UserService {
     const userSelectFields = this.userSelectFields();
     const whereCondition: any = {};
 
-    const searchQuery = request.searchQuery;
+    const searchQuery = request.search;
     if (searchQuery) {
       whereCondition.OR = [
         { idNumber: { contains: searchQuery, mode: 'insensitive' } },
@@ -725,5 +725,9 @@ export class UserService {
         },
       });
     }
+  }
+
+  health() {
+    return 'ok';
   }
 }

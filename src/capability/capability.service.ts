@@ -90,6 +90,8 @@ export class CapabilityService {
         ratingCode: true,
         trainingCode: true,
         trainingName: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -117,6 +119,8 @@ export class CapabilityService {
         trainingCode: true,
         trainingName: true,
         curriculumSyllabus: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -227,6 +231,8 @@ export class CapabilityService {
       ratingCode: item.ratingCode,
       trainingCode: item.trainingCode,
       trainingName: item.trainingName,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     }));
   }
 
@@ -244,8 +250,8 @@ export class CapabilityService {
     paging: Paging;
   }> {
     const whereClause: any = {};
-    if (request.searchQuery) {
-      const searchQuery = request.searchQuery;
+    if (request.search) {
+      const searchQuery = request.search;
       whereClause.OR = [
         { ratingCode: { contains: searchQuery, mode: 'insensitive' } },
         { trainingCode: { contains: searchQuery, mode: 'insensitive' } },
@@ -253,21 +259,30 @@ export class CapabilityService {
       ];
     }
 
+    const page = request.page ?? 1;
+    const size = request.size ?? 10;
+    const skip = (page - 1) * size;
+
     const totalCapability = await this.prismaService.capability.count({
       where: whereClause,
     });
 
     const capabilities = await this.prismaService.capability.findMany({
       where: whereClause,
-      skip: (request.page - 1) * request.size,
-      take: request.size,
+      skip,
+      take: size,
     });
 
-    const capabilitiesWithFilteredAttributes = capabilities.map(
-      this.mapCapabilityWithDurations
-    );
+    const capabilitiesWithFilteredAttributes = capabilities.map(item => ({
+      id: item.id,
+      ratingCode: item.ratingCode,
+      trainingCode: item.trainingCode,
+      trainingName: item.trainingName,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
 
-    const totalPage = Math.ceil(totalCapability / request.size);
+    const totalPage = Math.ceil(totalCapability / size);
 
     const userRole = user.role.name.toLowerCase();
     const actions = this.validateActions(userRole);
@@ -276,9 +291,9 @@ export class CapabilityService {
       data: capabilitiesWithFilteredAttributes,
       actions: actions,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }

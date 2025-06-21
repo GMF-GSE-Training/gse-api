@@ -21,10 +21,10 @@ import {
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
-import { Response, Request } from 'express';
+import type { Response, Request } from 'express';
 
 import { UrlHelper } from '../common/helpers/url.helper.js';
-import {
+import type {
   AuthResponse,
   CurrentUserRequest,
   LoginUserRequest,
@@ -73,7 +73,7 @@ export class AuthController {
     @Body() req: RegisterUserRequest
   ): Promise<WebResponse<string>> {
     const result = await this.authService.register(req);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -126,8 +126,8 @@ export class AuthController {
       const redirectUrl = `${frontendUrl}/home`;
       this.logger.debug(`Berhasil verifikasi, mengarahkan ke: ${redirectUrl}`);
       return res.redirect(redirectUrl);
-    } catch (error) {
-      this.logger.error('Gagal memverifikasi akun', error.stack);
+    } catch (error: unknown) {
+      this.logger.error('Gagal memverifikasi akun', (error as Error).stack);
       const errorMessage =
         error instanceof Error ? error.message : 'Terjadi kesalahan';
       const redirectUrl = `${frontendUrl}/verification?error=${encodeURIComponent(errorMessage)}`;
@@ -167,7 +167,7 @@ export class AuthController {
       maxAge: 60 * 60 * 1000,
     });
 
-    return buildResponse(HttpStatus.OK, 'Login Berhasil');
+    return buildResponse('Login Berhasil', undefined, 'success');
   }
 
   /**
@@ -195,7 +195,11 @@ export class AuthController {
       path: '/',
       maxAge: 60 * 60 * 1000,
     });
-    return buildResponse(HttpStatus.OK, 'Access token berhasil diperbarui');
+    return buildResponse(
+      'Access token berhasil diperbarui',
+      undefined,
+      'success'
+    );
   }
 
   /**
@@ -216,7 +220,7 @@ export class AuthController {
     @User() user: CurrentUserRequest
   ): Promise<WebResponse<AuthResponse>> {
     const result = await this.authService.profile(user);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -236,7 +240,7 @@ export class AuthController {
     @Body('email') email: string
   ): Promise<WebResponse<string>> {
     const result = await this.authService.resendVerificationLink(email);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -256,7 +260,7 @@ export class AuthController {
     @Body('email') email: string
   ): Promise<WebResponse<string>> {
     const result = await this.authService.passwordResetRequest(email);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -275,31 +279,32 @@ export class AuthController {
     @Res() res: Response
   ): Promise<void> {
     this.logger.debug(
-      `Memulai verifikasi reset password dengan token: ${token}`
+      `Memulai verifikasi token reset password dengan token: ${token}`
     );
 
     if (!token || token.trim() === '') {
       this.logger.warn('Token tidak ada atau tidak valid');
       const frontendUrl = this.urlHelper.getBaseUrl('frontend');
-      const redirectUrl = `${frontendUrl}/password-reset?error=${encodeURIComponent('Token tidak diberikan')}`;
+      const redirectUrl = `${frontendUrl}/reset-password?error=${encodeURIComponent('Token tidak valid')}`;
       return res.redirect(redirectUrl);
     }
 
     const frontendUrl = this.urlHelper.getBaseUrl('frontend');
 
     try {
-      await this.authService.verifyPasswordResetRequestToken(token);
+      const result =
+        await this.authService.verifyPasswordResetRequestToken(token);
       const redirectUrl = `${frontendUrl}/reset/${token}`;
       this.logger.debug(`Token valid, mengarahkan ke: ${redirectUrl}`);
       return res.redirect(redirectUrl);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
         'Gagal memverifikasi token reset password',
-        error.stack
+        (error as Error).stack
       );
       const errorMessage =
         error instanceof Error ? error.message : 'Terjadi kesalahan';
-      const redirectUrl = `${frontendUrl}/password-reset?error=${encodeURIComponent(errorMessage)}`;
+      const redirectUrl = `${frontendUrl}/reset-password?error=${encodeURIComponent(errorMessage)}`;
       return res.redirect(redirectUrl);
     }
   }
@@ -317,7 +322,7 @@ export class AuthController {
     @Body() request: UpdatePassword
   ): Promise<WebResponse<string>> {
     const result = await this.authService.resetPassword(request);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -339,8 +344,8 @@ export class AuthController {
     @User() user: CurrentUserRequest,
     @Body('email') email: string
   ): Promise<WebResponse<string>> {
-    const result = await this.authService.updateEmailRequest(email, user);
-    return buildResponse(HttpStatus.OK, result);
+    const result = await this.authService.updateEmailRequest(user, email);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -349,14 +354,16 @@ export class AuthController {
    * @param token - Token verifikasi email.
    * @param res - Objek respons untuk pengalihan.
    */
-  @Get('/update-email/verify/:token')
+  @Get('/verify-update-email/:token')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Verify email update' })
+  @ApiOperation({
+    summary: 'Verify user email update request',
+  })
   @ApiResponse({
     status: 302,
-    description: 'Redirects to frontend after verification',
+    description: 'Redirects to frontend after email update verification',
   })
   async verifyUpdateEmailRequestToken(
     @User() user: CurrentUserRequest,
@@ -364,13 +371,13 @@ export class AuthController {
     @Res() res: Response
   ): Promise<void> {
     this.logger.debug(
-      `Memulai verifikasi perubahan email untuk user ${user.id} dengan token: ${token}`
+      `Memulai verifikasi token perubahan email dengan token: ${token}`
     );
 
     if (!token || token.trim() === '') {
       this.logger.warn('Token tidak ada atau tidak valid');
       const frontendUrl = this.urlHelper.getBaseUrl('frontend');
-      const redirectUrl = `${frontendUrl}/home?error=${encodeURIComponent('Token tidak valid')}`;
+      const redirectUrl = `${frontendUrl}/profile?error=${encodeURIComponent('Token tidak valid')}`;
       return res.redirect(redirectUrl);
     }
 
@@ -378,35 +385,20 @@ export class AuthController {
 
     try {
       const result = await this.authService.verifyUpdateEmailRequestToken(
-        token,
-        user
+        user,
+        token
       );
-      let redirectUrl: string;
-
-      if (user.role.name.toLowerCase() === 'user') {
-        redirectUrl = `${frontendUrl}/participants/${user.participantId}/profile/account?success=${encodeURIComponent(result)}`;
-      } else {
-        redirectUrl = `${frontendUrl}/users/${user.id}/account?success=${encodeURIComponent(result)}`;
-      }
-
+      const redirectUrl = `${frontendUrl}/profile`;
       this.logger.debug(`Verifikasi berhasil, mengarahkan ke: ${redirectUrl}`);
       return res.redirect(redirectUrl);
-    } catch (error) {
-      this.logger.error('Gagal memverifikasi perubahan email', error.stack);
+    } catch (error: unknown) {
+      this.logger.error(
+        'Gagal memverifikasi perubahan email',
+        (error as Error).stack
+      );
       const errorMessage =
         error instanceof Error ? error.message : 'Terjadi kesalahan';
-      let redirectUrl: string;
-
-      if (user) {
-        if (user.role.name.toLowerCase() === 'user') {
-          redirectUrl = `${frontendUrl}/participants/${user.participantId}/profile/account?error=${encodeURIComponent(errorMessage)}`;
-        } else {
-          redirectUrl = `${frontendUrl}/users/${user.id}/account?error=${encodeURIComponent(errorMessage)}`;
-        }
-      } else {
-        redirectUrl = `${frontendUrl}/home`;
-      }
-
+      const redirectUrl = `${frontendUrl}/profile?error=${encodeURIComponent(errorMessage)}`;
       return res.redirect(redirectUrl);
     }
   }
@@ -422,19 +414,23 @@ export class AuthController {
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update user password' })
-  @ApiResponse({ status: 200, description: 'Password updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'User password updated successfully',
+  })
   async updatePassword(
     @Body() request: UpdatePassword,
     @User() user: CurrentUserRequest
   ): Promise<WebResponse<string>> {
-    const result = await this.authService.updatePassword(request, user);
-    return buildResponse(HttpStatus.OK, result);
+    const result = await this.authService.updatePassword(user, request);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
    * Logout pengguna dari sesi saat ini.
    * @param user - Data pengguna saat ini.
    * @param res - Objek respons untuk menghapus cookie.
+   * @param refreshToken - Token refresh dari cookie.
    * @returns Respons dengan pesan keberhasilan.
    */
   @Delete('/current')
@@ -445,12 +441,13 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User logged out successfully' })
   async logout(
     @User() user: CurrentUserRequest,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @GetCookie('refresh_token') refreshToken: string
   ): Promise<WebResponse<string>> {
-    const result = await this.authService.logout(user);
+    const result = await this.authService.logout(user, refreshToken);
     res.clearCookie('refresh_token');
     res.clearCookie('access_token');
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -462,6 +459,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Check authentication service health' })
   @ApiResponse({ status: 200, description: 'Service health status' })
   async healthCheck(): Promise<WebResponse<string>> {
-    return buildResponse(HttpStatus.OK, 'Authentication service is healthy');
+    return buildResponse(
+      'Authentication service is healthy',
+      undefined,
+      'success'
+    );
   }
 }

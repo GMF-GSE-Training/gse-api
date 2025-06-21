@@ -20,6 +20,8 @@ import { MailModule } from '../mail/mail.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { GoogleStrategy } from './google.strategy.js';
+import { ParticipantAccessGuard } from './guards/participant-access.guard.js';
+import { RolesGuard } from './guards/roles.guard.js';
 import { JwtModule } from './jwt/jwt.module.js';
 import { MicrosoftStrategy } from './microsoft.strategy.js';
 
@@ -61,8 +63,10 @@ import { MicrosoftStrategy } from './microsoft.strategy.js';
     CoreHelper,
     FileUploadService,
     UrlHelper,
+    RolesGuard,
+    ParticipantAccessGuard,
   ],
-  exports: [AuthService],
+  exports: [AuthService, RolesGuard, ParticipantAccessGuard],
 })
 export class AuthModule {
   /**

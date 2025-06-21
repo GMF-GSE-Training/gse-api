@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import {
+import type {
   CreateCurriculumSyllabus,
   UpdateCurriculumSyllabus,
 } from '../model/curriculum-syllabus.model.js';
@@ -47,7 +47,7 @@ export class CurriculumSyllabusController {
   ): Promise<WebResponse<string>> {
     const result =
       await this.curriculumSyllabusService.createCurriculumSyllabus(request);
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 
   /**
@@ -68,6 +68,6 @@ export class CurriculumSyllabusController {
         capabilityId,
         request
       );
-    return buildResponse(HttpStatus.OK, result);
+    return buildResponse(result, undefined, 'success');
   }
 }

@@ -117,4 +117,6 @@ export class CoreHelper {
 
     throw new HttpException('Tipe file tidak didukung', 400);
   }
+
+  static noop(..._args: any[]): void {}
 }

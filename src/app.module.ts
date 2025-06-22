@@ -18,6 +18,7 @@ import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
 import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { FileUploadModule } from './file-upload/file-upload.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { extname } from 'path';
       }),
       inject: [ConfigService],
     }),
+    FileUploadModule,
   ],
   controllers: [],
   providers: [],

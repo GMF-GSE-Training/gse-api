@@ -4,14 +4,18 @@ import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import * as cookieParser from 'cookie-parser';
 import * as os from 'os';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
   let app;
   try {
-    app = await NestFactory.create(AppModule);
+    app = await NestFactory.create<NestExpressApplication>(AppModule);
 
     const winstonLogger = app.get(WINSTON_MODULE_NEST_PROVIDER);
     app.useLogger(winstonLogger);
+
+    app.useStaticAssets(join(__dirname, '..', 'public'));
 
     const configService = app.get(ConfigService);
     app.use(cookieParser());

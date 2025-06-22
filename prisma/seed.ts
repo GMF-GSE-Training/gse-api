@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SignatureType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
@@ -10,10 +11,30 @@ import { parser } from 'stream-json';
 import { streamArray } from 'stream-json/streamers/StreamArray';
 import { faker } from '@faker-js/faker';
 
+// Load environment variables from .env file
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
 const prisma = new PrismaClient();
 const dummyDir = path.join(__dirname, 'dummy-data');
 const sampleDir = path.join(__dirname, '..', 'public', 'assets', 'images');
 const placeholderPdf = path.join(sampleDir, 'certificate.pdf');
+
+// Daftar file aset yang akan digunakan
+const predefinedFiles = {
+  foto: 'foto.jpg',
+  ktp: 'ktp.jpg',
+  simA: 'SIM_A.jpg',
+  simB: 'SIM_B.jpg',
+  suratSehatButaWarna: 'surat_ket_sehat.jpg',
+  suratBebasNarkoba: 'surat_bebas_narkoba.jpg',
+};
+
+// Fungsi pembantu untuk memuat buffer aset
+const loadAssetBuffer = (fileName: string, defaultBuffer?: Buffer): Buffer | null => {
+  if (!fileName) return defaultBuffer || null;
+  const filePath = path.join(sampleDir, fileName);
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath) : defaultBuffer || null;
+};
 
 // Helper sanitizers
 const toInt = (v: any): number | null => {
@@ -72,8 +93,8 @@ async function seedParticipants() {
   const participantsPath = path.join(dummyDir, 'participants.json');
   let rawParticipants: any[] = [];
 
+  // Muat data dari participants.json jika ada
   if (fs.existsSync(participantsPath)) {
-    // Use streaming for large files if the file exists
     const pipeline = chain([
       fs.createReadStream(participantsPath),
       parser(),
@@ -84,10 +105,10 @@ async function seedParticipants() {
     }
   }
 
+  // Jika tidak ada data JSON, buat data dummy
   if (rawParticipants.length === 0) {
     console.warn('- Dummy data file not found or empty: participants.json. Generating dummy participants.');
-    // Generate 50 dummy participants
-    for (let i = 0; i < 50; i++) { // Generate 50 dummy participants
+    for (let i = 0; i < 50; i++) {
       const gender = faker.helpers.arrayElement(['male', 'female']) as 'male' | 'female';
       const name = faker.person.fullName({ sex: gender });
       const email = faker.internet.email({ firstName: faker.person.firstName(gender), lastName: faker.person.lastName(gender) }).toLowerCase();
@@ -98,24 +119,24 @@ async function seedParticipants() {
 
       rawParticipants.push({
         id: faker.string.uuid(),
-        idNumber: idNumber,
-        name: name,
-        nik: nik,
-        dinas: dinas,
+        idNumber,
+        name,
+        nik,
+        dinas,
         bidang: faker.commerce.department(),
         company: faker.company.name(),
-        email: email,
-        phoneNumber: phoneNumber,
+        email,
+        phoneNumber,
         nationality: 'Indonesia',
         placeOfBirth: faker.location.city(),
-        dateOfBirth: faker.date.past({ years: 30, refDate: '2000-01-01' }).toISOString().split('T')[0], // YYYY-MM-DD
-        simAFileName: null,
-        simBFileName: null,
-        ktpFileName: null,
-        fotoFileName: null,
-        suratSehatButaWarnaFileName: null,
+        dateOfBirth: faker.date.past({ years: 30, refDate: '2000-01-01' }).toISOString().split('T')[0],
+        simAFileName: predefinedFiles.simA,
+        simBFileName: predefinedFiles.simB,
+        ktpFileName: predefinedFiles.ktp,
+        fotoFileName: predefinedFiles.foto,
+        suratSehatButaWarnaFileName: predefinedFiles.suratSehatButaWarna,
         tglKeluarSuratSehatButaWarna: null,
-        suratBebasNarkobaFileName: null,
+        suratBebasNarkobaFileName: predefinedFiles.suratBebasNarkoba,
         tglKeluarSuratBebasNarkoba: null,
         gmfNonGmf: faker.helpers.arrayElement(['GMF', 'Non-GMF']),
       });
@@ -126,53 +147,61 @@ async function seedParticipants() {
     console.log('No participants to seed.');
     return;
   }
-    
+
   const localIp = Object.values(os.networkInterfaces()).flat().find((x) => x?.family === 'IPv4' && !x.internal)?.address ?? 'localhost';
+  const defaultPhotoBuffer = loadAssetBuffer('blank-profile-picture.png');
 
   const dataToSeed = await Promise.all(rawParticipants.map(async (p) => {
-      // Sanitize: empty string or undefined -> null
-      for (const key in p) {
-        if (p[key] === '' || p[key] === undefined) p[key] = null;
-      }
+    // Override nama file dengan aset yang ditentukan
+    p.fotoFileName = predefinedFiles.foto;
+    p.ktpFileName = predefinedFiles.ktp;
+    p.simAFileName = predefinedFiles.simA;
+    p.simBFileName = predefinedFiles.simB;
+    p.suratSehatButaWarnaFileName = predefinedFiles.suratSehatButaWarna;
+    p.suratBebasNarkobaFileName = predefinedFiles.suratBebasNarkoba;
 
-      // Convert ISO date strings (yyyy-mm-dd) to Date objects
-      const toDate = (d: string | null): Date | null => {
-        if (!d || d.trim() === '') return null;
-        const date = new Date(`${d}T00:00:00Z`);
-        return isNaN(date.getTime()) ? null : date;
-      };
-      ['tglKeluarSuratBebasNarkoba', 'tglKeluarSuratSehatButaWarna', 'dateOfBirth'].forEach((field) => {
-        p[field] = toDate(p[field]);
-      });
+    // Sanitasi data
+    for (const key in p) {
+      if (p[key] === '' || p[key] === undefined) p[key] = null;
+    }
 
-      const img = (fileName: string | null) => {
-        const filePath = fileName ? path.join(sampleDir, fileName) : null;
-        return filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath) : null;
-      };
-      p.simA = img(p.simAFileName);
-      p.simB = img(p.simBFileName);
-      p.ktp = img(p.ktpFileName);
-      p.foto = img(p.fotoFileName);
-      p.suratBebasNarkoba = img(p.suratBebasNarkobaFileName);
-      p.suratSehatButaWarna = img(p.suratSehatButaWaktuFileName);
+    // Konversi tanggal
+    const toDate = (d: string | null): Date | null => {
+      if (!d || d.trim() === '') return null;
+      const date = new Date(`${d}T00:00:00Z`);
+      return isNaN(date.getTime()) ? null : date;
+    };
+    ['tglKeluarSuratBebasNarkoba', 'tglKeluarSuratSehatButaWarna', 'dateOfBirth'].forEach((field) => {
+      p[field] = toDate(p[field]);
+    });
 
-      const url = `http://${localIp}:4200/participant/detail/${p.id}`;
-      const qrDataUrl = await QRCode.toDataURL(url);
-      p.qrCode = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+    // Muat buffer dari aset
+    p.foto = loadAssetBuffer(p.fotoFileName) ?? defaultPhotoBuffer;
+    p.ktp = loadAssetBuffer(p.ktpFileName);
+    p.simA = loadAssetBuffer(p.simAFileName);
+    p.simB = loadAssetBuffer(p.simBFileName);
+    p.suratSehatButaWarna = loadAssetBuffer(p.suratSehatButaWarnaFileName);
+    p.suratBebasNarkoba = loadAssetBuffer(p.suratBebasNarkobaFileName);
+
+    // Buat QR code
+    const frontendUrl = process.env.FRONTEND_URL || `http://${localIp}:4200`;
+    const url = `${frontendUrl}/participant/detail/${p.id}`;
+    const qrDataUrl = await QRCode.toDataURL(url);
+    p.qrCode = Buffer.from(qrDataUrl.split(',')[1], 'base64');
 
     return p;
-    }));
+  }));
 
-    try {
-      await prisma.participant.createMany({
+  try {
+    await prisma.participant.createMany({
       data: dataToSeed,
-        skipDuplicates: true,
-      });
+      skipDuplicates: true,
+    });
     console.log(`✔ Seeded ${dataToSeed.length} participants.`);
-    } catch (e) {
-      console.error('⚠ Failed inserting participant batch, logging to failed_participants.json');
+  } catch (e) {
+    console.error('⚠ Failed inserting participant batch, logging to failed_participants.json');
     fs.appendFileSync('failed_participants.json', JSON.stringify(dataToSeed, null, 2) + ',\n');
-      }
+  }
 }
 
 async function seedUsers() {
@@ -372,7 +401,7 @@ async function seedCots() {
         theoryInstructorCompetency: faker.person.fullName(),
         practicalInstructor1: faker.person.fullName(),
         practicalInstructor2: faker.person.fullName(),
-        status: faker.helpers.arrayElement(['pending', 'in-progress', 'completed']),
+        status: faker.helpers.arrayElement(['Menunggu', 'Berlangsung', 'Selesai']),
       });
     }
   } else {
@@ -385,7 +414,7 @@ async function seedCots() {
     theoryInstructorCompetency: c.theoryInstructorCompetency ?? 'N/A',
     practicalInstructor1: c.practicalInstructor1 ?? 'N/A',
     practicalInstructor2: c.practicalInstructor2 ?? 'N/A',
-    status: c.status ?? 'pending',
+    status: c.status ?? 'Menunggu',
   }));
   }
 
@@ -414,56 +443,57 @@ async function seedCapabilityCots() {
 
 async function seedSignatures() {
   console.log('--- Seeding signatures ---');
-  const raw: any[] = loadJson('signatures.json');
-  let data = raw.map((s) => {
-    // Determine which image file to use
-    const sigType = (s.signatureType ?? 'SIGNATURE1').toString();
-    // Choose default image based on signature type
-    const defaultName = sigType === 'SIGNATURE2' ? 'e-sign2.png' : 'e-sign1.png';
+  console.log('- Creating signatures directly from asset files, ignoring signatures.json.');
 
-    let fileBase = s.eSignFileName ?? defaultName;
-    let absPath = path.join(sampleDir, fileBase);
+  const signaturesToCreate: {
+    id: string;
+    idNumber: string;
+    role: string;
+    name: string;
+    eSignFileName: string;
+    signatureType: SignatureType;
+    status: boolean;
+  }[] = [
+    {
+      id: randomUUID(),
+      idNumber: 'SIGNER001',
+      role: 'Manager',
+      name: 'Manager Signatory',
+      eSignFileName: 'e-sign1.png',
+      signatureType: 'SIGNATURE1',
+      status: true,
+    },
+    {
+      id: randomUUID(),
+      idNumber: 'SIGNER002',
+      role: 'Supervisor',
+      name: 'Supervisor Signatory',
+      eSignFileName: 'e-sign2.png',
+      signatureType: 'SIGNATURE2',
+      status: true,
+    },
+  ];
 
-    // Provided file missing? fallback to defaultName
-    if (!fs.existsSync(absPath)) {
-      fileBase = defaultName;
-      absPath = path.join(sampleDir, fileBase);
-    }
-
-    const eSignBuf: Buffer = fs.existsSync(absPath)
-      ? fs.readFileSync(absPath)
-      : Buffer.from('');
-    return {
-      id: s.id,
-      idNumber: s.idNumber ?? '0000',
-      role: s.role ?? 'user',
-      name: s.name ?? 'Unknown',
-      eSign: eSignBuf,
-      eSignFileName: fileBase,
-      signatureType: s.signatureType ?? 'SIGNATURE1',
-      status: toBool(s.status),
-    };
-  });
-
-  if (data.length === 0) {
-    console.warn('- No signatures data found, generating dummy signatures');
-    const dummyFiles = ['e-sign1.png','e-sign2.png'];
-    data = dummyFiles.map((f, idx) => {
-      const abs = path.join(sampleDir, f);
+  const data = signaturesToCreate
+    .map((s) => {
+      const eSignBuffer = loadAssetBuffer(s.eSignFileName);
+      if (!eSignBuffer) {
+        console.warn(`- Signature asset not found: ${s.eSignFileName}. Skipping.`);
+        return null;
+      }
       return {
-        id: randomUUID(),
-        idNumber: `D${idx + 1}`,
-        role: idx === 0 ? 'Manager' : 'Supervisor',
-        name: idx === 0 ? 'Dummy Signer 1' : 'Dummy Signer 2',
-        eSign: fs.existsSync(abs) ? fs.readFileSync(abs) : Buffer.from(''),
-        eSignFileName: f,
-        signatureType: idx === 0 ? 'SIGNATURE1' : 'SIGNATURE2',
-        status: true,
+        ...s,
+        eSign: eSignBuffer,
       };
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+
+  if (data.length > 0) {
+    await prisma.signature.createMany({
+      data,
+      skipDuplicates: true,
     });
   }
-
-  if (data.length > 0) await prisma.signature.createMany({ data, skipDuplicates: true });
   console.log(`✔ Seeded ${data.length} signatures.`);
 }
 

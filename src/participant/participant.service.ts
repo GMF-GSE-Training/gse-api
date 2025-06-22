@@ -14,6 +14,7 @@ import { join } from "path";
 import * as ejs from 'ejs';
 import { UrlHelper } from '../common/helpers/url.helper';
 import { QrCodeService } from "src/qrcode/qrcode.service";
+import * as fs from 'fs';
 
 @Injectable()
 export class ParticipantService {
@@ -132,7 +133,24 @@ export class ParticipantService {
             this.validateDinasForLcuRequest(participant.dinas, user.dinas);
         }
     
-        return participant[fileName];
+        if (fileName === 'foto' && !participant.foto) {
+            this.logger.debug(`Peserta ${participantId} tidak memiliki foto, menyajikan gambar default.`);
+            try {
+                const defaultImagePath = join(__dirname, '..', '..', 'public', 'assets', 'images', 'blank-profile-picture.png');
+                return fs.readFileSync(defaultImagePath);
+            } catch (error) {
+                this.logger.error('Gagal membaca file foto default', error.stack);
+                throw new HttpException('File default tidak ditemukan', 500);
+            }
+        }
+    
+        const fileBuffer = participant[fileName];
+
+        if (!fileBuffer) {
+            throw new HttpException(`File ${fileName} tidak ditemukan untuk peserta ini.`, 404);
+        }
+
+        return fileBuffer;
     }
 
     async getParticipant(participantId: string, user: CurrentUserRequest): Promise<ParticipantResponse> {

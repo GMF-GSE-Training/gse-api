@@ -16,4 +16,12 @@ export class FileUploadService {
   async deleteFile(filePath: string): Promise<void> {
     return this.storageProvider.delete(filePath);
   }
+
+  async fileExists(filePath: string, requestId?: string): Promise<boolean> {
+    return this.storageProvider.exists(filePath, requestId);
+  }
+
+  async getSignedUrl(filePath: string, expiresIn: number = 3600, requestId?: string): Promise<string> {
+    return this.storageProvider.getSignedUrl(filePath, expiresIn, requestId);
+  }
 } 

@@ -16,6 +16,7 @@ import { UrlHelper } from '../common/helpers/url.helper';
 import { QrCodeService } from "src/qrcode/qrcode.service";
 import * as fs from 'fs';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Injectable()
 export class ParticipantService {
@@ -27,6 +28,7 @@ export class ParticipantService {
         private readonly coreHelper: CoreHelper,
         private readonly urlHelper: UrlHelper,
         private readonly qrCodeService: QrCodeService,
+        private readonly fileUploadService: FileUploadService,
     ) {}
 
     async uploadParticipantFile(buffer: Buffer): Promise<void> {
@@ -145,8 +147,16 @@ export class ParticipantService {
                 throw new HttpException('File default tidak ditemukan', 500);
             }
         }
-    
-        const fileBuffer = await getFileBufferFromMinio(participant[pathField]);
+
+        // Ambil file dari storage dinamis
+        const storageType = process.env.STORAGE_TYPE || 'minio';
+        let fileBuffer: Buffer;
+        if (storageType === 'supabase') {
+          const { buffer } = await this.fileUploadService.downloadFile(participant[pathField]);
+          fileBuffer = buffer;
+        } else {
+          fileBuffer = await getFileBufferFromMinio(participant[pathField]);
+        }
 
         if (!fileBuffer) {
             throw new HttpException(`File ${fileName} tidak ditemukan untuk peserta ini.`, 404);
@@ -196,7 +206,15 @@ export class ParticipantService {
         // Konfigurasi URL dan konversi data
         const backendUrl = this.urlHelper.getBaseUrl('backend');
         const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
-        const photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+        // Ambil foto dari storage dinamis
+        const storageType = process.env.STORAGE_TYPE || 'minio';
+        let photoBuffer: Buffer;
+        if (storageType === 'supabase') {
+          const { buffer } = await this.fileUploadService.downloadFile(participant.fotoPath);
+          photoBuffer = buffer;
+        } else {
+          photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+        }
         const photoBase64 = photoBuffer.toString('base64');
         const qrCodeBase64 = Buffer.from(qrCodeBuffer).toString('base64');
         const photoType = this.coreHelper.getMediaType(photoBuffer);
@@ -353,7 +371,7 @@ export class ParticipantService {
         }
 
         // Konversi data ke base64
-        const photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+        const { buffer: photoBuffer } = await this.fileUploadService.downloadFile(participant.fotoPath);
         const photoBase64 = photoBuffer.toString('base64');
         const qrCodeBase64 = qrCodeBuffer.toString('base64');
         const photoType = this.coreHelper.getMediaType(photoBuffer);

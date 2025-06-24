@@ -5,6 +5,7 @@ import { UrlHelper } from 'src/common/helpers/url.helper';
 import * as QRCode from 'qrcode';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { Client as MinioClient } from 'minio';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 const minio = new MinioClient({
   endPoint: process.env.MINIO_ENDPOINT!,
@@ -22,6 +23,7 @@ export class QrCodeService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly urlHelper: UrlHelper,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   /**
@@ -62,7 +64,8 @@ export class QrCodeService {
     this.logger.debug(
       `Mengembalikan QR code yang ada untuk peserta ID: ${participantId}`,
     );
-    return await getFileBufferFromMinio(participant.qrCodePath);
+    const { buffer: qrCodeBuffer } = await this.fileUploadService.downloadFile(participant.qrCodePath);
+    return qrCodeBuffer;
   }
 
   /**
@@ -92,10 +95,26 @@ export class QrCodeService {
       throw new HttpException('Gagal menghasilkan QR code', 500);
     }
 
-    // Upload ke Minio
-    await minio.putObject(minioBucket, qrCodeFileName, qrCodeBuffer);
+    // Upload ke storage dinamis
+    const storageType = process.env.STORAGE_TYPE || 'minio';
+    if (storageType === 'supabase') {
+      await this.fileUploadService.uploadFile({
+        buffer: qrCodeBuffer,
+        size: qrCodeBuffer.length,
+        mimetype: 'image/png',
+        originalname: qrCodeFileName,
+        fieldname: 'qrCode',
+        encoding: '7bit',
+        stream: undefined,
+        destination: '',
+        filename: qrCodeFileName,
+        path: '',
+      } as any, qrCodeFileName);
+    } else {
+      await minio.putObject(minioBucket, qrCodeFileName, qrCodeBuffer);
+    }
 
-    // Update peserta dengan path file Minio
+    // Update peserta dengan path file
     await this.prismaService.participant.update({
       where: { id: participant.id },
       data: {
@@ -104,7 +123,7 @@ export class QrCodeService {
     });
 
     this.logger.debug(
-      `QR code untuk peserta ID: ${participant.id} berhasil diperbarui di database dan diupload ke Minio`,
+      `QR code untuk peserta ID: ${participant.id} berhasil diperbarui di database dan diupload ke storage`,
     );
     return qrCodeBuffer;
   }

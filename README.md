@@ -76,7 +76,6 @@ PROTOCOL=http
 HOST=0.0.0.0
 FRONTEND_URL=http://localhost:4200
 BACKEND_URL=http://localhost:3000
-QR_CODE_LINK=http://localhost:4200/participants/{id}/detail
 ACCESS_TOKEN=<YOUR_ACCESS_TOKEN>
 REFRESH_TOKEN=<YOUR_REFRESH_TOKEN>
 VERIFICATION_TOKEN=<YOUR_VERIFICATION_TOKEN>
@@ -141,7 +140,6 @@ Pastikan [GitHub Secrets](https://docs.github.com/en/actions/security-guides/enc
 *   `MAIL_PASS`
 *   `FRONTEND_URL`
 *   `BACKEND_URL`
-*   `QR_CODE_LINK`
 *   `APP_NAME`
 
 **Penting:** Nama secret di GitHub Actions harus sama persis dengan nama variabel lingkungan yang diharapkan oleh aplikasi di Cloud Run.

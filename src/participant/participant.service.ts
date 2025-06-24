@@ -15,6 +15,7 @@ import * as ejs from 'ejs';
 import { UrlHelper } from '../common/helpers/url.helper';
 import { QrCodeService } from "src/qrcode/qrcode.service";
 import * as fs from 'fs';
+import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 
 @Injectable()
 export class ParticipantService {
@@ -83,18 +84,18 @@ export class ParticipantService {
                 nationality: createRequest.nationality,
                 placeOfBirth: createRequest.placeOfBirth,
                 dateOfBirth: createRequest.dateOfBirth,
-                simA: createRequest.simA,
+                simAPath: createRequest.simAPath,
                 simAFileName: createRequest.simAFileName,
-                simB: createRequest.simB,
-                simBFileName: createRequest.simAFileName,
-                ktp: createRequest.ktp,
+                simBPath: createRequest.simBPath,
+                simBFileName: createRequest.simBFileName,
+                ktpPath: createRequest.ktpPath,
                 ktpFileName: createRequest.ktpFileName,
-                foto: createRequest.foto,
+                fotoPath: createRequest.fotoPath,
                 fotoFileName: createRequest.fotoFileName,
-                suratSehatButaWarna: createRequest.suratSehatButaWarna,
+                suratSehatButaWarnaPath: createRequest.suratSehatButaWarnaPath,
                 suratSehatButaWarnaFileName: createRequest.suratSehatButaWarnaFileName,
                 tglKeluarSuratSehatButaWarna: createRequest.tglKeluarSuratSehatButaWarna,
-                suratBebasNarkoba: createRequest.suratBebasNarkoba,
+                suratBebasNarkobaPath: createRequest.suratBebasNarkobaPath,
                 suratBebasNarkobaFileName: createRequest.suratBebasNarkobaFileName,
                 tglKeluarSuratBebasNarkoba: createRequest.tglKeluarSuratBebasNarkoba,
                 gmfNonGmf: createRequest.gmfNonGmf,
@@ -133,7 +134,8 @@ export class ParticipantService {
             this.validateDinasForLcuRequest(participant.dinas, user.dinas);
         }
     
-        if (fileName === 'foto' && !participant.foto) {
+        const pathField = fileName + 'Path';
+        if (fileName === 'foto' && !participant.fotoPath) {
             this.logger.debug(`Peserta ${participantId} tidak memiliki foto, menyajikan gambar default.`);
             try {
                 const defaultImagePath = join(__dirname, '..', '..', 'public', 'assets', 'images', 'blank-profile-picture.png');
@@ -144,7 +146,7 @@ export class ParticipantService {
             }
         }
     
-        const fileBuffer = participant[fileName];
+        const fileBuffer = await getFileBufferFromMinio(participant[pathField]);
 
         if (!fileBuffer) {
             throw new HttpException(`File ${fileName} tidak ditemukan untuk peserta ini.`, 404);
@@ -177,7 +179,7 @@ export class ParticipantService {
         const participant = await this.findOneParticipant(participantId);
         
         const requiredFields = {
-            foto: participant.foto,
+            foto: participant.fotoPath,
             company: participant.company,
             nationality: participant.nationality,
             qrCode: qrCodeBuffer,
@@ -194,9 +196,10 @@ export class ParticipantService {
         // Konfigurasi URL dan konversi data
         const backendUrl = this.urlHelper.getBaseUrl('backend');
         const gmfLogoUrl = `${backendUrl}/assets/images/Logo_GMF_Aero_Asia.png`;
-        const photoBase64 = Buffer.from(participant.foto).toString('base64');
+        const photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+        const photoBase64 = photoBuffer.toString('base64');
         const qrCodeBase64 = Buffer.from(qrCodeBuffer).toString('base64');
-        const photoType = this.coreHelper.getMediaType(Buffer.from(participant.foto));
+        const photoType = this.coreHelper.getMediaType(photoBuffer);
         const qrCodeType = this.coreHelper.getMediaType(qrCodeBuffer);
 
         // Render template EJS
@@ -246,10 +249,10 @@ export class ParticipantService {
         // Ambil data peserta
         const participant = await this.findOneParticipant(participantId);
         const requiredFields = {
-            simA: participant.simA,
-            ktp: participant.ktp,
-            suratSehatButaWarna: participant.suratSehatButaWarna,
-            suratBebasNarkoba: participant.suratBebasNarkoba,
+            simA: participant.simAPath,
+            ktp: participant.ktpPath,
+            suratSehatButaWarna: participant.suratSehatButaWarnaPath,
+            suratBebasNarkoba: participant.suratBebasNarkobaPath,
         };
         const missingFields = Object.entries(requiredFields)
             .filter(([_, value]) => !value)
@@ -306,10 +309,14 @@ export class ParticipantService {
         };
 
         // Tambahkan dokumen ke PDF
-        await addFileToPdf(Buffer.from(participant.simA), 'SIM A');
-        await addFileToPdf(Buffer.from(participant.ktp), 'KTP');
-        await addFileToPdf(Buffer.from(participant.suratSehatButaWarna), 'Surat Sehat Buta Warna');
-        await addFileToPdf(Buffer.from(participant.suratBebasNarkoba), 'Surat Bebas Narkoba');
+        const simABuffer = await getFileBufferFromMinio(participant.simAPath);
+        const ktpBuffer = await getFileBufferFromMinio(participant.ktpPath);
+        const suratSehatButaWarnaBuffer = await getFileBufferFromMinio(participant.suratSehatButaWarnaPath);
+        const suratBebasNarkobaBuffer = await getFileBufferFromMinio(participant.suratBebasNarkobaPath);
+        await addFileToPdf(simABuffer, 'SIM A');
+        await addFileToPdf(ktpBuffer, 'KTP');
+        await addFileToPdf(suratSehatButaWarnaBuffer, 'Surat Sehat Buta Warna');
+        await addFileToPdf(suratBebasNarkobaBuffer, 'Surat Bebas Narkoba');
 
         // Simpan dan kembalikan PDF
         const pdfBytes = await pdfDoc.save();
@@ -331,7 +338,7 @@ export class ParticipantService {
         const participant = await this.findOneParticipant(participantId);
         
         const requiredFields = {
-            foto: participant.foto,
+            foto: participant.fotoPath,
             company: participant.company,
             nationality: participant.nationality,
             qrCode: qrCodeBuffer,
@@ -346,9 +353,10 @@ export class ParticipantService {
         }
 
         // Konversi data ke base64
-        const photoBase64 = Buffer.from(participant.foto).toString('base64');
+        const photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+        const photoBase64 = photoBuffer.toString('base64');
         const qrCodeBase64 = qrCodeBuffer.toString('base64');
-        const photoType = this.coreHelper.getMediaType(Buffer.from(participant.foto));
+        const photoType = this.coreHelper.getMediaType(photoBuffer);
         const qrCodeType = this.coreHelper.getMediaType(qrCodeBuffer);
 
         // Konfigurasi URL
@@ -599,13 +607,17 @@ export class ParticipantService {
             phoneNumber: participant.phoneNumber,
             nationality: participant.nationality,
             placeOfBirth: participant.placeOfBirth,
-            simAFileName: participant.simAFileName,
-            simBFileName: participant.simBFileName,
-            ktpFileName: participant.ktpFileName,
-            fotoFileName: participant.fotoFileName,
-            suratSehatButaWarnaFileName: participant.suratSehatButaWarnaFileName,
-            suratBebasNarkobaFileName: participant.suratBebasNarkobaFileName,
             dateOfBirth: participant.dateOfBirth,
+            simAPath: participant.simAPath,
+            simAFileName: participant.simAFileName,
+            simBPath: participant.simBPath,
+            simBFileName: participant.simBFileName,
+            ktpPath: participant.ktpPath,
+            ktpFileName: participant.ktpFileName,
+            fotoPath: participant.fotoPath,
+            fotoFileName: participant.fotoFileName,
+            suratSehatButaWarnaPath: participant.suratSehatButaWarnaPath,
+            suratSehatButaWarnaFileName: participant.suratSehatButaWarnaFileName,
             tglKeluarSuratSehatButaWarna: participant.tglKeluarSuratSehatButaWarna,
             tglKeluarSuratBebasNarkoba: participant.tglKeluarSuratBebasNarkoba,
             gmfNonGmf: participant.gmfNonGmf,
@@ -637,5 +649,10 @@ export class ParticipantService {
         };
         
         return this.coreHelper.validateActions(userRole, accessMap);
+    }
+
+    // Tambahan helper untuk ambil participant tanpa validasi user/role
+    async getParticipantRaw(participantId: string): Promise<Participant> {
+        return this.findOneParticipant(participantId);
     }
 }

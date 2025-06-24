@@ -10,6 +10,7 @@ import { chain } from 'stream-chain';
 import { parser } from 'stream-json';
 import { streamArray } from 'stream-json/streamers/StreamArray';
 import { faker } from '@faker-js/faker';
+import { Client as MinioClient } from 'minio';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -28,6 +29,22 @@ const predefinedFiles = {
   suratSehatButaWarna: 'surat_ket_sehat.jpg',
   suratBebasNarkoba: 'surat_bebas_narkoba.jpg',
 };
+
+// Inisialisasi Minio Client
+const minio = new MinioClient({
+  endPoint: process.env.MINIO_ENDPOINT!,
+  port: Number(process.env.MINIO_PORT!),
+  useSSL: process.env.MINIO_USE_SSL === 'true',
+  accessKey: process.env.MINIO_ACCESS_KEY!,
+  secretKey: process.env.MINIO_SECRET_KEY!,
+});
+const minioBucket = process.env.MINIO_BUCKET!;
+
+async function uploadToMinio(localPath: string, destName: string): Promise<string> {
+  if (!fs.existsSync(localPath)) return '';
+  await minio.fPutObject(minioBucket, destName, localPath);
+  return destName;
+}
 
 // Fungsi pembantu untuk memuat buffer aset
 const loadAssetBuffer = (fileName: string, defaultBuffer?: Buffer): Buffer | null => {
@@ -175,19 +192,32 @@ async function seedParticipants() {
       p[field] = toDate(p[field]);
     });
 
-    // Muat buffer dari aset
-    p.foto = loadAssetBuffer(p.fotoFileName) ?? defaultPhotoBuffer;
-    p.ktp = loadAssetBuffer(p.ktpFileName);
-    p.simA = loadAssetBuffer(p.simAFileName);
-    p.simB = loadAssetBuffer(p.simBFileName);
-    p.suratSehatButaWarna = loadAssetBuffer(p.suratSehatButaWarnaFileName);
-    p.suratBebasNarkoba = loadAssetBuffer(p.suratBebasNarkobaFileName);
+    // Upload file ke Minio dan simpan path
+    p.fotoPath = await uploadToMinio(path.join(sampleDir, p.fotoFileName), `foto/${p.id}.jpg`);
+    p.ktpPath = await uploadToMinio(path.join(sampleDir, p.ktpFileName), `ktp/${p.id}.jpg`);
+    p.simAPath = await uploadToMinio(path.join(sampleDir, p.simAFileName), `simA/${p.id}.jpg`);
+    p.simBPath = await uploadToMinio(path.join(sampleDir, p.simBFileName), `simB/${p.id}.jpg`);
+    p.suratSehatButaWarnaPath = await uploadToMinio(path.join(sampleDir, p.suratSehatButaWarnaFileName), `suratSehat/${p.id}.jpg`);
+    p.suratBebasNarkobaPath = await uploadToMinio(path.join(sampleDir, p.suratBebasNarkobaFileName), `suratNarkoba/${p.id}.jpg`);
 
-    // Buat QR code
+    // QR code (generate, simpan sebagai file, upload ke Minio, simpan path)
     const frontendUrl = process.env.FRONTEND_URL || `http://${localIp}:4200`;
     const url = `${frontendUrl}/participant/detail/${p.id}`;
     const qrDataUrl = await QRCode.toDataURL(url);
-    p.qrCode = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+    const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+    const qrTempPath = path.join(os.tmpdir(), `qr_${p.id}.png`);
+    fs.writeFileSync(qrTempPath, qrBuffer);
+    p.qrCodePath = await uploadToMinio(qrTempPath, `qrcode/${p.id}.png`);
+    fs.unlinkSync(qrTempPath);
+
+    // Hapus field buffer agar tidak error
+    delete p.foto;
+    delete p.ktp;
+    delete p.simA;
+    delete p.simB;
+    delete p.suratSehatButaWarna;
+    delete p.suratBebasNarkoba;
+    delete p.qrCode;
 
     return p;
   }));
@@ -444,24 +474,16 @@ async function seedCapabilityCots() {
 async function seedSignatures() {
   console.log('--- Seeding signatures ---');
   console.log('- Creating signatures directly from asset files, ignoring signatures.json.');
-
-  const signaturesToCreate: {
-    id: string;
-    idNumber: string;
-    role: string;
-    name: string;
-    eSignFileName: string;
-    signatureType: SignatureType;
-    status: boolean;
-  }[] = [
+  const signaturesToCreate = [
     {
       id: randomUUID(),
       idNumber: 'SIGNER001',
       role: 'Manager',
       name: 'Manager Signatory',
       eSignFileName: 'e-sign1.png',
-      signatureType: 'SIGNATURE1',
+      signatureType: SignatureType.SIGNATURE1,
       status: true,
+      eSignPath: '',
     },
     {
       id: randomUUID(),
@@ -469,25 +491,25 @@ async function seedSignatures() {
       role: 'Supervisor',
       name: 'Supervisor Signatory',
       eSignFileName: 'e-sign2.png',
-      signatureType: 'SIGNATURE2',
+      signatureType: SignatureType.SIGNATURE2,
       status: true,
+      eSignPath: '',
     },
   ];
-
-  const data = signaturesToCreate
-    .map((s) => {
-      const eSignBuffer = loadAssetBuffer(s.eSignFileName);
-      if (!eSignBuffer) {
-        console.warn(`- Signature asset not found: ${s.eSignFileName}. Skipping.`);
-        return null;
-      }
-      return {
-        ...s,
-        eSign: eSignBuffer,
-      };
-    })
-    .filter((s): s is NonNullable<typeof s> => s !== null);
-
+  const data = await Promise.all(signaturesToCreate.map(async (s) => {
+    const localPath = path.join(sampleDir, s.eSignFileName);
+    const eSignPath = await uploadToMinio(localPath, `esign/${s.id}.png`);
+    return {
+      id: s.id,
+      idNumber: s.idNumber,
+      role: s.role,
+      name: s.name,
+      eSignFileName: s.eSignFileName,
+      eSignPath,
+      signatureType: s.signatureType,
+      status: s.status,
+    };
+  }));
   if (data.length > 0) {
     await prisma.signature.createMany({
       data,

@@ -332,12 +332,37 @@ export class ParticipantController {
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.getQrCode(participantId);
-    if (fileBuffer) {
-      res.setHeader('Content-Type', 'image/png');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('QR Code not found');
+    try {
+      // Cek participant
+      let participant;
+      try {
+        participant = await this.participantService.getParticipantRaw(participantId);
+      } catch (e) {
+        res.status(404).send('Participant not found');
+        return;
+      }
+      // Ambil QR code
+      const fileBuffer = await this.participantService.getQrCode(participantId);
+      let sanitizedNama = 'Participant';
+      if (participant && participant.name) {
+        sanitizedNama = participant.name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+      }
+      const filename = `QRCode_${sanitizedNama}_${participantId}.png`;
+      const encodedFilename = encodeURIComponent(filename);
+      const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`;
+      if (fileBuffer) {
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Content-Disposition', disposition);
+        res.send(fileBuffer);
+      } else {
+        res.status(404).send('QR Code not found');
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'Participant not found');
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+      }
     }
   }
 

@@ -11,6 +11,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -62,22 +63,21 @@ model Participant {
   nationality                   String?             @db.VarChar(50)
   placeOfBirth                  String?             @db.VarChar(50)
   dateOfBirth                   DateTime?           @db.Date
-  simA                          Bytes?
   simAFileName                  String?             @db.VarChar(255)
-  simB                          Bytes?
+  simAPath                      String?             @db.VarChar(255)
   simBFileName                  String?             @db.VarChar(255)
-  ktp                           Bytes?
+  simBPath                      String?             @db.VarChar(255)
   ktpFileName                   String?             @db.VarChar(255)
-  foto                          Bytes?
+  ktpPath                       String?             @db.VarChar(255)
   fotoFileName                  String?             @db.VarChar(255)
-  suratSehatButaWarna           Bytes?
+  fotoPath                      String?             @db.VarChar(255)
   suratSehatButaWarnaFileName   String?             @db.VarChar(255)
+  suratSehatButaWarnaPath       String?             @db.VarChar(255)
   tglKeluarSuratSehatButaWarna  DateTime?           @db.Date
-  suratBebasNarkoba             Bytes?
   suratBebasNarkobaFileName     String?             @db.VarChar(255)
+  suratBebasNarkobaPath         String?             @db.VarChar(255)
   tglKeluarSuratBebasNarkoba    DateTime?           @db.Date
-  qrCode                        Bytes?
-  qrCodeLink                    String?             @db.Text
+  qrCodePath                    String?             @db.Text
   gmfNonGmf                     String?             @db.VarChar(20)
 
   participantsCots              ParticipantsCOT[]
@@ -161,8 +161,8 @@ model Signature {
   idNumber        String          @db.VarChar(20)
   role            String          @db.VarChar(50)
   name            String          @db.VarChar(50)
-  eSign           Bytes
   eSignFileName   String?         @db.VarChar(255)
+  eSignPath       String?         @db.VarChar(255)
   signatureType   SignatureType
   status          Boolean         @default(false)
 

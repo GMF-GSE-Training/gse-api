@@ -3,6 +3,17 @@ import { PrismaService } from 'src/common/service/prisma.service';
 import { Participant } from '@prisma/client';
 import { UrlHelper } from 'src/common/helpers/url.helper';
 import * as QRCode from 'qrcode';
+import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
+import { Client as MinioClient } from 'minio';
+
+const minio = new MinioClient({
+  endPoint: process.env.MINIO_ENDPOINT!,
+  port: Number(process.env.MINIO_PORT!),
+  useSSL: process.env.MINIO_USE_SSL === 'true',
+  accessKey: process.env.MINIO_ACCESS_KEY!,
+  secretKey: process.env.MINIO_SECRET_KEY!,
+});
+const minioBucket = process.env.MINIO_BUCKET!;
 
 @Injectable()
 export class QrCodeService {
@@ -32,36 +43,39 @@ export class QrCodeService {
       throw new HttpException('Peserta tidak ditemukan', 404);
     }
 
+    // Sanitasi nama peserta
+    const sanitizedNama = participant.name
+      ? participant.name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '')
+      : 'Participant';
+    const qrCodeFileName = `qrcode/QRCode_${sanitizedNama}_${participant.id}.png`;
     const frontendUrl = this.urlHelper.getBaseUrl('frontend');
     const expectedQrCodeLink = `${frontendUrl}/participants/${participant.id}/detail`;
 
     // Cek jika QR code perlu diregenerasi
-    if (
-      !participant.qrCode ||
-      !participant.qrCodeLink ||
-      participant.qrCodeLink !== expectedQrCodeLink
-    ) {
+    if (!participant.qrCodePath || participant.qrCodePath !== qrCodeFileName) {
       this.logger.log(
-        `Meregenerasi QR code untuk peserta ID: ${participantId}. Link lama: ${participant.qrCodeLink}, Link baru: ${expectedQrCodeLink}`,
+        `Meregenerasi QR code untuk peserta ID: ${participantId}. Path lama: ${participant.qrCodePath}, Path baru: ${qrCodeFileName}`,
       );
-      return this.generateAndSaveQrCode(participant, expectedQrCodeLink);
+      return this.generateAndSaveQrCode(participant, expectedQrCodeLink, qrCodeFileName);
     }
 
     this.logger.debug(
       `Mengembalikan QR code yang ada untuk peserta ID: ${participantId}`,
     );
-    return Buffer.from(participant.qrCode);
+    return await getFileBufferFromMinio(participant.qrCodePath);
   }
 
   /**
    * Fungsi internal untuk membuat QR code, menyimpannya ke DB, dan mengembalikan buffer.
    * @param participant - Objek peserta
    * @param qrCodeLink - Link yang akan di-encode
+   * @param qrCodeFileName - Nama file QR code di Minio
    * @returns Buffer gambar QR code
    */
   private async generateAndSaveQrCode(
     participant: Participant,
     qrCodeLink: string,
+    qrCodeFileName: string,
   ): Promise<Buffer> {
     let qrCodeBuffer: Buffer;
     try {
@@ -78,17 +92,19 @@ export class QrCodeService {
       throw new HttpException('Gagal menghasilkan QR code', 500);
     }
 
-    // Update peserta dengan QR code dan link baru
+    // Upload ke Minio
+    await minio.putObject(minioBucket, qrCodeFileName, qrCodeBuffer);
+
+    // Update peserta dengan path file Minio
     await this.prismaService.participant.update({
       where: { id: participant.id },
       data: {
-        qrCode: qrCodeBuffer,
-        qrCodeLink: qrCodeLink,
+        qrCodePath: qrCodeFileName,
       },
     });
 
     this.logger.debug(
-      `QR code untuk peserta ID: ${participant.id} berhasil diperbarui di database`,
+      `QR code untuk peserta ID: ${participant.id} berhasil diperbarui di database dan diupload ke Minio`,
     );
     return qrCodeBuffer;
   }

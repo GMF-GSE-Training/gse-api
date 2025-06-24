@@ -11,6 +11,7 @@ import { ESignValidation } from './e-sign.validation';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { CurrentUserRequest } from 'src/model/auth.model';
+import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 
 @Injectable()
 export class ESignService {
@@ -152,11 +153,11 @@ export class ESignService {
       },
     });
 
-    if (!eSign || !eSign.eSign) {
+    if (!eSign || !eSign.eSignPath) {
       throw new HttpException('File E-Sign tidak ditemukan', 404);
     }
 
-    return Buffer.from(eSign.eSign);
+    return await getFileBufferFromMinio(eSign.eSignPath);
   }
 
   async deleteESign(eSignId: string): Promise<string> {

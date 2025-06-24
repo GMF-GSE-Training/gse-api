@@ -29,4 +29,10 @@ export class FileUploadController {
     await this.fileUploadService.deleteFile(filePath);
     return { status: 'deleted', filePath };
   }
+
+  @Get('signed-url/:filePath')
+  async getSignedUrl(@Param('filePath') filePath: string) {
+    const signedUrl = await this.fileUploadService.getSignedUrl(filePath);
+    return { signedUrl };
+  }
 } 

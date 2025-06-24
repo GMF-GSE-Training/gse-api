@@ -941,7 +941,7 @@ export class AuthService {
       }
     }
     
-    this.logger.log(`Berhasil menghapus ${deletedCount} user role 'user' yang belum terverifikasi setelah 24 jam`);
+    this.logger.log(`Berhasil menghapus ${deletedCount} pengguna dengan role 'user' yang belum terverifikasi dalam 24 jam`);
     return deletedCount;
   }
 

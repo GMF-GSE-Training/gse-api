@@ -1,16 +1,20 @@
 import { Client } from 'minio';
+import { Logger } from '@nestjs/common';
 // import { StorageProvider } from '../storage-provider.interface'; // Uncomment jika sudah ada interface
 
-// TODO: Ganti dengan import interface StorageProvider jika sudah tersedia di backend
+// TODO: Ganti dengan import interface StorageProvider jika sudah tersedia di be-dev
 export interface StorageProvider {
   upload(file: Express.Multer.File, fileName: string, requestId?: string): Promise<string>;
   download(filePath: string, requestId?: string): Promise<{ buffer: Buffer; mimeType: string }>;
   delete(filePath: string, requestId?: string): Promise<void>;
+  exists(filePath: string, requestId?: string): Promise<boolean>;
+  getSignedUrl(filePath: string, expiresIn: number, requestId?: string): Promise<string>;
 }
 
 export class MinioStorageProvider implements StorageProvider {
   private client: Client;
   private bucket: string;
+  private logger = new Logger(MinioStorageProvider.name);
 
   constructor(options: { endPoint: string; port: number; useSSL: boolean; accessKey: string; secretKey: string; bucket: string }) {
     this.client = new Client({
@@ -40,5 +44,19 @@ export class MinioStorageProvider implements StorageProvider {
 
   async delete(filePath: string, requestId?: string): Promise<void> {
     await this.client.removeObject(this.bucket, filePath);
+  }
+
+  async exists(filePath: string, requestId?: string): Promise<boolean> {
+    try {
+      await this.client.statObject(this.bucket, filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getSignedUrl(filePath: string, expiresIn: number, requestId?: string): Promise<string> {
+    this.logger.log(`Generating signed URL for Minio: ${filePath}`, requestId);
+    return this.client.presignedGetObject(this.bucket, filePath, expiresIn);
   }
 } 

@@ -26,10 +26,13 @@ async function bootstrap() {
     const host = (configService.get('HOST') as string) || 'localhost';
     const port = (configService.get('PORT') as number) || process.env.PORT || (nodeEnv === 'development' ? 3000 : 3000);
     const protocol = (configService.get('PROTOCOL') as string) || process.env.PROTOCOL || (nodeEnv === 'production' ? 'https' : 'http');
-    const frontendUrl = (configService.get('FRONTEND_URL') as string) || process.env.FRONTEND_URL || 'http://localhost:4200';
+    // Ambil origin CORS dari env, support multi-origin (pisahkan dengan koma)
+    const corsOrigins = (configService.get('FRONTEND_URL') || process.env.FRONTEND_URL || configService.get('ORIGIN') || process.env.ORIGIN || 'http://localhost:4200')
+      .split(',')
+      .map(origin => origin.trim());
 
     app.enableCors({
-      origin: [frontendUrl, 'https://gmf-utility-training.github.io', `${protocol}://${host}:4200`],
+      origin: corsOrigins,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       allowedHeaders: 'Content-Type,Authorization,Cache-Control',
       credentials: true,

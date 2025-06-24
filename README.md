@@ -74,8 +74,10 @@ DATABASE_URL="postgresql://postgres.ckyobbobvftqziemlccu:<YOUR_PASSWORD>@aws-0-a
 NODE_ENV=development
 PROTOCOL=http
 HOST=0.0.0.0
-FRONTEND_URL=http://localhost:4200
-BACKEND_URL=http://localhost:3000
+PORT=3000
+FRONTEND_URL=https://sertifikat.gmf.co.id           # URL utama frontend, untuk kebutuhan aplikasi (redirect, QR, dsb)
+CORS_ORIGIN=http://localhost:4200,https://sertifikat.gmf.co.id # Daftar origin yang diizinkan CORS, pisahkan dengan koma jika multi-origin
+BACKEND_URL=https://api.gmf.co.id
 ACCESS_TOKEN=<YOUR_ACCESS_TOKEN>
 REFRESH_TOKEN=<YOUR_REFRESH_TOKEN>
 VERIFICATION_TOKEN=<YOUR_VERIFICATION_TOKEN>
@@ -87,6 +89,10 @@ APP_NAME="Admin GMF Training"
 ```
 
 **Catatan Penting:**
+*   `FRONTEND_URL` digunakan untuk kebutuhan aplikasi (generate link, QR code, dsb). Hanya satu URL utama.
+*   `CORS_ORIGIN` digunakan khusus untuk konfigurasi CORS backend. Bisa diisi lebih dari satu origin, pisahkan dengan koma.
+*   Jangan gunakan multi-origin di `FRONTEND_URL` untuk menghindari error parsing di logic aplikasi.
+*   Untuk deployment production, ganti `FRONTEND_URL` dan `CORS_ORIGIN` ke domain yang sesuai.
 *   Ganti `<YOUR_PASSWORD>`, `<YOUR_ACCESS_TOKEN>`, `<YOUR_REFRESH_TOKEN>`, `<YOUR_VERIFICATION_TOKEN>`, `<YOUR_MAIL_USER>`, dan `<YOUR_MAIL_PASS>` dengan nilai yang sebenarnya.
 *   Untuk `DATABASE_URL`, pastikan Anda menggunakan string koneksi Supavisor (session mode) dari dashboard Anda, dan tambahkan `?pgbouncer=true` di akhir untuk kompatibilitas Cloud Run.
 

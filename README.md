@@ -32,7 +32,7 @@ Repositori ini berisi kode *backend* untuk aplikasi 'GMF Utility Training', yang
 Proyek mengikuti konvensi modular NestJS:
 
 ```
-be-dev/
+backend/
 ├── src/
 │   ├── auth/              # Modul autentikasi dan otorisasi (login, register, JWT)
 │   ├── common/            # Modul umum (Prisma, Validation, JWT config, Error Filter, Winston)
@@ -67,7 +67,7 @@ $ pnpm install
 
 ## Konfigurasi Lingkungan (`.env`)
 
-Buat file `.env` di direktori `be-dev/` dengan variabel lingkungan berikut. Pastikan untuk mengisi nilai yang sesuai, terutama `DATABASE_URL`.
+Buat file `.env` di direktori `backend/` dengan variabel lingkungan berikut. Pastikan untuk mengisi nilai yang sesuai, terutama `DATABASE_URL`.
 
 ```
 DATABASE_URL="postgresql://postgres.ckyobbobvftqziemlccu:<YOUR_PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true"

@@ -1,7 +1,7 @@
 import { Client } from 'minio';
 // import { StorageProvider } from '../storage-provider.interface'; // Uncomment jika sudah ada interface
 
-// TODO: Ganti dengan import interface StorageProvider jika sudah tersedia di be-dev
+// TODO: Ganti dengan import interface StorageProvider jika sudah tersedia di backend
 export interface StorageProvider {
   upload(file: Express.Multer.File, fileName: string, requestId?: string): Promise<string>;
   download(filePath: string, requestId?: string): Promise<{ buffer: Buffer; mimeType: string }>;

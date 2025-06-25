@@ -47,9 +47,15 @@ export class ErrorFilter implements ExceptionFilter {
         },
       };
     } else if (exception instanceof PrismaClientKnownRequestError) {
-      statusCode = HttpStatus.BAD_REQUEST;
-
-      if (exception.code === 'P2002') {
+      // Penanganan khusus error P2024 (connection pool timeout)
+      if (exception.code === 'P2024') {
+        statusCode = HttpStatus.SERVICE_UNAVAILABLE;
+        errorResponse = {
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: 'Server sedang sibuk, silakan coba beberapa saat lagi dalam beberapa menit.',
+        };
+      } else if (exception.code === 'P2002') {
         // Error Unique Constraint Violation
         const target = exception.meta?.target as string | undefined;
         errorResponse = {
@@ -78,10 +84,11 @@ export class ErrorFilter implements ExceptionFilter {
         };
       } else {
         // Error Prisma Lainnya
+        statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
         errorResponse = {
-          code: HttpStatus.INTERNAL_SERVER_ERROR,
-          status: HttpStatus[HttpStatus.INTERNAL_SERVER_ERROR],
-          errors: 'Terjadi kesalahan pada database.',
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: 'Maaf, terjadi gangguan pada sistem. Silakan coba beberapa saat lagi.',
         };
       }
     } else if (exception instanceof PrismaClientValidationError) {
@@ -101,15 +108,26 @@ export class ErrorFilter implements ExceptionFilter {
       errorResponse = {
         code: statusCode,
         status: HttpStatus[statusCode],
-        errors: 'Terjadi kesalahan internal pada layer database.',
+        errors: 'Maaf, terjadi gangguan internal pada sistem. Silakan coba beberapa saat lagi.',
       };
     } else {
       statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      let fallbackMessage = 'Maaf, terjadi gangguan pada sistem. Silakan coba beberapa saat lagi.';
+      // Jika pesan error terlalu teknis (mengandung "Exception" atau "Error"), fallback ke pesan ramah
+      const msg = exception.message || '';
+      if (msg.match(/Exception|Error|database|timeout|connection|prisma|stack|failed|not found|undefined|null|internal/i)) {
+        errorResponse = {
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: fallbackMessage,
+        };
+      } else {
       errorResponse = {
         code: statusCode,
         status: HttpStatus[statusCode],
-        errors: exception.message,
+          errors: msg || fallbackMessage,
       };
+      }
     }
 
     response.status(statusCode).json(errorResponse);

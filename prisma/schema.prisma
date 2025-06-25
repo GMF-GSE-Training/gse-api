@@ -78,6 +78,7 @@ model Participant {
   suratBebasNarkobaPath         String?             @db.VarChar(255)
   tglKeluarSuratBebasNarkoba    DateTime?           @db.Date
   qrCodePath                    String?             @db.Text
+  qrCodeLink                    String?             @db.Text
   gmfNonGmf                     String?             @db.VarChar(20)
 
   participantsCots              ParticipantsCOT[]

@@ -7,15 +7,6 @@ import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { Client as MinioClient } from 'minio';
 import { FileUploadService } from '../file-upload/file-upload.service';
 
-const minio = new MinioClient({
-  endPoint: process.env.MINIO_ENDPOINT!,
-  port: Number(process.env.MINIO_PORT!),
-  useSSL: process.env.MINIO_USE_SSL === 'true',
-  accessKey: process.env.MINIO_ACCESS_KEY!,
-  secretKey: process.env.MINIO_SECRET_KEY!,
-});
-const minioBucket = process.env.MINIO_BUCKET!;
-
 @Injectable()
 export class QrCodeService {
   private readonly logger = new Logger(QrCodeService.name);
@@ -111,6 +102,14 @@ export class QrCodeService {
         path: '',
       } as any, qrCodeFileName);
     } else {
+      const minio = new MinioClient({
+        endPoint: process.env.MINIO_ENDPOINT!,
+        port: Number(process.env.MINIO_PORT!),
+        useSSL: process.env.MINIO_USE_SSL === 'true',
+        accessKey: process.env.MINIO_ACCESS_KEY!,
+        secretKey: process.env.MINIO_SECRET_KEY!,
+      });
+      const minioBucket = process.env.MINIO_BUCKET!;
       await minio.putObject(minioBucket, qrCodeFileName, qrCodeBuffer);
     }
 

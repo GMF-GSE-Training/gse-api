@@ -961,17 +961,22 @@ async function seedSignatures() {
   
   const data = await Promise.all(signaturesToCreate.map(async (s, index) => {
     try {
-    const localPath = path.join(sampleDir, s.eSignFileName);
+      const localPath = path.join(sampleDir, s.eSignFileName);
       let eSignPath = '';
       try {
         eSignPath = await uploadToStorage(localPath, `esign/${s.id}.png`);
       } catch (error) {
         Logger.warn(`Failed to upload eSign for signature ${s.idNumber}`, { error: (error as Error).message });
       }
-      
-    return {
-        ...s,
-      eSignPath,
+      return {
+        id: s.id,
+        idNumber: s.idNumber,
+        role: s.role,
+        name: s.name,
+        eSignFileName: s.eSignFileName,
+        eSignPath,
+        signatureType: s.signatureType,
+        status: s.status,
       };
     } catch (error) {
       Logger.error(`Failed to process signature ${s.idNumber || index}`, {

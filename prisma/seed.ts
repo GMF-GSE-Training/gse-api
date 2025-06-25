@@ -631,17 +631,27 @@ async function seedParticipants() {
         await Promise.all(uploadPromises);
       
       // Generate and upload QR code using buffer (no temp file)
-    const url = `${frontendUrl}/participant/detail/${p.id}`;
-    const qrDataUrl = await QRCode.toDataURL(url);
-    const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
-      
-      let qrCodePath = '';
-      try {
-        qrCodePath = await uploadQRCodeBuffer(qrBuffer, `qrcode/${p.id}.png`);
-      } catch (error) {
-        Logger.warn(`Failed to upload QR code for participant ${p.id}`, { error: (error as Error).message });
-      }
-      
+      // const url = `${frontendUrl}/participant/detail/${p.id}`;
+      // const qrDataUrl = await QRCode.toDataURL(url);
+      // const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+      // let qrCodePath = '';
+      // try {
+      //   qrCodePath = await uploadQRCodeBuffer(qrBuffer, `qrcode/${p.id}.png`);
+      // } catch (error) {
+      //   Logger.warn(`Failed to upload QR code for participant ${p.id}`, { error: (error as Error).message });
+      // }
+      // return {
+      //   ...p,
+      //   qrCodePath,
+      //   // Remove unused fields
+      //   foto: undefined,
+      //   ktp: undefined,
+      //   simA: undefined,
+      //   simB: undefined,
+      //   suratSehatButaWarna: undefined,
+      //   suratBebasNarkoba: undefined,
+      //   qrCode: undefined,
+      // };
       return {
         ...p,
         fotoPath,
@@ -650,7 +660,8 @@ async function seedParticipants() {
         simBPath,
         suratSehatButaWarnaPath: suratSehatPath,
         suratBebasNarkobaPath: suratNarkobaPath,
-        qrCodePath,
+        qrCodePath: undefined,
+        qrCodeLink: undefined,
         // Remove unused fields
         foto: undefined,
         ktp: undefined,

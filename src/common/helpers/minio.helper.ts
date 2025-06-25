@@ -1,15 +1,20 @@
 import { Client as MinioClient } from 'minio';
 import { Readable } from 'stream';
 
-const minio = new MinioClient({
-  endPoint: process.env.MINIO_ENDPOINT!,
-  port: Number(process.env.MINIO_PORT!),
-  useSSL: process.env.MINIO_USE_SSL === 'true',
-  accessKey: process.env.MINIO_ACCESS_KEY!,
-  secretKey: process.env.MINIO_SECRET_KEY!,
-});
-const minioBucket = process.env.MINIO_BUCKET!;
+function getMinioClient() {
+  if (process.env.STORAGE_TYPE !== 'minio') {
+    throw new Error('MinioClient hanya boleh diinisialisasi jika STORAGE_TYPE=minio');
+  }
+  return new MinioClient({
+    endPoint: process.env.MINIO_ENDPOINT!,
+    port: Number(process.env.MINIO_PORT!),
+    useSSL: process.env.MINIO_USE_SSL === 'true',
+    accessKey: process.env.MINIO_ACCESS_KEY!,
+    secretKey: process.env.MINIO_SECRET_KEY!,
+  });
+}
 
+const minioBucket = process.env.MINIO_BUCKET!;
 const storageType = process.env.STORAGE_TYPE || 'minio';
 
 if (storageType === 'supabase') {
@@ -31,6 +36,7 @@ export async function getFileBufferFromMinio(path: string): Promise<Buffer> {
   if (storageType === 'supabase') {
     throw new Error('getFileBufferFromMinio tidak boleh dipakai saat STORAGE_TYPE=supabase');
   }
+  const minio = getMinioClient();
   const stream = await minio.getObject(minioBucket, path);
   if (!stream) throw new Error('File not found in Minio: ' + path);
   return streamToBuffer(stream as Readable);

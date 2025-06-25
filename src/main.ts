@@ -27,7 +27,16 @@ async function bootstrap() {
     const port = (configService.get('PORT') as number) || process.env.PORT || (nodeEnv === 'development' ? 3000 : 3000);
     const protocol = (configService.get('PROTOCOL') as string) || process.env.PROTOCOL || (nodeEnv === 'production' ? 'https' : 'http');
     // Ambil origin CORS dari env, support multi-origin (pisahkan dengan koma)
-    const corsOrigins = (configService.get('FRONTEND_URL') || process.env.FRONTEND_URL || configService.get('ORIGIN') || process.env.ORIGIN || 'http://localhost:4200')
+    // Prioritaskan CORS_ORIGIN, fallback ke FRONTEND_URL, ORIGIN, dst
+    const corsOrigins = (
+      configService.get('CORS_ORIGIN') ||
+      process.env.CORS_ORIGIN ||
+      configService.get('FRONTEND_URL') ||
+      process.env.FRONTEND_URL ||
+      configService.get('ORIGIN') ||
+      process.env.ORIGIN ||
+      'http://localhost:4200'
+    )
       .split(',')
       .map(origin => origin.trim());
 

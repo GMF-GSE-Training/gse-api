@@ -44,10 +44,10 @@ export class QrCodeService {
     const frontendUrl = this.urlHelper.getBaseUrl('frontend');
     const expectedQrCodeLink = `${frontendUrl}/participants/${participant.id}/detail`;
 
-    // Cek jika QR code perlu diregenerasi
-    if (!participant.qrCodePath || participant.qrCodePath !== qrCodeFileName) {
+    // Cek jika QR code perlu diregenerasi (path atau link berbeda)
+    if (!participant.qrCodePath || participant.qrCodePath !== qrCodeFileName || participant.qrCodeLink !== expectedQrCodeLink) {
       this.logger.log(
-        `Meregenerasi QR code untuk peserta ID: ${participantId}. Path lama: ${participant.qrCodePath}, Path baru: ${qrCodeFileName}`,
+        `Meregenerasi QR code untuk peserta ID: ${participantId}. Path lama: ${participant.qrCodePath}, Path baru: ${qrCodeFileName}, Link lama: ${participant.qrCodeLink}, Link baru: ${expectedQrCodeLink}`,
       );
       return this.generateAndSaveQrCode(participant, expectedQrCodeLink, qrCodeFileName);
     }
@@ -113,11 +113,12 @@ export class QrCodeService {
       await minio.putObject(minioBucket, qrCodeFileName, qrCodeBuffer);
     }
 
-    // Update peserta dengan path file
+    // Update peserta dengan path file dan link QR code
     await this.prismaService.participant.update({
       where: { id: participant.id },
       data: {
         qrCodePath: qrCodeFileName,
+        qrCodeLink: qrCodeLink,
       },
     });
 

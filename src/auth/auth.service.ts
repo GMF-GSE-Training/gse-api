@@ -226,7 +226,7 @@ export class AuthService {
       });
 
       if (!user) {
-        throw new HttpException('Pengguna tidak ditemukan', 404);
+        throw new HttpException('Akun tidak ditemukan.', 404);
       }
 
       const trimmedToken = token.trim();
@@ -266,7 +266,7 @@ export class AuthService {
       this.logger.error(
         `Verifikasi Akun: Gagal memverifikasi token. Error: ${error.message}. Stack: ${error.stack}`,
       );
-      throw new HttpException('Token tidak valid atau telah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -295,7 +295,7 @@ export class AuthService {
 
     if (!user) {
       throw new HttpException(
-        'Akun Anda belum terdaftar. Silakan lakukan pendaftaran.',
+        'Akun Anda belum terdaftar. Silakan lakukan pendaftaran untuk mengakses layanan.',
         HttpStatus.NOT_FOUND,
       );
     }
@@ -304,7 +304,7 @@ export class AuthService {
       where: { id: user.roleId },
     });
     if (role?.name.toLowerCase() === 'user' && !user.verifiedAccount) {
-      throw new HttpException('ACCOUNT_NOT_VERIFIED', 403);
+      throw new HttpException('Akun Anda belum terverifikasi. Silakan cek email Anda atau klik menu "Belum Terverifikasi?" di halaman login.', 403);
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -352,7 +352,7 @@ export class AuthService {
       });
 
       if (!user || user.refreshToken !== refreshToken) {
-        throw new HttpException('Unauthorized', 401);
+        throw new HttpException('Sesi Anda telah berakhir. Silakan login kembali.', 401);
       }
 
       const payload = { id: user.id };
@@ -361,7 +361,7 @@ export class AuthService {
       return this.toAuthResponse(user, newAccessToken, refreshToken);
     } catch (error) {
       console.log(error);
-      throw new HttpException('Unauthorized', 401);
+      throw new HttpException('Sesi Anda telah berakhir. Silakan login kembali.', 401);
     }
   }
 
@@ -468,14 +468,14 @@ export class AuthService {
 
     if (!user) {
       this.logger.warn(`Pengguna dengan email ${emailRequest} tidak ditemukan`);
-      throw new HttpException('Pengguna tidak ada', 404);
+      throw new HttpException('Akun tidak ditemukan.', 404);
     }
 
     if (user.verifiedAccount) {
       this.logger.warn(
         `Akun dengan email ${emailRequest} sudah terverifikasi`,
       );
-      throw new HttpException('Akun sudah terverifikasi. Silakan login.', 400);
+      throw new HttpException('Akun Anda sudah terverifikasi. Silakan login.', 400);
     }
 
     const cooldownMinutes = 30;
@@ -653,13 +653,13 @@ export class AuthService {
 
       if (!user.passwordResetToken || user.passwordResetToken !== token) {
         throw new HttpException(
-          'Token ini tidak valid atau sudah digunakan',
+          'Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.',
           400,
         );
       }
       return true;
     } catch (error) {
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -687,7 +687,7 @@ export class AuthService {
         user.passwordResetToken !== request.token
       ) {
         throw new HttpException(
-          'Token ini tidak valid atau sudah digunakan',
+          'Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.',
           400,
         );
       }
@@ -708,7 +708,7 @@ export class AuthService {
 
       return 'Password berhasil diubah';
     } catch (error) {
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -853,7 +853,7 @@ export class AuthService {
       return 'Berhasil mengubah email';
     } catch (error) {
       console.log(error);
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -957,12 +957,12 @@ export class AuthService {
       if (user) {
         if (!user.verifiedAccount) {
           throw new HttpException(
-            'Akun dengan Nomor Pegawai ini sudah terdaftar dan belum diverifikasi.',
+            'Akun dengan Nomor Pegawai ini sudah terdaftar namun belum terverifikasi. Silakan cek inbox/spam email Anda atau klik menu "Belum Terverifikasi?" di halaman login.',
             409,
           );
         } else {
           throw new HttpException(
-            'Nomor Pegawai sudah digunakan. Silakan login.',
+            'Nomor Pegawai sudah digunakan. Silakan login atau gunakan menu lupa password.',
             409,
           );
         }
@@ -978,11 +978,11 @@ export class AuthService {
       if (user) {
         if (!user.verifiedAccount) {
           throw new HttpException(
-            'Akun dengan Email ini sudah terdaftar dan belum diverifikasi.',
+            'Akun dengan email ini sudah terdaftar namun belum diverifikasi. Silakan cek email Anda atau klik menu "Belum Terverifikasi?" di halaman login.',
             409,
           );
         } else {
-          throw new HttpException('Email sudah digunakan. Silakan login.', 409);
+          throw new HttpException('Email sudah digunakan. Silakan login atau gunakan menu lupa password.', 409);
         }
       }
     }

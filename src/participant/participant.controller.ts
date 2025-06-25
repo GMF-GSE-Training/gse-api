@@ -454,6 +454,17 @@ export class ParticipantController {
     }
   }
 
+  @Get('/:participantId/download-all')
+  @Roles('super admin', 'lcu')
+  @UseGuards(AuthGuard, RoleGuard)
+  @HttpCode(200)
+  async downloadAllFiles(
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.participantService.downloadAllFilesAsZip(participantId, res);
+  }
+
   @Delete('/:participantId')
   @HttpCode(200)
   @Roles('super admin', 'lcu')

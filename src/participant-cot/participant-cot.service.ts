@@ -243,12 +243,29 @@ export class ParticipantCotService {
       idNumber: true,
       name: true,
       dinas: true,
-      ...(userRole !== 'user' && {
-        simB: true,
-        simA: true,
-        tglKeluarSuratSehatButaWarna: true,
-        tglKeluarSuratBebasNarkoba: true,
-      }),
+      bidang: true,
+      company: true,
+      email: true,
+      phoneNumber: true,
+      nationality: true,
+      placeOfBirth: true,
+      dateOfBirth: true,
+      simAPath: true,
+      simAFileName: true,
+      simBPath: true,
+      simBFileName: true,
+      ktpPath: true,
+      ktpFileName: true,
+      fotoPath: true,
+      fotoFileName: true,
+      suratSehatButaWarnaPath: true,
+      suratSehatButaWarnaFileName: true,
+      suratBebasNarkobaPath: true,
+      suratBebasNarkobaFileName: true,
+      tglKeluarSuratSehatButaWarna: true,
+      tglKeluarSuratBebasNarkoba: true,
+      gmfNonGmf: true,
+      qrCodePath: true,
     };
 
     const participantCot = await this.prismaService.cOT.findUnique({
@@ -333,17 +350,7 @@ export class ParticipantCotService {
 
     const participants = participantCot.participantsCots
       .map((pc) => pc.participant)
-      .filter((p) => p !== null)
-      .map((participant) => {
-        const participantData = {
-          ...participant,
-          ...(userRole !== 'user' && {
-            simB: !!participant.simB,
-            simA: !!participant.simA,
-          }),
-        };
-        return participantData;
-      });
+      .filter((p) => p !== null);
 
     const actions = this.validateActions(userRole);
 

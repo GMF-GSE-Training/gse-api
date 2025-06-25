@@ -17,6 +17,7 @@ import { QrCodeService } from "src/qrcode/qrcode.service";
 import * as fs from 'fs';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import * as archiver from 'archiver';
 
 @Injectable()
 export class ParticipantService {
@@ -72,7 +73,37 @@ export class ParticipantService {
     
         createRequest.dinas ? createRequest.dinas.toUpperCase() : createRequest.dinas;
         createRequest.bidang ? createRequest.bidang.toUpperCase() : createRequest.bidang;
-    
+
+        // PATCH: Upload file jika buffer ada, assign path
+        const fileFields = [
+            { key: 'simA', fileNameKey: 'simAFileName', pathKey: 'simAPath' },
+            { key: 'simB', fileNameKey: 'simBFileName', pathKey: 'simBPath' },
+            { key: 'ktp', fileNameKey: 'ktpFileName', pathKey: 'ktpPath' },
+            { key: 'foto', fileNameKey: 'fotoFileName', pathKey: 'fotoPath' },
+            { key: 'suratSehatButaWarna', fileNameKey: 'suratSehatButaWarnaFileName', pathKey: 'suratSehatButaWarnaPath' },
+            { key: 'suratBebasNarkoba', fileNameKey: 'suratBebasNarkobaFileName', pathKey: 'suratBebasNarkobaPath' },
+        ];
+        for (const field of fileFields) {
+            if (createRequest[field.key]) {
+                try {
+                    this.logger.log(`Uploading file ${field.key} for participant...`);
+                    const fileObj = {
+                        buffer: createRequest[field.key],
+                        originalname: createRequest[field.fileNameKey] || `${field.key}.png`,
+                        mimetype: 'application/octet-stream', // Default, bisa diimprove jika ada info
+                        size: createRequest[field.key].length,
+                    };
+                    // Simulasi Express.Multer.File
+                    const path = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+                    createRequest[field.pathKey] = path;
+                    this.logger.log(`File ${field.key} uploaded, path: ${path}`);
+                } catch (err) {
+                    this.logger.error(`Gagal upload file ${field.key}: ${err.message}`);
+                    throw new HttpException(`Gagal upload file ${field.key}: ${err.message}`, 500);
+                }
+            }
+        }
+
         const participant = await this.prismaService.participant.create({
             data: {
                 idNumber: createRequest.idNumber,
@@ -445,39 +476,80 @@ export class ParticipantService {
             { field: 'idNumber', value: updateRequest.idNumber, message: 'No Pegawai sudah ada di data peserta' },
         ], participantId);
         
-        await this.prismaService.participant.update({
-            where: { id: participantId },
-            data: {
-                ...updateRequest,
-            },
-        });
-    
-        if(participant.nik) {
-            const updateUser = {
-                idNumber: updateRequest.idNumber,
-                name: updateRequest.name,
-                nik: updateRequest.nik,
-                dinas: updateRequest.dinas,
-                email: updateRequest.email,
-            };
+        this.logger.debug('UpdateParticipant request:', req);
 
-            const userUpdate = await this.prismaService.user.findUnique({
-                where: {
-                    participantId: participant.id,
-                },
-            });
-        
-            if(userUpdate) {
-                await this.prismaService.user.update({
-                    where: {
-                        id: userUpdate.id,
-                    },
-                    data: updateUser,
-                });
+        // PATCH: Upload file jika buffer ada, assign path
+        const fileFields = [
+            { key: 'simA', fileNameKey: 'simAFileName', pathKey: 'simAPath' },
+            { key: 'simB', fileNameKey: 'simBFileName', pathKey: 'simBPath' },
+            { key: 'ktp', fileNameKey: 'ktpFileName', pathKey: 'ktpPath' },
+            { key: 'foto', fileNameKey: 'fotoFileName', pathKey: 'fotoPath' },
+            { key: 'suratSehatButaWarna', fileNameKey: 'suratSehatButaWarnaFileName', pathKey: 'suratSehatButaWarnaPath' },
+            { key: 'suratBebasNarkoba', fileNameKey: 'suratBebasNarkobaFileName', pathKey: 'suratBebasNarkobaPath' },
+        ];
+        for (const field of fileFields) {
+            if (updateRequest[field.key]) {
+                try {
+                    this.logger.log(`Uploading file ${field.key} for participant (update)...`);
+                    const fileObj = {
+                        buffer: updateRequest[field.key],
+                        originalname: updateRequest[field.fileNameKey] || `${field.key}.png`,
+                        mimetype: 'application/octet-stream',
+                        size: updateRequest[field.key].length,
+                    };
+                    const path = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+                    updateRequest[field.pathKey] = path;
+                    this.logger.log(`File ${field.key} uploaded (update), path: ${path}`);
+                } catch (err) {
+                    this.logger.error(`Gagal upload file ${field.key} (update): ${err.message}`);
+                    throw new HttpException(`Gagal upload file ${field.key}: ${err.message}`, 500);
+                }
             }
         }
 
-        return "Participant berhasil diperbarui";
+        // Hanya field yang valid di schema yang di-assign ke updateData
+        const updateData: any = {
+            idNumber: req.idNumber,
+            name: req.name,
+            nik: req.nik,
+            dinas: req.dinas,
+            bidang: req.bidang,
+            company: req.company,
+            phoneNumber: req.phoneNumber,
+            nationality: req.nationality,
+            placeOfBirth: req.placeOfBirth,
+            dateOfBirth: req.dateOfBirth ? new Date(req.dateOfBirth) : undefined,
+            simAFileName: req.simAFileName,
+            simAPath: updateRequest.simAPath,
+            simBFileName: req.simBFileName,
+            simBPath: updateRequest.simBPath,
+            ktpFileName: req.ktpFileName,
+            ktpPath: updateRequest.ktpPath,
+            fotoFileName: req.fotoFileName,
+            fotoPath: updateRequest.fotoPath,
+            suratSehatButaWarnaFileName: req.suratSehatButaWarnaFileName,
+            suratSehatButaWarnaPath: updateRequest.suratSehatButaWarnaPath,
+            tglKeluarSuratSehatButaWarna: req.tglKeluarSuratSehatButaWarna ? new Date(req.tglKeluarSuratSehatButaWarna) : undefined,
+            suratBebasNarkobaFileName: req.suratBebasNarkobaFileName,
+            suratBebasNarkobaPath: updateRequest.suratBebasNarkobaPath,
+            tglKeluarSuratBebasNarkoba: req.tglKeluarSuratBebasNarkoba ? new Date(req.tglKeluarSuratBebasNarkoba) : undefined,
+            gmfNonGmf: req.gmfNonGmf,
+            // tambahkan field lain yang memang ada di schema jika perlu
+        };
+
+        // Hapus field undefined/null agar payload bersih
+        Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+        this.logger.debug('Payload update participant ke Prisma:', updateData);
+
+        const result = await this.prismaService.participant.update({
+            where: { id: participantId },
+            data: updateData,
+        });
+
+        this.logger.debug('UpdateParticipant result:', result);
+
+        return 'Participant berhasil diupdate';
     }
 
     async deleteParticipant(participantId: string, user: CurrentUserRequest): Promise<string> {
@@ -672,5 +744,60 @@ export class ParticipantService {
     // Tambahan helper untuk ambil participant tanpa validasi user/role
     async getParticipantRaw(participantId: string): Promise<Participant> {
         return this.findOneParticipant(participantId);
+    }
+
+    // Fungsi baru: Download semua file peserta sebagai ZIP
+    async downloadAllFilesAsZip(participantId: string, res: any): Promise<void> {
+        const participant = await this.findOneParticipant(participantId);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        let fileCount = 0;
+
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="AllFiles_${participant.name || 'Participant'}_${participantId}.zip"`,
+        });
+
+        archive.pipe(res);
+
+        // Daftar file yang ingin di-zip
+        const files = [
+            { path: participant.ktpPath, name: participant.ktpFileName || 'KTP.png' },
+            { path: participant.simAPath, name: participant.simAFileName || 'SIM_A.png' },
+            { path: participant.simBPath, name: participant.simBFileName || 'SIM_B.png' },
+            { path: participant.fotoPath, name: participant.fotoFileName || 'Foto.png' },
+            { path: participant.suratSehatButaWarnaPath, name: participant.suratSehatButaWarnaFileName || 'Surat_Sehat_Buta_Warna.png' },
+            { path: participant.suratBebasNarkobaPath, name: participant.suratBebasNarkobaFileName || 'Surat_Bebas_Narkoba.png' },
+        ];
+
+        for (const file of files) {
+            if (file.path) {
+                try {
+                    // Ambil buffer dari storage dinamis
+                    let buffer: Buffer | null = null;
+                    const storageType = process.env.STORAGE_TYPE || 'minio';
+                    if (storageType === 'supabase') {
+                        const { buffer: buf } = await this.fileUploadService.downloadFile(file.path);
+                        buffer = buf;
+                    } else {
+                        buffer = await getFileBufferFromMinio(file.path);
+                    }
+                    if (buffer) {
+                        archive.append(buffer, { name: file.name });
+                        fileCount++;
+                    }
+                } catch (err) {
+                    // Lewati file yang gagal diambil
+                    this.logger.warn(`Gagal mengambil file ${file.name}: ${err.message}`);
+                }
+            }
+        }
+
+        if (fileCount === 0) {
+            archive.abort();
+            res.status(404).json({ message: 'Data tidak ditemukan.' });
+            return;
+        }
+
+        await archive.finalize();
     }
 }

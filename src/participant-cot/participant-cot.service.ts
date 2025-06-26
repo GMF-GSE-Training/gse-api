@@ -117,6 +117,10 @@ export class ParticipantCotService {
       throw new HttpException('COT tidak ditemukan', 404);
     }
 
+    if (cot.status === 'Selesai') {
+      throw new HttpException('Tidak dapat menambah peserta ke COT yang sudah selesai', 400);
+    }
+
     const participants = await this.prismaService.participant.findMany({
       where: {
         id: { in: AddParticipantToCotRequest.participantIds },

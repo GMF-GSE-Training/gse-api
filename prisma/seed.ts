@@ -1,3 +1,12 @@
+console.log('=== SEED SCRIPT STARTED ===');
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
 import { PrismaClient, SignatureType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
@@ -13,7 +22,6 @@ import { streamArray } from 'stream-json/streamers/StreamArray';
 import { faker } from '@faker-js/faker';
 import { Client as MinioClient } from 'minio';
 import { StorageClient } from '@supabase/storage-js';
-import { ConfigService } from '@nestjs/config';
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -26,7 +34,7 @@ const EXPONENTIAL_BACKOFF_BASE = 2;
 
 // Initialize clients
 const prisma = new PrismaClient();
-const configService = new ConfigService();
+console.log('=== INISIALISASI PRISMA SELESAI ===');
 const dummyDir = path.join(__dirname, 'dummy-data');
 const sampleDir = path.join(__dirname, '..', 'public', 'assets', 'images');
 
@@ -116,7 +124,7 @@ function validateConfiguration() {
     throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
 
-  const storageType = configService.get('STORAGE_TYPE', 'minio') as 'minio' | 'supabase';
+  const storageType = process.env.STORAGE_TYPE || 'minio';
   
   if (storageType === 'supabase') {
     const supabaseVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SUPABASE_BUCKET'];
@@ -139,12 +147,12 @@ function validateConfiguration() {
 
 // Initialize storage client with enhanced validation
 function initializeStorageClient(): StorageConfig {
-  const storageType = configService.get('STORAGE_TYPE', 'minio') as 'minio' | 'supabase';
+  const storageType = process.env.STORAGE_TYPE || 'minio';
   
   if (storageType === 'supabase') {
-    const supabaseUrl = configService.get('SUPABASE_URL');
-    const supabaseServiceKey = configService.get('SUPABASE_SERVICE_KEY');
-    const supabaseBucket = configService.get('SUPABASE_BUCKET');
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+    const supabaseBucket = process.env.SUPABASE_BUCKET;
     
     return {
       client: new StorageClient(`${supabaseUrl}/storage/v1`, {
@@ -155,17 +163,17 @@ function initializeStorageClient(): StorageConfig {
       type: 'supabase',
     };
   } else {
-    const endpoint = configService.get('MINIO_ENDPOINT');
-    const port = configService.get('MINIO_PORT');
-    const accessKey = configService.get('MINIO_ACCESS_KEY');
-    const secretKey = configService.get('MINIO_SECRET_KEY');
-    const bucket = configService.get('MINIO_BUCKET');
+    const endpoint = process.env.MINIO_ENDPOINT;
+    const port = process.env.MINIO_PORT;
+    const accessKey = process.env.MINIO_ACCESS_KEY;
+    const secretKey = process.env.MINIO_SECRET_KEY;
+    const bucket = process.env.MINIO_BUCKET;
     
     return {
       client: new MinioClient({
         endPoint: endpoint,
         port: Number(port),
-        useSSL: configService.get('MINIO_USE_SSL') === 'true',
+        useSSL: process.env.MINIO_USE_SSL === 'true',
         accessKey,
         secretKey,
       }),
@@ -177,6 +185,7 @@ function initializeStorageClient(): StorageConfig {
 
 // Tambahkan di sini agar storageConfig global
 const storageConfig = initializeStorageClient();
+console.log('=== INISIALISASI STORAGE SELESAI ===');
 
 // Utility functions with enhanced retry mechanism
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -446,40 +455,93 @@ async function backupTableIfRequested(tableName: string) {
   }
 }
 
-// Enhanced seeding functions with consistent batch processing
+/**
+ * ENV yang didukung untuk jumlah data dummy:
+ * - DUMMY_ROLE_COUNT
+ * - DUMMY_CAPABILITY_COUNT
+ * - DUMMY_COT_COUNT
+ * - DUMMY_SIGNATURE_COUNT
+ * - DUMMY_CERTIFICATE_COUNT
+ * - DUMMY_PARTICIPANTSCOT_COUNT
+ * - DUMMY_CURRICULUMSYLLABUS_COUNT
+ * - DUMMY_USER_COUNT
+ * - DUMMY_PARTICIPANT_COUNT
+ * - IGNORE_DUMMY_JSON (true/false)
+ */
+
+// Utility untuk load data dari JSON atau generate otomatis
+async function loadOrGenerate<T>(file: string, generator: () => T[], countEnv: string, defaultCount: number): Promise<T[]> {
+  if (process.env.IGNORE_DUMMY_JSON === 'true') {
+    Logger.info(`IGNORE_DUMMY_JSON aktif, generate data dummy untuk ${file}`);
+    return generator();
+  }
+  const data = await loadJson<T>(file);
+  if (data.length > 0) {
+    Logger.info(`Menggunakan data dari ${file} (${data.length} item)`);
+    return data;
+  }
+  Logger.info(`File ${file} kosong, generate data dummy (${defaultCount} item)`);
+  return generator();
+}
+
+// Refactor seedRoles agar role wajib selalu ada
 async function seedRoles() {
   Logger.info('Starting roles seeding');
   await backupTableIfRequested('roles');
-
+  const coreRoles = ['super admin', 'supervisor', 'lcu', 'user'];
+  for (const name of coreRoles) {
+    await prisma.role.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+    Logger.info(`Ensured role exists: ${name}`);
+  }
+  // Tambahkan role lain dari roles.json jika ada
   const raw = await loadJson<any>('roles.json');
-  
-  const data = raw.map((r) => {
-    if (typeof r === 'string') return { name: r };
-    if (Array.isArray(r) && r.length >= 2) return { id: r[0], name: r[1] };
-    return { id: r.id ?? undefined, name: r.name ?? r };
-  });
-  
+  const additionalRoles = raw.filter((r: any) => !coreRoles.includes(typeof r === 'string' ? r : r.name));
+  const data = additionalRoles.map((r: any) => ({
+    name: typeof r === 'string' ? r : r.name,
+  }));
   if (data.length > 0) {
     await processBatch(data, async (role) => {
-      await prisma.role.create({ data: role });
-    }, BATCH_SIZE, 'seed-roles');
-    
-    Logger.info(`Seeded ${data.length} roles`);
+      await prisma.role.upsert({
+        where: { name: role.name },
+        update: {},
+        create: role,
+      });
+    }, BATCH_SIZE, 'seed-additional-roles');
+    Logger.info(`Seeded ${data.length} additional roles`);
   } else {
-    Logger.info('No roles to seed');
+    Logger.info('No additional roles to seed');
   }
 }
 
+// Refactor seedCapabilities
 async function seedCapabilities() {
   Logger.info('Starting capabilities seeding');
   await backupTableIfRequested('capabilities');
-  
+  const count = parseInt(process.env.DUMMY_CAPABILITY_COUNT || '10', 10);
+    const numFields = [
+      'totalDuration',
+      'totalPracticeDurationCompetency',
+      'totalPracticeDurationRegGse',
+      'totalTheoryDurationCompetency',
+      'totalTheoryDurationRegGse',
+    ];
   const raw = await loadJson<any>('capabilities.json');
-  
   let data: any[] = [];
-  if (raw.length === 0) {
-    Logger.warn('No capabilities data found, generating dummy data');
-    data = Array.from({ length: 10 }, (_, i) => ({
+  if (raw.length > 0) {
+    data = raw.map(c => {
+      const item: any = { ...c };
+      numFields.forEach(f => {
+        item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
+      });
+      return item;
+    });
+    Logger.info(`Menggunakan data dari capabilities.json (${data.length} item)`);
+  } else {
+    data = Array.from({ length: count }, (_, i) => ({
       id: faker.string.uuid(),
       ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
       trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
@@ -490,391 +552,280 @@ async function seedCapabilities() {
       totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
       totalDuration: faker.number.int({ min: 50, max: 500 }),
     }));
-  } else {
-    const numFields = [
-      'totalDuration',
-      'totalPracticeDurationCompetency',
-      'totalPracticeDurationRegGse',
-      'totalTheoryDurationCompetency',
-      'totalTheoryDurationRegGse',
-    ];
-    
-    data = raw.map(c => {
-      const item: any = { ...c };
-      numFields.forEach(f => {
-        item[f] = sanitizers.toInt(item[f]);
-      });
-      return item;
-    });
+    Logger.info(`File capabilities.json kosong, generate data dummy (${count} item)`);
   }
-  
   if (data.length > 0) {
     await processBatch(data, async (capability) => {
       await prisma.capability.create({ data: capability });
     }, BATCH_SIZE, 'seed-capabilities');
-    
     Logger.info(`Seeded ${data.length} capabilities`);
   } else {
     Logger.info('No capabilities to seed');
   }
 }
 
-// Enhanced participant seeding with improved error handling
-async function seedParticipants() {
-  Logger.info('Starting participants seeding');
+/**
+ * Seeder ini telah dioptimalkan untuk membuat data dummy User & Participant secara otomatis,
+ * tanpa mengandalkan file JSON besar. Data User peserta akan selalu dibuat berelasi dengan Participant baru,
+ * dan field relasi (participantId, idNumber) akan diisi dengan data valid (bukan 'dummy', '0', atau null).
+ * Untuk user non-peserta (admin, supervisor, dsb), field relasi dibiarkan null.
+ * Data penting dari users.json (superadmin, supervisor, dsb) tetap dipertahankan, namun relasi diatur otomatis.
+ *
+ * Opsi jumlah data dummy dapat diatur via ENV/flag jika diperlukan.
+ */
+// Refactor seedParticipantsAndUsers agar jumlah batch user penting dan user massal bisa diatur dari ENV
+async function seedParticipantsAndUsers() {
+  Logger.info('Starting participants & users seeding (multi-role batch, ENV configurable)');
   await backupTableIfRequested('participants');
-  
-  const participantsPath = path.join(dummyDir, 'participants.json');
-  let rawParticipants: any[] = [];
-
-  // Stream processing for large files
-  if (fsSync.existsSync(participantsPath)) {
-    try {
-    const pipeline = chain([
-        fsSync.createReadStream(participantsPath),
-      parser(),
-      streamArray(),
-    ]);
-      
-    for await (const data of pipeline) {
-      rawParticipants.push(data.value);
-      }
-      Logger.info(`Loaded ${rawParticipants.length} participants from file`);
-    } catch (error) {
-      Logger.error('Failed to load participants from file', { error: (error as Error).message });
-    }
-  }
-
-  // Generate dummy data if no file exists
-  if (rawParticipants.length === 0) {
-    Logger.warn('Generating dummy participants...');
-    rawParticipants = Array.from({ length: 50 }, (_, i) => {
-      const gender = faker.helpers.arrayElement(['male', 'female']) as 'male' | 'female';
-      return {
-        id: faker.string.uuid(),
-        idNumber: `P${(i + 1).toString().padStart(3, '0')}`,
-        name: faker.person.fullName({ sex: gender }),
-        nik: faker.string.numeric(16),
-        dinas: faker.helpers.arrayElement(['TA', 'TB', 'TC', 'TF', 'TJ', 'TL', 'TM', 'TR', 'TU', 'TV', 'TZ']),
-        bidang: faker.commerce.department(),
-        company: faker.company.name(),
-        email: faker.internet.email().toLowerCase(),
-        phoneNumber: faker.phone.number('08##########'),
-        nationality: 'Indonesia',
-        placeOfBirth: faker.location.city(),
-        dateOfBirth: faker.date.past({ years: 30, refDate: '2000-01-01' }).toISOString().split('T')[0],
-        gmfNonGmf: faker.helpers.arrayElement(['GMF', 'Non-GMF']),
-      };
-      });
-  }
-
-  if (rawParticipants.length === 0) {
-    Logger.info('No participants to seed');
-    return;
-  }
-
-  const localIp = Object.values(os.networkInterfaces())
-    .flat()
-    .find((x) => x?.family === 'IPv4' && !x.internal)?.address ?? 'localhost';
-  
-  const frontendUrl = process.env.FRONTEND_URL || `http://${localIp}:4200`;
-  
-  const failedParticipants: any[] = [];
-  
-  // Process participants in batches with enhanced error handling
-  const processParticipant = async (p: any, index: number) => {
-    try {
-      // Clean null values
-      Object.keys(p).forEach(key => {
-      if (p[key] === '' || p[key] === undefined) p[key] = null;
-      });
-
-      // Convert dates
-    const toDate = (d: string | null): Date | null => {
-      if (!d || d.trim() === '') return null;
-      const date = new Date(`${d}T00:00:00Z`);
-      return isNaN(date.getTime()) ? null : date;
-    };
-      
-      ['tglKeluarSuratBebasNarkoba', 'tglKeluarSuratSehatButaWarna', 'dateOfBirth']
-        .forEach(field => p[field] = toDate(p[field]));
-      
-      // Upload files concurrently with individual error handling
-      const uploadPromises = [
-        uploadToStorage(path.join(sampleDir, predefinedFiles.foto), `foto/${p.id}.jpg`).catch(e => {
-          Logger.warn(`Failed to upload foto for participant ${p.id}`, { error: e.message });
-          return '';
-        }),
-        uploadToStorage(path.join(sampleDir, predefinedFiles.ktp), `ktp/${p.id}.jpg`).catch(e => {
-          Logger.warn(`Failed to upload ktp for participant ${p.id}`, { error: e.message });
-          return '';
-        }),
-        uploadToStorage(path.join(sampleDir, predefinedFiles.simA), `simA/${p.id}.jpg`).catch(e => {
-          Logger.warn(`Failed to upload simA for participant ${p.id}`, { error: e.message });
-          return '';
-        }),
-        uploadToStorage(path.join(sampleDir, predefinedFiles.simB), `simB/${p.id}.jpg`).catch(e => {
-          Logger.warn(`Failed to upload simB for participant ${p.id}`, { error: e.message });
-          return '';
-        }),
-        uploadToStorage(path.join(sampleDir, predefinedFiles.suratSehatButaWarna), `suratSehat/${p.id}.jpg`).catch(e => {
-          Logger.warn(`Failed to upload suratSehat for participant ${p.id}`, { error: e.message });
-          return '';
-        }),
-        uploadToStorage(path.join(sampleDir, predefinedFiles.suratBebasNarkoba), `suratNarkoba/${p.id}.jpg`).catch(e => {
-          Logger.warn(`Failed to upload suratNarkoba for participant ${p.id}`, { error: e.message });
-          return '';
-        }),
-      ];
-      
-      const [fotoPath, ktpPath, simAPath, simBPath, suratSehatPath, suratNarkobaPath] = 
-        await Promise.all(uploadPromises);
-      
-      // Generate and upload QR code using buffer (no temp file)
-      // const url = `${frontendUrl}/participant/detail/${p.id}`;
-      // const qrDataUrl = await QRCode.toDataURL(url);
-      // const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
-      // let qrCodePath = '';
-      // try {
-      //   qrCodePath = await uploadQRCodeBuffer(qrBuffer, `qrcode/${p.id}.png`);
-      // } catch (error) {
-      //   Logger.warn(`Failed to upload QR code for participant ${p.id}`, { error: (error as Error).message });
-      // }
-      // return {
-      //   ...p,
-      //   qrCodePath,
-      //   // Remove unused fields
-      //   foto: undefined,
-      //   ktp: undefined,
-      //   simA: undefined,
-      //   simB: undefined,
-      //   suratSehatButaWarna: undefined,
-      //   suratBebasNarkoba: undefined,
-      //   qrCode: undefined,
-      // };
-      return {
-        ...p,
-        fotoPath,
-        ktpPath,
-        simAPath,
-        simBPath,
-        suratSehatButaWarnaPath: suratSehatPath,
-        suratBebasNarkobaPath: suratNarkobaPath,
-        qrCodePath: undefined,
-        qrCodeLink: undefined,
-        // Remove unused fields
-        foto: undefined,
-        ktp: undefined,
-        simA: undefined,
-        simB: undefined,
-        suratSehatButaWarna: undefined,
-        suratBebasNarkoba: undefined,
-        qrCode: undefined,
-      };
-    } catch (error) {
-      Logger.error(`Failed to process participant ${p.id || index}`, { 
-        error: (error as Error).message,
-        participantData: { id: p.id, name: p.name, email: p.email }
-      });
-      failedParticipants.push({ ...p, processingError: (error as Error).message });
-      throw error;
-    }
-  };
-  
-  try {
-    const processedParticipants = await processBatch(
-      rawParticipants, 
-      processParticipant, 
-      10, // Smaller batch size for file uploads
-      'process-participants'
-    );
-    
-    // Insert in batches
-    await processBatch(processedParticipants, async (participant) => {
-      await prisma.participant.create({ data: participant });
-    }, BATCH_SIZE, 'insert-participants');
-    
-    Logger.info(`Seeded ${processedParticipants.length} participants`);
-    
-    if (failedParticipants.length > 0) {
-      const failedFilePath = path.join(__dirname, 'failed_participants.json');
-      await fs.writeFile(failedFilePath, JSON.stringify(failedParticipants, null, 2));
-      Logger.warn(`${failedParticipants.length} participants failed processing. Details saved to ${failedFilePath}`);
-    }
-    
-  } catch (error) {
-    Logger.error('Critical failure in participant seeding', { error: (error as Error).message });
-    
-    // Save failed data for debugging
-    const failedFilePath = path.join(__dirname, 'failed_participants_debug.json');
-    await fs.writeFile(failedFilePath, JSON.stringify({
-      rawParticipants,
-      failedParticipants,
-      error: (error as Error).message,
-      timestamp: new Date().toISOString()
-    }, null, 2));
-    
-    throw error;
-  }
-}
-
-// Enhanced user seeding with better password management
-async function seedUsers() {
-  Logger.info('Starting users seeding');
   await backupTableIfRequested('users');
-  
-  const coreRoles = ['super admin', 'supervisor', 'lcu', 'user'];
-  
-  await processBatch(coreRoles, async (roleName) => {
-    await prisma.role.upsert({
-      where: { name: roleName },
-      create: { name: roleName },
-      update: {}
-    });
-  }, BATCH_SIZE, 'seed-core-roles');
 
+  // Fetch role IDs
   const roles = await prisma.role.findMany();
   const roleMap = Object.fromEntries(roles.map(r => [r.name.toLowerCase(), r.id]));
   const dinasList = ['TA', 'TB', 'TC', 'TF', 'TJ', 'TL', 'TM', 'TR', 'TU', 'TV', 'TZ'];
-  
-  Logger.info('Pre-hashing common passwords...');
-  const commonPasswords = {
-    'Admin12345': await bcrypt.hash('Admin12345', 10),
-    'Supervisor12345': await bcrypt.hash('Supervisor12345', 10),
-    'Lcu12345': await bcrypt.hash('Lcu12345', 10),
-    'User12345': await bcrypt.hash('User12345', 10),
-  };
-  
-  const upsertUser = async (userData: any, index: number) => {
-    try {
-      const passwordHash = commonPasswords[userData.passwordPlain as keyof typeof commonPasswords] ||
-        await bcrypt.hash(userData.passwordPlain, 10);
-      
+
+  // Ambil jumlah dari ENV atau default
+  const superadminCount = parseInt(process.env.DUMMY_SUPERADMIN_COUNT || '7', 10);
+  const supervisorCount = parseInt(process.env.DUMMY_SUPERVISOR_COUNT || '14', 10);
+  const lcuCount = parseInt(process.env.DUMMY_LCU_COUNT || '7', 10);
+  const userCount = parseInt(process.env.DUMMY_USER_COUNT || '80', 10);
+
+  // Batch user penting
+  const importantUsers: any[] = [];
+  for (let i = 1; i <= superadminCount; i++) {
+    importantUsers.push({
+      email: `superadmin${i}@example.com`,
+      idNumber: `SA${i.toString().padStart(3, '0')}`,
+      name: `Super Admin ${i}`,
+      password: await bcrypt.hash('Admin12345', 10),
+      role: 'super admin',
+      nik: `10000000000000${i.toString().padStart(2, '0')}`,
+    });
+  }
+  for (let i = 1; i <= supervisorCount; i++) {
+    importantUsers.push({
+      email: `supervisor${i}@example.com`,
+      idNumber: `SV${i.toString().padStart(3, '0')}`,
+      name: `Supervisor ${i}`,
+      password: await bcrypt.hash('Supervisor12345', 10),
+      role: 'supervisor',
+      dinas: dinasList[i % dinasList.length],
+      nik: `20000000000000${i.toString().padStart(2, '0')}`,
+    });
+  }
+  for (let i = 1; i <= lcuCount; i++) {
+    importantUsers.push({
+      email: `lcu${i}@example.com`,
+      idNumber: `LCU${i.toString().padStart(3, '0')}`,
+      name: `LCU ${i}`,
+      password: await bcrypt.hash('Lcu12345', 10),
+      role: 'lcu',
+      dinas: dinasList[(i + 1) % dinasList.length],
+      nik: `30000000000000${i.toString().padStart(2, '0')}`,
+    });
+  }
+  const usedEmails = new Set<string>(importantUsers.map(u => u.email));
+  const usedNIKs = new Set<string>(importantUsers.map(u => u.nik));
+  const usedIdNumbers = new Set<string>(importantUsers.map(u => u.idNumber));
+
+  // Upsert user penting
+  await processBatch(importantUsers, async (user) => {
     await prisma.user.upsert({
-        where: { email: userData.email },
+      where: { email: user.email },
       create: {
-          email: userData.email,
-          idNumber: userData.idNumber ?? null,
-          name: userData.name ?? userData.email,
-          password: passwordHash,
-          roleId: roleMap[userData.role.toLowerCase()],
-          participantId: userData.participantId ?? null,
-          dinas: userData.dinas ?? null,
+        email: user.email,
+        idNumber: user.idNumber,
+        name: user.name,
+        password: user.password,
+        roleId: roleMap[user.role.toLowerCase()],
+        dinas: user.dinas || null,
+        nik: user.nik,
         verifiedAccount: true,
       },
       update: {
-          password: passwordHash,
-          roleId: roleMap[userData.role.toLowerCase()],
-          dinas: userData.dinas ?? undefined,
+        password: user.password,
+        roleId: roleMap[user.role.toLowerCase()],
+        dinas: user.dinas || undefined,
+        nik: user.nik,
       },
     });
-    } catch (error) {
-      Logger.error(`Failed to upsert user ${userData.email || index}`, {
-        error: (error as Error).message,
-        userData: { email: userData.email, idNumber: userData.idNumber }
-      });
-      throw error;
-    }
-  };
-  
-  const adminUsers = [
-    ...Array.from({ length: 5 }, (_, i) => ({
-      email: `superadmin${i + 1}@example.com`,
-      idNumber: `SA${(i + 1).toString().padStart(3, '0')}`,
-      name: `Super Admin ${i + 1}`,
-      passwordPlain: 'Admin12345',
-      role: 'super admin',
-    })),
-    ...Array.from({ length: 5 }, (_, i) => ({
-      email: `supervisor${i + 1}@example.com`,
-      idNumber: `SP${(i + 1).toString().padStart(3, '0')}`,
-      name: `Supervisor ${i + 1}`,
-      dinas: dinasList[i],
-      passwordPlain: 'Supervisor12345',
-      role: 'supervisor',
-    })),
-    ...Array.from({ length: 11 }, (_, i) => ({
-      email: `lcu${i + 1}@example.com`,
-      idNumber: `LCU${(i + 1).toString().padStart(3, '0')}`,
-      name: `LCU ${i + 1}`,
-      dinas: dinasList[i % dinasList.length],
-      passwordPlain: 'Lcu12345',
-      role: 'lcu',
-    })),
-  ];
-  
-  await processBatch(adminUsers, upsertUser, 20, 'seed-admin-users');
-  
-  const participants = await prisma.participant.findMany({ take: 30 });
-  const participantUsers = participants.map((p, idx) => ({
-    email: p.email ?? `participant${idx + 1}@example.com`,
-    idNumber: p.idNumber,
-      name: p.name,
-      participantId: p.id,
-    dinas: p.dinas,
-      passwordPlain: 'User12345',
+    Logger.info(`Seeded important user: ${user.email}`);
+  }, BATCH_SIZE, 'seed-important-users');
+
+  // Generate participants dan user role 'user' (berelasi)
+  const participantCount = userCount;
+  const participants: any[] = [];
+  const participantUsers: any[] = [];
+  for (let i = 0; i < participantCount; i++) {
+      const gender = faker.helpers.arrayElement(['male', 'female']) as 'male' | 'female';
+    const participantId = faker.string.uuid();
+    const idNumber = `P${(i + 1).toString().padStart(3, '0')}`;
+    let email: string;
+    do {
+      email = `user${i + 1}@example.com`;
+    } while (usedEmails.has(email));
+    usedEmails.add(email);
+    let nik: string;
+    do {
+      nik = faker.string.numeric(16);
+    } while (usedNIKs.has(nik));
+    usedNIKs.add(nik);
+    let idNum: string;
+    do {
+      idNum = idNumber;
+    } while (usedIdNumbers.has(idNum));
+    usedIdNumbers.add(idNum);
+    const dinas = faker.helpers.arrayElement(dinasList);
+    const participant = {
+      id: participantId,
+      idNumber: idNum,
+        name: faker.person.fullName({ sex: gender }),
+      nik,
+      dinas,
+        bidang: faker.commerce.department(),
+        company: faker.company.name(),
+      email,
+      phoneNumber: '08' + faker.string.numeric(10),
+        nationality: 'Indonesia',
+        placeOfBirth: faker.location.city(),
+      dateOfBirth: faker.date.past({ years: 30, refDate: '2000-01-01' }),
+      simAFileName: 'SIM_A.jpg',
+      simAPath: `/simA/${participantId}.jpg`,
+      simBFileName: 'SIM_B.jpg',
+      simBPath: `/simB/${participantId}.jpg`,
+      ktpFileName: 'ktp.jpg',
+      ktpPath: `/ktp/${participantId}.jpg`,
+      fotoFileName: 'foto.jpg',
+      fotoPath: `/foto/${participantId}.jpg`,
+      suratSehatButaWarnaFileName: 'surat_ket_sehat.jpg',
+      suratSehatButaWarnaPath: `/suratSehat/${participantId}.jpg`,
+      tglKeluarSuratSehatButaWarna: faker.date.past({ years: 10, refDate: '2015-01-01' }),
+      suratBebasNarkobaFileName: 'surat_bebas_narkoba.jpg',
+      suratBebasNarkobaPath: `/suratNarkoba/${participantId}.jpg`,
+      tglKeluarSuratBebasNarkoba: faker.date.past({ years: 10, refDate: '2015-01-01' }),
+      qrCodePath: `/qrcode/${participantId}.png`,
+      qrCodeLink: `https://dummy-frontend/participant/detail/${participantId}`,
+      gmfNonGmf: faker.helpers.arrayElement(['GMF', 'Non-GMF'])
+    };
+    participants.push(participant);
+    participantUsers.push({
+      email,
+      idNumber: idNum,
+      name: participant.name,
+      password: await bcrypt.hash('User12345', 10),
       role: 'user',
-  }));
-  
-  await processBatch(participantUsers, upsertUser, 20, 'seed-participant-users');
-  
-  const usersFromJson = await loadJson<any>('users.json');
-  if (usersFromJson.length > 0) {
-  const existingIds = await prisma.user.findMany({ select: { idNumber: true } });
-    const usedIdNumbers = new Set(existingIds.map(r => r.idNumber).filter(Boolean) as string[]);
+      participantId,
+      dinas,
+      nik,
+      verifiedAccount: true,
+    });
+  }
 
-    const jsonUserProcessor = async (u: any, index: number) => {
-      try {
-  const bcryptRegex = /^\$2[aby]\$/;
-    const passwordToStore = bcryptRegex.test(u.password)
-          ? u.password
-      : await bcrypt.hash(u.password, 10);
+  // Insert participants
+  await processBatch(participants, async (participant) => {
+      await prisma.participant.create({ data: participant });
+    }, BATCH_SIZE, 'insert-participants');
+    
+  // Ambil semua participantId yang valid
+  const allParticipants = await prisma.participant.findMany({ select: { id: true } });
+  const validParticipantIds = new Set(allParticipants.map(p => p.id));
 
-        let idNumberToUse = u.idNumber ?? null;
-    if (idNumberToUse && usedIdNumbers.has(idNumberToUse)) {
-          idNumberToUse = null;
+  // Data dari users.json, hanya yang valid dan tidak duplikat, dan participantId valid/null
+  let usersFromJson = (await loadJson<any>('users.json')).filter(u =>
+    u.email && !usedEmails.has(u.email) && u.nik && !usedNIKs.has(u.nik) && u.idNumber && !usedIdNumbers.has(u.idNumber)
+  );
+  usersFromJson = usersFromJson.filter(u => !u.participantId || validParticipantIds.has(u.participantId));
+  // --- PATCH: filter NIK unik antar user JSON ---
+  const filteredUsersFromJson: any[] = [];
+  for (const u of usersFromJson) {
+    if (usedNIKs.has(u.nik)) {
+      Logger.warn(`Skip user from JSON karena NIK duplikat: ${u.email} (${u.nik})`);
+      continue;
     }
-    if (idNumberToUse) usedIdNumbers.add(idNumberToUse);
+    if (usedIdNumbers.has(u.idNumber)) {
+      Logger.warn(`Skip user from JSON karena idNumber duplikat: ${u.email} (${u.idNumber})`);
+      continue;
+    }
+    filteredUsersFromJson.push(u);
+    usedEmails.add(u.email);
+    usedNIKs.add(u.nik);
+    usedIdNumbers.add(u.idNumber);
+  }
+  usersFromJson = filteredUsersFromJson;
+  // --- END PATCH ---
 
+  // Upsert user role 'user' (participant)
+  await processBatch(participantUsers, async (user) => {
     await prisma.user.upsert({
-      where: { email: u.email },
-          update: {},
+      where: { email: user.email },
       create: {
-        email: u.email,
-        idNumber: idNumberToUse,
-        name: u.name,
-        password: passwordToStore,
-        roleId: roleMap[(u.role || 'user').toLowerCase()],
-        participantId: u.participantId ?? null,
+      email: user.email,
+      idNumber: user.idNumber,
+      name: user.name,
+      password: user.password,
+        roleId: roleMap[user.role.toLowerCase()],
+      participantId: user.participantId,
+      dinas: user.dinas,
+      nik: user.nik,
         verifiedAccount: true,
       },
+      update: {
+        password: user.password,
+        roleId: roleMap[user.role.toLowerCase()],
+        participantId: user.participantId,
+        dinas: user.dinas,
+        nik: user.nik,
+      },
     });
-      } catch (error) {
-        Logger.error(`Failed to process JSON user ${u.email || index}`, {
-          error: (error as Error).message,
-          userData: { email: u.email, idNumber: u.idNumber }
-        });
-        throw error;
-      }
-    };
-    
-    await processBatch(usersFromJson, jsonUserProcessor, 20, 'seed-json-users');
-  }
-  
-  const [{ count }] = await prisma.$queryRawUnsafe<{ count: string }[]>(`SELECT count(*) FROM "users"`);
-  Logger.info(`Users table now has ${count} rows`);
+  }, BATCH_SIZE, 'seed-participant-users');
+
+  // Upsert user dari JSON
+  await processBatch(usersFromJson, async (user) => {
+    const password = user.password && /^\$2[aby]\$/.test(user.password) ? user.password : await bcrypt.hash(user.password || 'User12345', 10);
+    await prisma.user.upsert({
+      where: { email: user.email },
+      create: {
+        email: user.email,
+        idNumber: user.idNumber || null,
+        name: user.name || user.email,
+        password,
+        roleId: roleMap[(user.role || 'user').toLowerCase()],
+        participantId: user.participantId || null,
+        dinas: user.dinas || null,
+        nik: user.nik,
+        verifiedAccount: true,
+      },
+      update: {
+        password,
+        roleId: roleMap[(user.role || 'user').toLowerCase()],
+        dinas: user.dinas || undefined,
+        nik: user.nik,
+      },
+    });
+  }, BATCH_SIZE, 'seed-json-users');
+
+  Logger.info(`Seeded ${participants.length} participants & ${participantUsers.length + importantUsers.length + usersFromJson.length} users (multi-role batch, ENV configurable)`);
 }
 
+// Refactor seedCots
 async function seedCots() {
   Logger.info('Starting COTs seeding');
   await backupTableIfRequested('cots');
-
+  const count = parseInt(process.env.DUMMY_COT_COUNT || '5', 10);
+  const numFields = [];
   const raw = await loadJson<any>('cots.json');
-  
   let data: any[] = [];
-  if (raw.length === 0) {
-    Logger.warn('No COTs data found, generating dummy data');
-    data = Array.from({ length: 5 }, () => ({
+  if (raw.length > 0) {
+    data = raw.map(c => {
+      const item: any = { ...c };
+      // Konversi field tanggal ke Date
+      item.startDate = item.startDate ? new Date(item.startDate) : new Date();
+      item.endDate = item.endDate ? new Date(item.endDate) : new Date();
+      return item;
+    });
+    Logger.info(`Menggunakan data dari cots.json (${data.length} item)`);
+  } else {
+    data = Array.from({ length: count }, () => ({
         id: faker.string.uuid(),
         startDate: faker.date.recent({ days: 30 }),
       endDate: faker.date.future({ years: 1 }),
@@ -885,256 +836,249 @@ async function seedCots() {
         practicalInstructor2: faker.person.fullName(),
         status: faker.helpers.arrayElement(['Menunggu', 'Berlangsung', 'Selesai']),
     }));
-  } else {
-    data = raw.map(c => ({
-      id: c.id ?? faker.string.uuid(),
-      startDate: sanitizers.toDateObj(c.startDate) ?? new Date(),
-      endDate: sanitizers.toDateObj(c.endDate) ?? new Date(),
-    trainingLocation: c.trainingLocation ?? 'N/A',
-    theoryInstructorRegGse: c.theoryInstructorRegGse ?? 'N/A',
-    theoryInstructorCompetency: c.theoryInstructorCompetency ?? 'N/A',
-    practicalInstructor1: c.practicalInstructor1 ?? 'N/A',
-    practicalInstructor2: c.practicalInstructor2 ?? 'N/A',
-    status: c.status ?? 'Menunggu',
-  }));
+    Logger.info(`File cots.json kosong, generate data dummy (${count} item)`);
   }
-
   if (data.length > 0) {
     await processBatch(data, async (cot) => {
       await prisma.cOT.create({ data: cot });
     }, BATCH_SIZE, 'seed-cots');
-    
     Logger.info(`Seeded ${data.length} COTs`);
   } else {
     Logger.info('No COTs to seed');
   }
 }
 
+// Refactor seedCapabilityCots
 async function seedCapabilityCots() {
   Logger.info('Starting capabilityCots seeding');
   await backupTableIfRequested('capabilityCots');
-  
+  const count = parseInt(process.env.DUMMY_CAPABILITYCOT_COUNT || '20', 10);
   const raw = await loadJson<any>('capabilitycots.json');
   let data = raw.map(r => ({
     capabilityId: r.capabilityId ?? r[0],
     cotId: r.cotId ?? r[1]
   }));
-
   if (data.length === 0) {
     Logger.warn('No capabilityCots data found, generating dummy links');
     const [caps, cots] = await Promise.all([
       prisma.capability.findMany(),
       prisma.cOT.findMany(),
     ]);
-    data = caps.flatMap(cap => 
-      cots.map(cot => ({
-        capabilityId: cap.id,
-        cotId: cot.id
-      }))
-    );
+    // --- PATCH: pastikan kombinasi unik ---
+    const uniquePairs = new Set<string>();
+    const maxPairs = caps.length * cots.length;
+    const targetCount = Math.min(count, maxPairs);
+    data = [];
+    while (data.length < targetCount) {
+      const cap = faker.helpers.arrayElement(caps);
+      const cot = faker.helpers.arrayElement(cots);
+      const key = `${cap.id}_${cot.id}`;
+      if (!uniquePairs.has(key)) {
+        uniquePairs.add(key);
+        data.push({ capabilityId: cap.id, cotId: cot.id });
+      }
+    }
+    // --- END PATCH ---
   }
-  
   if (data.length > 0) {
     await processBatch(data, async (capabilityCot) => {
       await prisma.capabilityCOT.create({ data: capabilityCot });
     }, BATCH_SIZE, 'seed-capability-cots');
-    
     Logger.info(`Seeded ${data.length} capabilityCots`);
   } else {
     Logger.info('No capabilityCots to seed');
   }
 }
 
+// Refactor seedSignatures
 async function seedSignatures() {
   Logger.info('Starting signatures seeding');
   await backupTableIfRequested('signatures');
-  
-  const signaturesToCreate = [
-    {
+  const count = parseInt(process.env.DUMMY_SIGNATURE_COUNT || '2', 10);
+  const data = await loadOrGenerate('signatures.json', () => {
+    return Array.from({ length: count }, (_, i) => ({
       id: randomUUID(),
-      idNumber: 'SIGNER001',
-      role: 'Manager',
-      name: 'Manager Signatory',
-      eSignFileName: 'e-sign1.png',
-      signatureType: SignatureType.SIGNATURE1,
+      idNumber: `SIGNER${(i + 1).toString().padStart(3, '0')}`,
+      role: faker.person.jobTitle(),
+      name: faker.person.fullName(),
+      eSignFileName: `e-sign${i + 1}.png`,
+      eSignPath: `/esign/${faker.string.uuid()}.png`,
+      signatureType: i % 2 === 0 ? SignatureType.SIGNATURE1 : SignatureType.SIGNATURE2,
       status: true,
-    },
-    {
-      id: randomUUID(),
-      idNumber: 'SIGNER002',
-      role: 'Supervisor',
-      name: 'Supervisor Signatory',
-      eSignFileName: 'e-sign2.png',
-      signatureType: SignatureType.SIGNATURE2,
-      status: true,
-    },
+    }));
+  }, 'DUMMY_SIGNATURE_COUNT', count);
+
+  // --- PATCH: filter hanya field valid ---
+  const validFields = [
+    'id', 'idNumber', 'role', 'name', 'eSignFileName', 'eSignPath', 'signatureType', 'status'
   ];
-  
-  const data = await Promise.all(signaturesToCreate.map(async (s, index) => {
-    try {
-      const localPath = path.join(sampleDir, s.eSignFileName);
-      let eSignPath = '';
-      try {
-        eSignPath = await uploadToStorage(localPath, `esign/${s.id}.png`);
-      } catch (error) {
-        Logger.warn(`Failed to upload eSign for signature ${s.idNumber}`, { error: (error as Error).message });
-      }
-      return {
-        id: s.id,
-        idNumber: s.idNumber,
-        role: s.role,
-        name: s.name,
-        eSignFileName: s.eSignFileName,
-        eSignPath,
-        signatureType: s.signatureType,
-        status: s.status,
-      };
-    } catch (error) {
-      Logger.error(`Failed to process signature ${s.idNumber || index}`, {
-        error: (error as Error).message,
-        signatureData: { idNumber: s.idNumber, name: s.name }
-      });
-      throw error;
+  const filteredData = data.map((item) => {
+    const filtered: any = {};
+    for (const key of validFields) {
+      if (item[key] !== undefined) filtered[key] = item[key];
     }
-  }));
-  
-  if (data.length > 0) {
-    await processBatch(data, async (signature) => {
+    // --- PATCH: pastikan status boolean ---
+    if ('status' in filtered) {
+      const v = filtered.status;
+      if (typeof v !== 'boolean') {
+        filtered.status = ['t', 'true', '1', 1, 'yes', 'y'].includes(String(v).toLowerCase());
+      }
+    }
+    // --- END PATCH ---
+    return filtered;
+  });
+  // --- END PATCH ---
+
+  if (filteredData.length > 0) {
+    await processBatch(filteredData, async (signature) => {
       await prisma.signature.create({ data: signature });
     }, BATCH_SIZE, 'seed-signatures');
-    
-    Logger.info(`Seeded ${data.length} signatures`);
+    Logger.info(`Seeded ${filteredData.length} signatures`);
   } else {
     Logger.info('No signatures to seed');
   }
 }
 
+// Refactor seedCertificates
 async function seedCertificates() {
   Logger.info('Starting certificates seeding');
   await backupTableIfRequested('certificates');
-  
+  const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '10', 10);
+  const numFields = ['theoryScore', 'practiceScore'];
   const raw = await loadJson<any>('certificates.json');
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  
-  let data = raw
-    .filter(c => {
+  let data = raw.filter(c => {
       const sig = c.signatureId ?? c[6];
       const cot = c.cotId ?? c[5];
       return uuid.test(sig) && uuid.test(cot);
-    })
-    .map(c => ({
-      id: c.id ?? faker.string.uuid(),
-      cotId: c.cotId ?? c[5],
-      signatureId: c.signatureId ?? c[6],
-      certificateNumber: c.certificateNumber ?? 'N/A',
-      attendance: sanitizers.toBool(c.attendance),
-      theoryScore: sanitizers.toFloat(c.theoryScore) ?? 0,
-      practiceScore: sanitizers.toFloat(c.practiceScore) ?? 0,
-    }));
-  
+  }).map(c => {
+    const item: any = { ...c };
+    numFields.forEach(f => {
+      item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
+    });
+    return item;
+  });
   if (data.length === 0) {
     Logger.warn('No valid certificate entries found, generating dummy data');
     const [cots, signatures] = await Promise.all([
       prisma.cOT.findMany(),
-      prisma.signature.findMany({ take: 1 }),
+      prisma.signature.findMany(),
     ]);
-    const sigId = signatures[0]?.id ?? randomUUID();
-    data = cots.map(c => ({
+    data = Array.from({ length: count }, () => {
+      const cot = faker.helpers.arrayElement(cots);
+      const sig = faker.helpers.arrayElement(signatures);
+      return {
       id: randomUUID(),
-      cotId: c.id,
-      signatureId: sigId,
-      certificateNumber: `CERT-${c.id.substring(0, 6).toUpperCase()}`,
+        cotId: cot.id,
+        signatureId: sig.id,
+        certificateNumber: `CERT-${cot.id.substring(0, 6).toUpperCase()}`,
       attendance: true,
-      theoryScore: 80,
-      practiceScore: 85,
-    }));
+        theoryScore: faker.number.int({ min: 60, max: 100 }),
+        practiceScore: faker.number.int({ min: 60, max: 100 }),
+      };
+    });
   }
-
   if (data.length > 0) {
     await processBatch(data, async (certificate) => {
       await prisma.certificate.create({ data: certificate });
     }, BATCH_SIZE, 'seed-certificates');
-    
     Logger.info(`Seeded ${data.length} certificates`);
   } else {
     Logger.info('No certificates to seed');
   }
 }
 
+// Refactor seedParticipantsCot
 async function seedParticipantsCot() {
   Logger.info('Starting participantsCot seeding');
   await backupTableIfRequested('participantsCot');
-  
+  const count = parseInt(process.env.DUMMY_PARTICIPANTSCOT_COUNT || '20', 10);
   const raw = await loadJson<any>('participantscot.json');
   let data = raw.map(r => ({
     id: r.id ?? faker.string.uuid(),
     participantId: r.participantId ?? r[0],
     cotId: r.cotId ?? r[1]
   }));
-
   if (data.length === 0) {
     Logger.warn('No participantsCot data found, generating dummy links');
     const [participants, cots] = await Promise.all([
-      prisma.participant.findMany({ take: 20 }),
+      prisma.participant.findMany(),
       prisma.cOT.findMany(),
     ]);
-    data = participants.map((p, idx) => ({
+    data = Array.from({ length: count }, () => {
+      const p = faker.helpers.arrayElement(participants);
+      const cot = faker.helpers.arrayElement(cots);
+      return {
       id: randomUUID(),
       participantId: p.id,
-      cotId: cots[idx % cots.length].id,
-    }));
+        cotId: cot.id,
+      };
+    });
   }
-
   if (data.length > 0) {
     await processBatch(data, async (participantCot) => {
       await prisma.participantsCOT.create({ data: participantCot });
     }, BATCH_SIZE, 'seed-participants-cot');
-    
     Logger.info(`Seeded ${data.length} participantsCot`);
   } else {
     Logger.info('No participantsCot to seed');
   }
 }
 
+// Refactor seedCurriculumSyllabus
 async function seedCurriculumSyllabus() {
   Logger.info('Starting curriculumSyllabus seeding');
   await backupTableIfRequested('curriculumSyllabus');
-  
+  const count = parseInt(process.env.DUMMY_CURRICULUMSYLLABUS_COUNT || '10', 10);
+  const numFields = ['theoryDuration', 'practiceDuration'];
+  // --- PATCH: ambil capability ---
+  const capabilities = await prisma.capability.findMany();
+  if (capabilities.length === 0) throw new Error('No capabilities found, cannot seed curriculumSyllabus');
+  // --- END PATCH ---
   const raw = await loadJson<any>('curriculumsyllabus.json');
-  let data = raw.map(r => ({
-    id: r.id ?? faker.string.uuid(),
-    capabilityId: r.capabilityId ?? r[0],
-    name: r.name ?? 'N/A',
-    theoryDuration: sanitizers.toInt(r.theoryDuration) ?? 0,
-    practiceDuration: sanitizers.toInt(r.practiceDuration) ?? 0,
-    type: r.type ?? 'REGULAR',
-  }));
-
-  if (data.length === 0) {
-    Logger.warn('No curriculumSyllabus data found, generating dummy syllabus');
-    const caps = await prisma.capability.findMany();
-    data = caps.map(c => ({
-      id: randomUUID(),
-      capabilityId: c.id,
-      name: `${c.trainingName} - Intro`,
-      theoryDuration: 2,
-      practiceDuration: 3,
-      type: 'REGULAR',
+  let data: any[] = [];
+  if (raw.length > 0) {
+    data = raw.map(r => {
+      const item: any = { ...r };
+      numFields.forEach(f => {
+        item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
+      });
+      // --- PATCH: pastikan ada capabilityId ---
+      if (!item.capabilityId) {
+        item.capabilityId = faker.helpers.arrayElement(capabilities).id;
+      }
+      // --- END PATCH ---
+      return item;
+    });
+    Logger.info(`Menggunakan data dari curriculumsyllabus.json (${data.length} item)`);
+  } else {
+    data = Array.from({ length: count }, () => ({
+      id: faker.string.uuid(),
+      capabilityId: faker.helpers.arrayElement(capabilities).id,
+      theoryDuration: faker.number.int({ min: 10, max: 100 }),
+      practiceDuration: faker.number.int({ min: 10, max: 100 }),
+      name: faker.lorem.words({ min: 2, max: 4 }),
+      type: faker.helpers.arrayElement(['Kompetensi', 'Reguler', 'Lainnya']),
     }));
+    Logger.info(`File curriculumsyllabus.json kosong, generate data dummy (${count} item)`);
   }
-
   if (data.length > 0) {
-    await processBatch(data, async (syllabus) => {
-      await prisma.curriculumSyllabus.create({ data: syllabus });
+    await processBatch(data, async (curriculumSyllabus) => {
+      await prisma.curriculumSyllabus.create({ data: curriculumSyllabus });
     }, BATCH_SIZE, 'seed-curriculum-syllabus');
-    
     Logger.info(`Seeded ${data.length} curriculumSyllabus`);
   } else {
     Logger.info('No curriculumSyllabus to seed');
   }
 }
 
+console.log('=== SEBELUM PANGGIL MAIN ===');
+main();
+console.log('=== SETELAH PANGGIL MAIN ===');
+
+// Tambahkan log di awal fungsi main
 async function main() {
+  console.log('=== MASUK FUNGSI MAIN ===');
   const startTime = Date.now();
   
   try {
@@ -1161,9 +1105,8 @@ async function main() {
     await seedCapabilityCots();
     await seedSignatures();
     await seedCertificates();
-    await seedParticipants();
+    await seedParticipantsAndUsers();
     await seedParticipantsCot();
-    await seedUsers();
     await seedCurriculumSyllabus();
 
     await prisma.$executeRawUnsafe(
@@ -1214,5 +1157,3 @@ process.on('SIGTERM', async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
-
-main();

@@ -521,7 +521,7 @@ async function seedRoles() {
 async function seedCapabilities() {
   Logger.info('Starting capabilities seeding');
   await backupTableIfRequested('capabilities');
-  const count = parseInt(process.env.DUMMY_CAPABILITY_COUNT || '10', 10);
+  const count = parseInt(process.env.DUMMY_CAPABILITY_COUNT || '3', 10);
     const numFields = [
       'totalDuration',
       'totalPracticeDurationCompetency',
@@ -585,10 +585,10 @@ async function seedParticipantsAndUsers() {
   const dinasList = ['TA', 'TB', 'TC', 'TF', 'TJ', 'TL', 'TM', 'TR', 'TU', 'TV', 'TZ'];
 
   // Ambil jumlah dari ENV atau default
-  const superadminCount = parseInt(process.env.DUMMY_SUPERADMIN_COUNT || '7', 10);
-  const supervisorCount = parseInt(process.env.DUMMY_SUPERVISOR_COUNT || '14', 10);
-  const lcuCount = parseInt(process.env.DUMMY_LCU_COUNT || '7', 10);
-  const userCount = parseInt(process.env.DUMMY_USER_COUNT || '80', 10);
+  const superadminCount = parseInt(process.env.DUMMY_SUPERADMIN_COUNT || '1', 10);
+  const supervisorCount = parseInt(process.env.DUMMY_SUPERVISOR_COUNT || '1', 10);
+  const lcuCount = parseInt(process.env.DUMMY_LCU_COUNT || '1', 10);
+  const userCount = parseInt(process.env.DUMMY_USER_COUNT || '5', 10);
 
   // Batch user penting
   const importantUsers: any[] = [];
@@ -707,6 +707,18 @@ async function seedParticipantsAndUsers() {
       qrCodeLink: `https://dummy-frontend/participant/detail/${participantId}`,
       gmfNonGmf: faker.helpers.arrayElement(['GMF', 'Non-GMF'])
     };
+    // Upload semua file dummy peserta ke storage
+    const filesToUpload = [
+      { src: 'foto.jpg', dest: `/foto/${participantId}.jpg` },
+      { src: 'SIM_A.jpg', dest: `/simA/${participantId}.jpg` },
+      { src: 'SIM_B.jpg', dest: `/simB/${participantId}.jpg` },
+      { src: 'ktp.jpg', dest: `/ktp/${participantId}.jpg` },
+      { src: 'surat_ket_sehat.jpg', dest: `/suratSehat/${participantId}.jpg` },
+      { src: 'surat_bebas_narkoba.jpg', dest: `/suratNarkoba/${participantId}.jpg` },
+    ];
+    for (const file of filesToUpload) {
+      await uploadToStorage(path.join(sampleDir, file.src), file.dest);
+    }
     participants.push(participant);
     participantUsers.push({
       email,
@@ -723,8 +735,8 @@ async function seedParticipantsAndUsers() {
 
   // Insert participants
   await processBatch(participants, async (participant) => {
-      await prisma.participant.create({ data: participant });
-    }, BATCH_SIZE, 'insert-participants');
+    await prisma.participant.create({ data: participant });
+  }, 2, 'insert-participants');
     
   // Ambil semua participantId yang valid
   const allParticipants = await prisma.participant.findMany({ select: { id: true } });
@@ -777,7 +789,7 @@ async function seedParticipantsAndUsers() {
         nik: user.nik,
       },
     });
-  }, BATCH_SIZE, 'seed-participant-users');
+  }, 2, 'seed-participant-users');
 
   // Upsert user dari JSON
   await processBatch(usersFromJson, async (user) => {
@@ -811,7 +823,7 @@ async function seedParticipantsAndUsers() {
 async function seedCots() {
   Logger.info('Starting COTs seeding');
   await backupTableIfRequested('cots');
-  const count = parseInt(process.env.DUMMY_COT_COUNT || '5', 10);
+  const count = parseInt(process.env.DUMMY_COT_COUNT || '3', 10);
   const numFields = [];
   const raw = await loadJson<any>('cots.json');
   let data: any[] = [];
@@ -929,6 +941,20 @@ async function seedSignatures() {
   });
   // --- END PATCH ---
 
+  // Upload e-signature dummy ke storage
+  for (let i = 0; i < filteredData.length; i++) {
+    let eSignDest = filteredData[i].eSignPath;
+    if (!eSignDest) {
+      // Jika eSignPath kosong/null, generate path baru
+      eSignDest = `/esign/${randomUUID()}.png`;
+      filteredData[i].eSignPath = eSignDest;
+      Logger.warn(`Signature ke-${i} tidak punya eSignPath, auto-generate: ${eSignDest}`);
+    }
+    const eSignSrc = path.join(sampleDir, `e-sign${(i % 2) + 1}.png`); // bergantian antara e-sign1.png dan e-sign2.png
+    Logger.info(`Upload e-signature dummy: ${eSignSrc} -> ${eSignDest}`);
+    await uploadToStorage(eSignSrc, eSignDest);
+  }
+
   if (filteredData.length > 0) {
     await processBatch(filteredData, async (signature) => {
       await prisma.signature.create({ data: signature });
@@ -943,7 +969,7 @@ async function seedSignatures() {
 async function seedCertificates() {
   Logger.info('Starting certificates seeding');
   await backupTableIfRequested('certificates');
-  const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '10', 10);
+  const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '5', 10);
   const numFields = ['theoryScore', 'practiceScore'];
   const raw = await loadJson<any>('certificates.json');
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -992,7 +1018,7 @@ async function seedCertificates() {
 async function seedParticipantsCot() {
   Logger.info('Starting participantsCot seeding');
   await backupTableIfRequested('participantsCot');
-  const count = parseInt(process.env.DUMMY_PARTICIPANTSCOT_COUNT || '20', 10);
+  const count = parseInt(process.env.DUMMY_PARTICIPANTSCOT_COUNT || '5', 10);
   const raw = await loadJson<any>('participantscot.json');
   let data = raw.map(r => ({
     id: r.id ?? faker.string.uuid(),
@@ -1029,7 +1055,7 @@ async function seedParticipantsCot() {
 async function seedCurriculumSyllabus() {
   Logger.info('Starting curriculumSyllabus seeding');
   await backupTableIfRequested('curriculumSyllabus');
-  const count = parseInt(process.env.DUMMY_CURRICULUMSYLLABUS_COUNT || '10', 10);
+  const count = parseInt(process.env.DUMMY_CURRICULUMSYLLABUS_COUNT || '3', 10);
   const numFields = ['theoryDuration', 'practiceDuration'];
   // --- PATCH: ambil capability ---
   const capabilities = await prisma.capability.findMany();

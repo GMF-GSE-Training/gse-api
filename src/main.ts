@@ -47,6 +47,9 @@ async function bootstrap() {
       credentials: true,
     });
 
+    // Agar IP user terdeteksi dengan benar jika di balik proxy/nginx
+    app.set('trust proxy', true);
+
     await app.listen(port, host);
     winstonLogger.log(`Application is running in ${nodeEnv} mode on ${protocol}://${host}:${port})`);
   } catch (error) {

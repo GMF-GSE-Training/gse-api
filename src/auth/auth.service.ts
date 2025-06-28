@@ -20,6 +20,7 @@ import { CoreHelper } from 'src/common/helpers/core.helper';
 import { UrlHelper } from 'src/common/helpers/url.helper';
 import { Response } from 'express';
 import { Controller, Get, Param, Res } from '@nestjs/common';
+import axios from 'axios';
 
 @Injectable()
 export class AuthService {
@@ -570,10 +571,34 @@ export class AuthService {
     return 'Email verifikasi sudah dikirim';
   }
 
-  async passwordResetRequest(email: string): Promise<string> {
+  async passwordResetRequest(email: string, hcaptchaToken: string, ip: string): Promise<string> {
     this.logger.debug(
       `Memulai permintaan reset password untuk email: ${email}`,
     );
+
+    // Validasi hCaptcha
+    const hcaptchaSecret = this.configService.get<string>('HCAPTCHA_SECRET');
+    let hcaptchaValid = false;
+    try {
+      const hcaptchaRes = await axios.post('https://hcaptcha.com/siteverify',
+        new URLSearchParams({
+          secret: hcaptchaSecret,
+          response: hcaptchaToken,
+          remoteip: ip,
+        }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      this.logger.debug('hCaptcha response:', hcaptchaRes.data);
+      hcaptchaValid = (hcaptchaRes.data as any).success;
+    } catch (e) {
+      this.logger.error('Gagal verifikasi hCaptcha', e);
+    }
+    if (!hcaptchaValid) {
+      this.logger.warn(`hCaptcha tidak valid untuk email: ${email}, ip: ${ip}`);
+      // Log attempt
+      await this.logResetAttempt(email, ip, false, 'hCaptcha invalid');
+      throw new HttpException('Verifikasi hCaptcha gagal. Silakan coba lagi.', 400);
+    }
 
     const emailRequest = this.validationService.validate(
       AuthValidation.EMAIL,
@@ -635,9 +660,18 @@ export class AuthService {
       this.logger.debug(
         `Email reset password berhasil dikirim untuk pengguna: ${user.email}`,
       );
+      await this.logResetAttempt(email, ip, true, 'success');
+    } else {
+      await this.logResetAttempt(email, ip, true, 'success (no user)');
     }
 
     return 'Email reset password sudah dikirim';
+  }
+
+  private async logResetAttempt(email: string, ip: string, success: boolean, note: string) {
+    // Simpan log ke database atau file sesuai kebutuhan
+    this.logger.log(`[RESET-PASSWORD-LOG] email: ${email}, ip: ${ip}, success: ${success}, note: ${note}, time: ${new Date().toISOString()}`);
+    // TODO: Implementasi simpan ke DB jika perlu
   }
 
   async verifyPasswordResetRequestToken(token: string): Promise<boolean> {

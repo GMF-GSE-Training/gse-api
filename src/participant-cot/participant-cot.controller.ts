@@ -21,6 +21,7 @@ import { buildResponse, ListRequest, WebResponse } from 'src/model/web.model';
 import {
   addParticipantToCot,
   ParticipantCotResponse,
+  AddParticipantResponse,
 } from 'src/model/participant-cot.model';
 import { User } from 'src/shared/decorator/user.decorator';
 import { CurrentUserRequest } from 'src/model/auth.model';
@@ -79,7 +80,7 @@ export class ParticipantCotController {
     @Param('cotId', ParseUUIDPipe) cotId: string,
     @User() user: CurrentUserRequest,
     @Body() request: addParticipantToCot,
-  ): Promise<WebResponse<string>> {
+  ): Promise<WebResponse<AddParticipantResponse>> {
     const result = await this.participantCotService.addParticipantToCot(
       cotId,
       user,

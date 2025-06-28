@@ -5,6 +5,7 @@ import { CurrentUserRequest } from 'src/model/auth.model';
 import {
   addParticipantToCot,
   ParticipantCotResponse,
+  AddParticipantResponse,
 } from 'src/model/participant-cot.model';
 import { ListParticipantResponse } from 'src/model/participant.model';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
@@ -40,7 +41,6 @@ export class ParticipantCotService {
     );
     const { startDate, endDate } = currentCot;
 
-    // Construct base where clause
     const baseWhereClause: any = {
       AND: [],
       NOT: {
@@ -56,7 +56,6 @@ export class ParticipantCotService {
       }),
     };
 
-    // Add search filters if provided
     if (request.searchQuery) {
       baseWhereClause.AND.push({
         OR: [
@@ -101,7 +100,7 @@ export class ParticipantCotService {
     cotId: string,
     user: CurrentUserRequest,
     request: addParticipantToCot,
-  ): Promise<string> {
+  ): Promise<AddParticipantResponse> {
     const AddParticipantToCotRequest = this.validationService.validate(
       ParticipantCotValidation.ADD,
       request,
@@ -140,7 +139,6 @@ export class ParticipantCotService {
       );
     }
 
-    // Filter hanya ID yang valid
     if (validParticipantIds.length === 0) {
       throw new HttpException(
         'Tidak ada participant yang valid ditemukan',
@@ -203,6 +201,8 @@ export class ParticipantCotService {
       );
     }
 
+    console.log('Sebelum menambah peserta:', await this.prismaService.participantsCOT.findMany({ where: { cotId } }));
+
     const participantData = newParticipantIds.map((participantId) => ({
       participantId,
       cotId,
@@ -212,7 +212,20 @@ export class ParticipantCotService {
       data: participantData,
     });
 
-    return `${newParticipantIds.length} participant berhasil ditambahkan`;
+    console.log('Setelah menambah peserta:', await this.prismaService.participantsCOT.findMany({ where: { cotId } }));
+
+    const updatedCount = await this.prismaService.participantsCOT.count({
+      where: {
+        cotId,
+        participantId: { not: null },
+      },
+    });
+
+    return {
+      message: `${newParticipantIds.length} participant berhasil ditambahkan`,
+      updatedCount,
+      addedParticipants: newParticipantIds,
+    };
   }
 
   async listParticipantsCot(
@@ -241,7 +254,6 @@ export class ParticipantCotService {
       idNumber: true,
       name: true,
       dinas: true,
-      // hanya tambahkan simB, simA, tglKeluarSuratSehatButaWarna, dan tglKeluarSuratBebasNarkoba jika bukan role 'user'
       ...(userRole !== 'user' && {
         simB: true,
         simA: true,
@@ -276,6 +288,16 @@ export class ParticipantCotService {
           take: request.size,
         },
         _count: { select: { participantsCots: true } },
+        capabilityCots: {
+          select: {
+            capability: {
+              select: {
+                ratingCode: true,
+                trainingName: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -283,7 +305,6 @@ export class ParticipantCotService {
       throw new HttpException('COT tidak ditemukan', 404);
     }
 
-    // Validasi akses untuk user
     if (isUser) {
       const isParticipantLinked =
         await this.prismaService.participantsCOT.count({
@@ -310,7 +331,6 @@ export class ParticipantCotService {
       .map((participant) => {
         const participantData = {
           ...participant,
-          // Jika role bukan 'user', simB dan simA akan tetap ada
           ...(userRole !== 'user' && {
             simB: !!participant.simB,
             simA: !!participant.simA,
@@ -321,6 +341,10 @@ export class ParticipantCotService {
 
     const actions = this.validateActions(userRole);
 
+    const capability = participantCot.capabilityCots?.[0]?.capability || {
+      ratingCode: '',
+      trainingName: '',
+    };
     const response: ParticipantCotResponse = {
       cot: {
         id: participantCot.id,
@@ -333,6 +357,7 @@ export class ParticipantCotService {
         practicalInstructor2: participantCot.practicalInstructor2,
         totalParticipants,
         status: participantCot.status,
+        capability,
         participants: {
           data: participants,
           paging: {
@@ -362,7 +387,6 @@ export class ParticipantCotService {
         },
       });
 
-    // Jika tidak ada data yang dihapus
     if (deletedParticipantFromCot.count === 0) {
       throw new HttpException('Data tidak ditemukan', 404);
     }

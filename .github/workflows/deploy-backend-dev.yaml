@@ -3,7 +3,7 @@ name: Deploy to Cloud Run
 on:
   push:
     branches:
-      - backup/dev-2025-06-15
+      - dev
 
 jobs:
   deploy:
@@ -42,4 +42,4 @@ jobs:
             --platform managed \
             --region asia-southeast1 \
             --allow-unauthenticated \
-            --set-env-vars "NODE_ENV=production,PROTOCOL=${{ secrets.PROTOCOL }},HOST=${{ secrets.HOST }},FRONTEND_URL=${{ secrets.FRONTEND_URL_DEV }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN_DEV }},BACKEND_URL=${{ secrets.BACKEND_URL_DEV }},DATABASE_URL=${{ secrets.DATABASE_URL_DEV }},DIRECT_URL=${{ secrets.DIRECT_URL_DEV }},QR_CODE_LINK=${{ secrets.QR_CODE_LINK_DEV }},ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }},REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN }},VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN }},MAIL_HOST=${{ secrets.MAIL_HOST }},MAIL_PORT=${{ secrets.MAIL_PORT }},MAIL_USER=${{ secrets.MAIL_USER_DEV }},MAIL_PASS=${{ secrets.MAIL_PASS_DEV }},APP_NAME=${{ secrets.APP_NAME }},STORAGE_TYPE=${{ secrets.STORAGE_TYPE }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }},SUPABASE_BUCKET=${{ secrets.SUPABASE_BUCKET }}"
+            --set-env-vars "NODE_ENV=production,PROTOCOL=${{ secrets.PROTOCOL_DEV }},HOST=${{ secrets.HOST_DEV }},FRONTEND_URL=${{ secrets.FRONTEND_URL_DEV }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN_DEV }},BACKEND_URL=${{ secrets.BACKEND_URL_DEV }},DATABASE_URL=${{ secrets.DATABASE_URL_DEV }},DIRECT_URL=${{ secrets.DIRECT_URL_DEV }},QR_CODE_LINK=${{ secrets.QR_CODE_LINK_DEV }},ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN_DEV }},REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN_DEV }},VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN_DEV }},MAIL_HOST=${{ secrets.MAIL_HOST_DEV }},MAIL_PORT=${{ secrets.MAIL_PORT_DEV }},MAIL_USER=${{ secrets.MAIL_USER_DEV }},MAIL_PASS=${{ secrets.MAIL_PASS_DEV }},APP_NAME=${{ secrets.APP_NAME_DEV }},STORAGE_TYPE=${{ secrets.STORAGE_TYPE_DEV }},SUPABASE_URL=${{ secrets.SUPABASE_URL_DEV }},SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY_DEV }},SUPABASE_BUCKET=${{ secrets.SUPABASE_BUCKET_DEV }}"

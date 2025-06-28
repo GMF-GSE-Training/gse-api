@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards, HttpException, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards, HttpException, Query, Req } from "@nestjs/common";
 import { AuthGuard } from "../shared/guard/auth.guard";
 import { AuthResponse, CurrentUserRequest, LoginUserRequest, RegisterUserRequest, UpdatePassword } from "../model/auth.model";
 import { buildResponse, WebResponse } from "../model/web.model";
@@ -13,6 +13,7 @@ import { Cron } from '@nestjs/schedule';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from './public.decorator';
 import { UrlHelper } from '../common/helpers/url.helper';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('/auth')
 export class AuthController {
@@ -135,8 +136,13 @@ export class AuthController {
 
     @Post('/request-reset-password')
     @HttpCode(200)
-    async passwordResetRequest(@Body('email') email: string): Promise<WebResponse<string>> {
-        const result = await this.authService.passwordResetRequest(email);
+    @Throttle({ default: { limit: 3, ttl: 3600_000 } })
+    async passwordResetRequest(
+        @Body('email') email: string,
+        @Body('hcaptchaToken') hcaptchaToken: string,
+        @Req() req: Request
+    ): Promise<WebResponse<string>> {
+        const result = await this.authService.passwordResetRequest(email, hcaptchaToken, req.ip);
         return buildResponse(HttpStatus.OK, result);
     }
 

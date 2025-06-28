@@ -18,6 +18,8 @@ import { SendEmail } from '../model/mail.model';
 import { JwtService } from '@nestjs/jwt';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { UrlHelper } from 'src/common/helpers/url.helper';
+import { Response } from 'express';
+import { Controller, Get, Param, Res } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -1024,5 +1026,23 @@ export class AuthService {
       participant: user.participant || undefined,
     };
     return result;
+  }
+}
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService, private readonly configService: ConfigService) {}
+
+  @Get('verify-account/:token')
+  async verifyAccountRedirect(@Param('token') token: string, @Res() res: Response) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
+    try {
+      await this.authService.accountVerification(token);
+      // Redirect ke frontend dengan status sukses
+      return res.redirect(`${frontendUrl}/verified?status=success`);
+    } catch (e) {
+      // Redirect ke frontend dengan status gagal
+      return res.redirect(`${frontendUrl}/verified?status=failed`);
+    }
   }
 } 

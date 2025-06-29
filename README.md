@@ -39,7 +39,7 @@ backend/
 │   ├── capability/        # Manajemen kapabilitas
 │   ├── certificate/       # Manajemen sertifikat
 │   ├── config/            # Konfigurasi aplikasi
-│   ├── cot/               # Chain of Trust (COT)
+│   ├── cot/               # Calendar Of Training (COT)
 │   ├── curriculum-syllabus/# Kurikulum & silabus
 │   ├── e-sign/            # Tanda tangan elektronik
 │   ├── mail/              # Pengiriman email

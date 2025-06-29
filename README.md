@@ -8,97 +8,93 @@
   Aplikasi *backend* untuk <b>GMF GSE Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL</b>.
 </p>
 
-    <p align="center">
+<p align="center">
   <a href="https://www.npmjs.com/package/@nestjs/core" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
   <a href="https://www.npmjs.com/package/@nestjs/core" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
   <a href="https://www.npmjs.com/package/@nestjs/common" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
 </p>
 
+---
+
 ## Deskripsi Proyek
 
-Repositori ini berisi kode *backend* untuk aplikasi 'GMF GSE Training', yang dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL. Ini menyediakan API untuk manajemen pengguna, otentikasi, otorisasi berdasarkan peran, dan fitur terkait pelatihan.
+Repositori ini berisi kode *backend* untuk aplikasi 'GMF GSE Training', dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL. Backend ini menyediakan API untuk manajemen pengguna, autentikasi, otorisasi berbasis peran, serta fitur pelatihan dan sertifikasi.
 
 ## Fitur Utama
 
-*   **Autentikasi & Otorisasi:** Menggunakan JWT (JSON Web Tokens) dengan refresh token, verifikasi email, dan reset password. Mendukung otorisasi berbasis peran.
-*   **Manajemen Pengguna & Peran:** Pengelolaan data pengguna dan peran (`super admin`, `supervisor`, `lcu`, `user`).
-*   **Integrasi Database:** Menggunakan Prisma ORM untuk interaksi dengan database PostgreSQL.
-*   **Sistem Notifikasi:** Pengiriman email untuk verifikasi akun dan reset password.
-*   **Manajemen Dokumen:** Fitur untuk mengelola dokumen dan sertifikat.
-*   **Logging:** Implementasi logging yang robust menggunakan Winston untuk pemantauan aplikasi.
+- **Autentikasi & Otorisasi:** JWT, refresh token, verifikasi email, reset password, dan otorisasi berbasis peran.
+- **Manajemen Pengguna & Peran:** CRUD pengguna dan peran (super admin, supervisor, lcu, user).
+- **Integrasi Database:** Prisma ORM untuk PostgreSQL.
+- **Sistem Notifikasi:** Email untuk verifikasi akun dan reset password.
+- **Manajemen Dokumen:** Upload/download dokumen dan sertifikat.
+- **Logging:** Winston untuk pemantauan aplikasi.
 
 ## Struktur Proyek
-
-Proyek mengikuti konvensi modular NestJS:
 
 ```
 backend/
 ├── src/
-│   ├── auth/              # Modul autentikasi dan otorisasi (login, register, JWT)
-│   ├── common/            # Modul umum (Prisma, Validation, JWT config, Error Filter, Winston)
-│   ├── capability/        # Modul untuk manajemen kapabilitas
-│   ├── certificate/       # Modul untuk manajemen sertifikat
+│   ├── auth/              # Modul autentikasi & otorisasi
+│   ├── common/            # Modul umum (Prisma, Validation, Logging)
+│   ├── capability/        # Manajemen kapabilitas
+│   ├── certificate/       # Manajemen sertifikat
 │   ├── config/            # Konfigurasi aplikasi
-│   ├── cot/               # Modul untuk Chain of Trust (COT)
-│   ├── curriculum-syllabus/# Modul untuk kurikulum dan silabus
-│   ├── e-sign/            # Modul untuk tanda tangan elektronik
-│   ├── mail/              # Modul untuk pengiriman email
-│   ├── participant/       # Modul untuk manajemen peserta
-│   ├── participant-cot/   # Modul untuk peserta COT
-│   ├── role/              # Modul untuk manajemen peran
-│   ├── shared/            # Modul dan layanan bersama lainnya
-│   ├── user/              # Modul untuk manajemen pengguna
+│   ├── cot/               # Chain of Trust (COT)
+│   ├── curriculum-syllabus/# Kurikulum & silabus
+│   ├── e-sign/            # Tanda tangan elektronik
+│   ├── mail/              # Pengiriman email
+│   ├── participant/       # Manajemen peserta
+│   ├── participant-cot/   # Peserta COT
+│   ├── role/              # Manajemen peran
+│   ├── shared/            # Modul & layanan bersama
+│   ├── user/              # Manajemen pengguna
 │   └── main.ts            # Entry point aplikasi
-├── prisma/                # Skema Prisma dan migrasi database
-├── public/                # Folder untuk file statis (misalnya QR code, sertifikat)
-├── uploads/               # Folder untuk unggahan file
-├── .env.example           # Contoh file konfigurasi lingkungan
-├── pnpm-lock.yaml         # Lock file dependensi pnpm
-└── package.json           # Definisi proyek dan skrip
+├── prisma/                # Skema & migrasi database
+├── public/                # File statis (QR code, sertifikat)
+├── uploads/               # File upload
+├── .env.example           # Contoh konfigurasi lingkungan
+├── pnpm-lock.yaml         # Lock file dependensi
+└── package.json           # Definisi proyek & skrip
 ```
 
 ## Instalasi
 
-Pastikan Anda memiliki [pnpm](https://pnpm.io/installation) terinstal. Kemudian, jalankan perintah berikut:
+1. Pastikan [pnpm](https://pnpm.io/installation) sudah terpasang.
+2. Jalankan:
 
 ```bash
-$ pnpm install
+pnpm install
 ```
 
 ## Konfigurasi Lingkungan (`.env`)
 
-Buat file `.env` di direktori `backend/` dengan variabel lingkungan berikut. Pastikan untuk mengisi nilai yang sesuai, terutama `DATABASE_URL`.
+Buat file `.env` di direktori `backend/` berdasarkan `.env.example`. Jangan gunakan data asli pada file ini. Contoh:
 
 ```
-DATABASE_URL="postgresql://postgres.ckyobbobvftqziemlccu:<YOUR_PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true"
+DATABASE_URL="postgresql://<USER>:<PASSWORD>@<HOST>:<PORT>/<DB>?pgbouncer=true"
 NODE_ENV=development
 PROTOCOL=http
 HOST=0.0.0.0
 PORT=3000
-FRONTEND_URL=https://sertifikat.gmf.co.id           # URL utama frontend, untuk kebutuhan aplikasi (redirect, QR, dsb)
-CORS_ORIGIN=http://localhost:4200,https://sertifikat.gmf.co.id # Daftar origin yang diizinkan CORS, pisahkan dengan koma jika multi-origin
-BACKEND_URL=https://api.gmf.co.id
-ACCESS_TOKEN=<YOUR_ACCESS_TOKEN>
-REFRESH_TOKEN=<YOUR_REFRESH_TOKEN>
-VERIFICATION_TOKEN=<YOUR_VERIFICATION_TOKEN>
-MAIL_HOST=smtp.gmail.com
+FRONTEND_URL=https://frontend.example.com
+CORS_ORIGIN=http://localhost:4200,https://frontend.example.com
+BACKEND_URL=https://api.example.com
+ACCESS_TOKEN=<ACCESS_TOKEN>
+REFRESH_TOKEN=<REFRESH_TOKEN>
+VERIFICATION_TOKEN=<VERIFICATION_TOKEN>
+MAIL_HOST=smtp.example.com
 MAIL_PORT=587
-MAIL_USER=<YOUR_MAIL_USER>
-MAIL_PASS=<YOUR_MAIL_PASS>
-APP_NAME="Admin GMF Training"
+MAIL_USER=<MAIL_USER>
+MAIL_PASS=<MAIL_PASS>
+APP_NAME="Admin GMF GSE Training"
 ```
 
-**Catatan Penting:**
-*   `FRONTEND_URL` digunakan untuk kebutuhan aplikasi (generate link, QR code, dsb). Hanya satu URL utama.
-*   `CORS_ORIGIN` digunakan khusus untuk konfigurasi CORS backend. Bisa diisi lebih dari satu origin, pisahkan dengan koma.
-*   Jangan gunakan multi-origin di `FRONTEND_URL` untuk menghindari error parsing di logic aplikasi.
-*   Untuk deployment production, ganti `FRONTEND_URL` dan `CORS_ORIGIN` ke domain yang sesuai.
-*   Ganti `<YOUR_PASSWORD>`, `<YOUR_ACCESS_TOKEN>`, `<YOUR_REFRESH_TOKEN>`, `<YOUR_VERIFICATION_TOKEN>`, `<YOUR_MAIL_USER>`, dan `<YOUR_MAIL_PASS>` dengan nilai yang sebenarnya.
-*   Untuk `DATABASE_URL`, pastikan Anda menggunakan string koneksi Supavisor (session mode) dari dashboard Anda, dan tambahkan `?pgbouncer=true` di akhir untuk kompatibilitas Cloud Run.
+**Catatan:**
+- Jangan pernah commit file `.env` yang berisi data asli.
+- Gunakan variabel dummy pada contoh.
+- Untuk deployment production, sesuaikan domain dan kredensial.
 
-## Migrasi dan Seeding Database
-
-Setelah mengkonfigurasi `.env`, jalankan migrasi database dan *seeding* awal:
+## Migrasi & Seeding Database
 
 ```bash
 pnpm prisma migrate deploy
@@ -109,75 +105,63 @@ pnpm run seed
 
 ```bash
 # Development
-$ pnpm run start
+pnpm run start
 
 # Watch mode (hot-reloading)
-$ pnpm run start:dev
+pnpm run start:dev
 
 # Production mode
-$ pnpm run start:prod
+pnpm run start:prod
 ```
 
 ## Testing
 
 ```bash
 # Unit tests
-$ pnpm run test
+pnpm run test
 
 # E2E tests
-$ pnpm run test:e2e
+pnpm run test:e2e
 
 # Test coverage
-$ pnpm run test:cov
+pnpm run test:cov
 ```
 
-## Deployment ke Google Cloud Run (via GitHub Actions)
+## Deployment ke Google Cloud Run
 
-Proyek ini dikonfigurasi untuk deployment *serverless* otomatis ke Google Cloud Run menggunakan GitHub Actions. Setiap *push* ke *branch* `backup/dev-2025-06-15` akan memicu alur kerja deployment.
+Deployment otomatis ke Cloud Run via GitHub Actions pada branch `backup/dev-2025-06-15`.
 
-Pastikan [GitHub Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets) berikut dikonfigurasi di repositori GitHub Anda (terutama untuk lingkungan produksi/Cloud Run):
+**Pastikan secrets berikut sudah diatur di GitHub:**
+- GCP_SA_KEY
+- DATABASE_URL
+- ACCESS_TOKEN
+- REFRESH_TOKEN
+- VERIFICATION_TOKEN
+- MAIL_USER
+- MAIL_PASS
+- FRONTEND_URL
+- BACKEND_URL
+- APP_NAME
 
-*   `GCP_SA_KEY` (Kunci akun layanan Google Cloud dalam format JSON)
-*   `DATABASE_URL` (String koneksi database PostgreSQL untuk lingkungan Cloud Run, harus menyertakan `?pgbouncer=true`)
-*   `ACCESS_TOKEN`
-*   `REFRESH_TOKEN`
-*   `VERIFICATION_TOKEN`
-*   `MAIL_USER`
-*   `MAIL_PASS`
-*   `FRONTEND_URL`
-*   `BACKEND_URL`
-*   `APP_NAME`
+**Penting:**
+- Nama secret harus sama persis dengan variabel environment aplikasi.
+- Jangan pernah menaruh data sensitif di README atau file publik.
 
-**Penting:** Nama secret di GitHub Actions harus sama persis dengan nama variabel lingkungan yang diharapkan oleh aplikasi di Cloud Run.
+## Pemecahan Masalah
 
-## Pemecahan Masalah (`Troubleshooting`)
+### bcrypt_lib.node module not found
 
-### `bcrypt_lib.node` module not found error
+Jika error terkait bcrypt, update bcrypt dan pastikan Node.js versi 20.x:
 
-Jika Anda menemukan error seperti `Error: Cannot find module '.../bcrypt_lib.node'` saat menjalankan `pnpm run seed`, itu mungkin karena masalah kompatibilitas dengan versi Node.js Anda atau instalasi `node_modules` yang rusak.
-
-**Solusi:**
-
-1.  **Perbarui bcrypt:**
-    ```bash
-    pnpm update bcrypt@latest
-    ```
-2.  **Regenerate Prisma Client:**
-    ```bash
-    pnpm prisma generate
-    ```
-3.  **Pertimbangkan Kompatibilitas Versi Node.js:**
-    `bcrypt` mungkin memiliki masalah kompatibilitas dengan versi Node.js yang lebih baru (misalnya, Node.js 22.x dengan bcrypt 5.x.x). Jika pembaruan `bcrypt` tidak menyelesaikan masalah, pertimbangkan untuk menggunakan versi Node.js yang diketahui kompatibel (misalnya, Node.js 20.x).
-
-    Untuk beralih versi Node.js (membutuhkan `nvm`):
-    ```bash
-    nvm install 20 # Instal Node.js 20 jika belum terinstal
-    nvm use 20     # Beralih ke Node.js 20
-    rm -rf node_modules pnpm-lock.yaml && pnpm install # Instal ulang dependensi
-    pnpm prisma generate # Regenerate Prisma Client
-    pnpm run seed # Coba jalankan seed lagi
-    ```
+```bash
+pnpm update bcrypt@latest
+pnpm prisma generate
+nvm install 20 && nvm use 20
+rm -rf node_modules pnpm-lock.yaml && pnpm install
+pnpm prisma generate
+pnpm run seed
+```
 
 ## Lisensi
 
-Proyek ini dilisensikan di bawah [MIT License](LICENSE).
+MIT License

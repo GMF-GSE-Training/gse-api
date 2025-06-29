@@ -9,6 +9,7 @@ export interface StorageProvider {
   delete(filePath: string, requestId?: string): Promise<void>;
   exists(filePath: string, requestId?: string): Promise<boolean>;
   getSignedUrl(filePath: string, expiresIn: number, requestId?: string): Promise<string>;
+  getPublicUrl(filePath: string, bucketOverride?: string): string;
 }
 
 export class MinioStorageProvider implements StorageProvider {
@@ -58,5 +59,11 @@ export class MinioStorageProvider implements StorageProvider {
   async getSignedUrl(filePath: string, expiresIn: number, requestId?: string): Promise<string> {
     this.logger.log(`Generating signed URL for Minio: ${filePath}`, requestId);
     return this.client.presignedGetObject(this.bucket, filePath, expiresIn);
+  }
+
+  getPublicUrl(filePath: string, bucketOverride?: string): string {
+    const protocol = process.env.MINIO_USE_SSL === 'true' ? 'https' : 'http';
+    const bucket = bucketOverride || this.bucket;
+    return `${protocol}://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${bucket}/${filePath}`;
   }
 } 

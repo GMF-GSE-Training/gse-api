@@ -58,4 +58,9 @@ export class SupabaseStorageProvider implements StorageProvider {
     if (error) throw new Error(`Supabase signed URL failed: ${error.message}`);
     return data.signedUrl;
   }
+
+  getPublicUrl(filePath: string, bucketOverride?: string): string {
+    const bucket = bucketOverride || this.bucket;
+    return `${this.config.get('SUPABASE_URL')}/storage/v1/object/public/${bucket}/${filePath}`;
+  }
 } 

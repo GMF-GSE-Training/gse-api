@@ -1,11 +1,11 @@
-# GMF Utility Training Backend
+# GMF GSE Training Backend
 
 <p align="center">
   <img src="https://nestjs.com/img/logo-small.svg" width="100" alt="Nest Logo" />
 </p>
 
 <p align="center">
-  Aplikasi *backend* untuk <b>GMF Utility Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL</b>.
+  Aplikasi *backend* untuk <b>GMF GSE Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL</b>.
 </p>
 
     <p align="center">
@@ -16,7 +16,7 @@
 
 ## Deskripsi Proyek
 
-Repositori ini berisi kode *backend* untuk aplikasi 'GMF Utility Training', yang dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL. Ini menyediakan API untuk manajemen pengguna, otentikasi, otorisasi berdasarkan peran, dan fitur terkait pelatihan.
+Repositori ini berisi kode *backend* untuk aplikasi 'GMF GSE Training', yang dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL. Ini menyediakan API untuk manajemen pengguna, otentikasi, otorisasi berdasarkan peran, dan fitur terkait pelatihan.
 
 ## Fitur Utama
 

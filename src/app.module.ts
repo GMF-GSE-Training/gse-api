@@ -61,19 +61,20 @@ import { ThrottlerGuard } from '@nestjs/throttler';
       inject: [ConfigService],
     }),
     FileUploadModule,
-    ThrottlerModule.forRoot([
-      {
-        ttl: 3600_000, // 1 jam dalam ms
-        limit: 3, // 3 request per IP per jam
-      },
-    ]),
-  ],
+    // ThrottlerModule.forRoot([
+    //   {
+    //     ttl: 3600_000, // 1 jam dalam ms
+    //     limit: 3, // 3 request per IP per jam
+    //   },
+    // ]),
+  ], 
   controllers: [],
   providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // HAPUS/COMMENT BARIS INI UNTUK MEMATIKAN THROTTLE GLOBAL
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: ThrottlerGuard,
+    // },
     Reflector,
   ],
 })

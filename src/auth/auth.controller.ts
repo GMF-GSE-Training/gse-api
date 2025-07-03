@@ -13,7 +13,7 @@ import { Cron } from '@nestjs/schedule';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from './public.decorator';
 import { UrlHelper } from '../common/helpers/url.helper';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 
 @Controller('/auth')
 export class AuthController {
@@ -24,6 +24,7 @@ export class AuthController {
         private readonly urlHelper: UrlHelper,
     ) {}
 
+    @SkipThrottle()
     @Post('/register')
     @HttpCode(200)
     async register(@Body() req: RegisterUserRequest): Promise<WebResponse<string>> {
@@ -76,6 +77,7 @@ export class AuthController {
         }
     }
 
+    @SkipThrottle()
     @Post('/login')
     @HttpCode(200)
     async login(@Body() request: LoginUserRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<AuthResponse>> {
@@ -128,7 +130,7 @@ export class AuthController {
     }
 
     @Post('/resend-verification')
-    @HttpCode(200)
+    @UseGuards(ThrottlerGuard)
     async resendVerification(@Body('email') email: string): Promise<WebResponse<string>> {
         const result = await this.authService.resendVerificationLink(email);
         return buildResponse(HttpStatus.OK, result);
@@ -136,7 +138,7 @@ export class AuthController {
 
     @Post('/request-reset-password')
     @HttpCode(200)
-    @Throttle({ default: { limit: 3, ttl: 3600_000 } })
+    @UseGuards(ThrottlerGuard)
     async passwordResetRequest(
         @Body('email') email: string,
         @Body('hcaptchaToken') hcaptchaToken: string,
@@ -178,6 +180,7 @@ export class AuthController {
     }
 
     @Post('/reset-password')
+    @UseGuards(ThrottlerGuard)
     async resetPassword(@Body() request: UpdatePassword): Promise<WebResponse<string>> {
         const result = await this.authService.resetPassword(request);
         return buildResponse(HttpStatus.OK, result);

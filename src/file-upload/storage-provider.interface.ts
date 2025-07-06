@@ -4,4 +4,5 @@ export interface StorageProvider {
   delete(filePath: string, requestId?: string): Promise<void>;
   exists(filePath: string, requestId?: string): Promise<boolean>;
   getSignedUrl(filePath: string, expiresIn: number, requestId?: string): Promise<string>;
+  getPublicUrl(filePath: string, bucketOverride?: string): string;
 } 

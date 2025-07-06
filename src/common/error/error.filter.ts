@@ -32,6 +32,48 @@ export class ErrorFilter implements ExceptionFilter {
       };
     } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
+      // Penanganan khusus untuk 429 (rate limit)
+      if (statusCode === 429) {
+        // Ambil Retry-After dari exception response jika ada, jika tidak default 3600 detik
+        let retryAfter = 3600;
+        let retryAfterHeader = null;
+        if (exception.getResponse && typeof exception.getResponse === 'function') {
+          const resp = exception.getResponse();
+          if (typeof resp === 'object' && resp && 'retryAfter' in resp) {
+            retryAfter = Number(resp['retryAfter']) || 3600;
+          }
+          if (typeof resp === 'object' && resp && 'message' in resp && typeof resp['message'] === 'number') {
+            retryAfter = Number(resp['message']) || 3600;
+          }
+        }
+        // Cek jika ada header Retry-After di exception (misal dari Throttler)
+        if (exception.getResponse && typeof exception.getResponse === 'function') {
+          const resp = exception.getResponse();
+          if (typeof resp === 'object' && resp && 'getResponseHeaders' in resp && typeof resp['getResponseHeaders'] === 'function') {
+            const headers = resp['getResponseHeaders']();
+            if (headers && headers['Retry-After']) {
+              retryAfterHeader = Number(headers['Retry-After']);
+              if (!isNaN(retryAfterHeader)) retryAfter = retryAfterHeader;
+            }
+          }
+        }
+        // Format waktu
+        const minutes = Math.floor(retryAfter / 60);
+        const seconds = retryAfter % 60;
+        const waitMsg = minutes > 0
+          ? `Silakan coba lagi dalam ${minutes} menit${seconds > 0 ? ' ' + seconds + ' detik' : ''}.`
+          : `Silakan coba lagi dalam ${seconds} detik.`;
+        errorResponse = {
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: exception.message || 'Terlalu banyak permintaan.',
+          retryAfter: retryAfter,
+          message: waitMsg,
+        };
+        response.setHeader('Retry-After', retryAfter);
+        response.status(statusCode).json(errorResponse);
+        return;
+      }
       errorResponse = {
         code: statusCode,
         status: HttpStatus[statusCode],

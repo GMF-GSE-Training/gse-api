@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards, HttpException, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res, UseGuards, HttpException, Query, Req } from "@nestjs/common";
 import { AuthGuard } from "../shared/guard/auth.guard";
 import { AuthResponse, CurrentUserRequest, LoginUserRequest, RegisterUserRequest, UpdatePassword } from "../model/auth.model";
 import { buildResponse, WebResponse } from "../model/web.model";
@@ -13,6 +13,7 @@ import { Cron } from '@nestjs/schedule';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from './public.decorator';
 import { UrlHelper } from '../common/helpers/url.helper';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 
 @Controller('/auth')
 export class AuthController {
@@ -23,6 +24,7 @@ export class AuthController {
         private readonly urlHelper: UrlHelper,
     ) {}
 
+    @SkipThrottle()
     @Post('/register')
     @HttpCode(200)
     async register(@Body() req: RegisterUserRequest): Promise<WebResponse<string>> {
@@ -75,6 +77,7 @@ export class AuthController {
         }
     }
 
+    @SkipThrottle()
     @Post('/login')
     @HttpCode(200)
     async login(@Body() request: LoginUserRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<AuthResponse>> {
@@ -127,7 +130,7 @@ export class AuthController {
     }
 
     @Post('/resend-verification')
-    @HttpCode(200)
+    @UseGuards(ThrottlerGuard)
     async resendVerification(@Body('email') email: string): Promise<WebResponse<string>> {
         const result = await this.authService.resendVerificationLink(email);
         return buildResponse(HttpStatus.OK, result);
@@ -135,8 +138,13 @@ export class AuthController {
 
     @Post('/request-reset-password')
     @HttpCode(200)
-    async passwordResetRequest(@Body('email') email: string): Promise<WebResponse<string>> {
-        const result = await this.authService.passwordResetRequest(email);
+    @UseGuards(ThrottlerGuard)
+    async passwordResetRequest(
+        @Body('email') email: string,
+        @Body('hcaptchaToken') hcaptchaToken: string,
+        @Req() req: Request
+    ): Promise<WebResponse<string>> {
+        const result = await this.authService.passwordResetRequest(email, hcaptchaToken, req.ip);
         return buildResponse(HttpStatus.OK, result);
     }
 
@@ -172,6 +180,7 @@ export class AuthController {
     }
 
     @Post('/reset-password')
+    @UseGuards(ThrottlerGuard)
     async resetPassword(@Body() request: UpdatePassword): Promise<WebResponse<string>> {
         const result = await this.authService.resetPassword(request);
         return buildResponse(HttpStatus.OK, result);

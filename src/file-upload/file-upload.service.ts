@@ -24,4 +24,8 @@ export class FileUploadService {
   async getSignedUrl(filePath: string, expiresIn: number = 3600, requestId?: string): Promise<string> {
     return this.storageProvider.getSignedUrl(filePath, expiresIn, requestId);
   }
+
+  public get provider(): StorageProvider {
+    return this.storageProvider;
+  }
 } 

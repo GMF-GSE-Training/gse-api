@@ -19,6 +19,9 @@ import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { FileUploadModule } from './file-upload/file-upload.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD, Reflector } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -58,9 +61,22 @@ import { FileUploadModule } from './file-upload/file-upload.module';
       inject: [ConfigService],
     }),
     FileUploadModule,
-  ],
+    // ThrottlerModule.forRoot([
+    //   {
+    //     ttl: 3600_000, // 1 jam dalam ms
+    //     limit: 3, // 3 request per IP per jam
+    //   },
+    // ]),
+  ], 
   controllers: [],
-  providers: [],
+  providers: [
+    // HAPUS/COMMENT BARIS INI UNTUK MEMATIKAN THROTTLE GLOBAL
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: ThrottlerGuard,
+    // },
+    Reflector,
+  ],
 })
 export class AppModule {
   constructor() {

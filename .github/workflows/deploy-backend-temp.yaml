@@ -1,0 +1,45 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - temp
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: gmf-training
+
+      - name: Set-Up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: gmf-training
+
+      - name: Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker --quiet
+
+      - name: Build Docker Image
+        run: |
+          docker build -t gcr.io/gmf-training/temp-backend-web-server:latest .
+
+      - name: Push to GCR
+        run: |
+          docker push gcr.io/gmf-training/temp-backend-web-server:latest
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy temp-backend-service \
+            --image gcr.io/gmf-training/temp-backend-web-server:latest \
+            --platform managed \
+            --region asia-southeast1 \
+            --allow-unauthenticated \
+            --set-env-vars "NODE_ENV=production,PROTOCOL=${{ secrets.PROTOCOL_TEMP }},HOST=${{ secrets.HOST_TEMP }},FRONTEND_URL=${{ secrets.FRONTEND_URL_TEMP }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN_TEMP }},BACKEND_URL=${{ secrets.BACKEND_URL_TEMP }},DATABASE_URL=${{ secrets.DATABASE_URL_TEMP }},DIRECT_URL=${{ secrets.DIRECT_URL_TEMP }},QR_CODE_LINK=${{ secrets.QR_CODE_LINK_TEMP }},ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN_TEMP }},REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN_TEMP }},VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN_TEMP }},MAIL_HOST=${{ secrets.MAIL_HOST_TEMP }},MAIL_PORT=${{ secrets.MAIL_PORT_TEMP }},MAIL_USER=${{ secrets.MAIL_USER_TEMP }},MAIL_PASS=${{ secrets.MAIL_PASS_TEMP }},APP_NAME=${{ secrets.APP_NAME_TEMP }},STORAGE_TYPE=${{ secrets.STORAGE_TYPE_TEMP }},SUPABASE_URL=${{ secrets.SUPABASE_URL_TEMP }},SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY_TEMP }},SUPABASE_BUCKET=${{ secrets.SUPABASE_BUCKET_TEMP }},SUPABASE_PUBLIC_BUCKET=${{ secrets.SUPABASE_PUBLIC_BUCKET_TEMP }},LOGO_PATH=${{ secrets.LOGO_PATH_TEMP }},HCAPTCHA_SECRET=${{ secrets.HCAPTCHA_SECRET }}"

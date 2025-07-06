@@ -15,6 +15,8 @@ interface AppConfig {
   mailUser: string;
   mailPass: string;
   appName: string;
+  publicBucket: string;
+  logoPath: string;
 }
 
 export default (): AppConfig => ({
@@ -34,4 +36,6 @@ export default (): AppConfig => ({
   mailUser: process.env.MAIL_USER,
   mailPass: process.env.MAIL_PASS,
   appName: process.env.APP_NAME,
+  publicBucket: process.env.SUPABASE_PUBLIC_BUCKET,
+  logoPath: process.env.LOGO_PATH,
 });

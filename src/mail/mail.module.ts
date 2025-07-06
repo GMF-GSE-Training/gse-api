@@ -5,6 +5,7 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
 import { EjsAdapter } from '@nestjs-modules/mailer/dist/adapters/ejs.adapter';
 import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
+import { FileUploadModule } from '../file-upload/file-upload.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { join } from 'path';
       }),
       inject: [ConfigService],
     }),
+    FileUploadModule,
   ],
   providers: [MailService],
   exports: [MailService],

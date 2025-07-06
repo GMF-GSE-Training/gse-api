@@ -33,10 +33,14 @@ import { Roles } from '../shared/decorator/role.decorator';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { User } from 'src/shared/decorator/user.decorator';
 import { Response } from 'express';
+import { CoreHelper } from 'src/common/helpers/core.helper';
 
 @Controller('/participants')
 export class ParticipantController {
-  constructor(private readonly participantService: ParticipantService) {}
+  constructor(
+    private readonly participantService: ParticipantService,
+    private readonly coreHelper: CoreHelper,
+  ) {}
 
   @Post()
   @HttpCode(200)
@@ -189,16 +193,21 @@ export class ParticipantController {
   async getSimA(
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
+    @Res() res: Response,
+  ): Promise<void> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
       'simA',
       user,
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    if (fileBuffer) {
+      const mediaType = this.coreHelper.getMediaType(fileBuffer);
+      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+      res.send(fileBuffer);
+    } else {
+      res.status(404).send('SIM A not found');
+    }
   }
-  x;
 
   @Get('/:participantId/sim-b')
   @HttpCode(200)
@@ -207,14 +216,20 @@ export class ParticipantController {
   async getSimB(
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
+    @Res() res: Response,
+  ): Promise<void> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
       'simB',
       user,
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    if (fileBuffer) {
+      const mediaType = this.coreHelper.getMediaType(fileBuffer);
+      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+      res.send(fileBuffer);
+    } else {
+      res.status(404).send('SIM B not found');
+    }
   }
 
   @Get('/:participantId/foto')
@@ -224,14 +239,20 @@ export class ParticipantController {
   async getFoto(
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
+    @Res() res: Response,
+  ): Promise<void> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
       'foto',
       user,
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    if (fileBuffer) {
+      const mediaType = this.coreHelper.getMediaType(fileBuffer);
+      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+      res.send(fileBuffer);
+    } else {
+      res.status(404).send('Foto not found');
+    }
   }
 
   @Get('/:participantId/ktp')
@@ -241,14 +262,20 @@ export class ParticipantController {
   async getKTP(
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
+    @Res() res: Response,
+  ): Promise<void> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
       'ktp',
       user,
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    if (fileBuffer) {
+      const mediaType = this.coreHelper.getMediaType(fileBuffer);
+      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+      res.send(fileBuffer);
+    } else {
+      res.status(404).send('KTP not found');
+    }
   }
 
   @Get('/:participantId/surat-sehat-buta-warna')
@@ -258,14 +285,20 @@ export class ParticipantController {
   async getSuratSehat(
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
+    @Res() res: Response,
+  ): Promise<void> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
       'suratSehatButaWarna',
       user,
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    if (fileBuffer) {
+      const mediaType = this.coreHelper.getMediaType(fileBuffer);
+      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+      res.send(fileBuffer);
+    } else {
+      res.status(404).send('Surat Sehat Buta Warna not found');
+    }
   }
 
   @Get('/:participantId/surat-bebas-narkoba')
@@ -275,14 +308,20 @@ export class ParticipantController {
   async getSuratKetBebasNarkoba(
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
+    @Res() res: Response,
+  ): Promise<void> {
     const fileBuffer = await this.participantService.streamFile(
       participantId,
       'suratBebasNarkoba',
       user,
     );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    if (fileBuffer) {
+      const mediaType = this.coreHelper.getMediaType(fileBuffer);
+      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+      res.send(fileBuffer);
+    } else {
+      res.status(404).send('Surat Bebas Narkoba not found');
+    }
   }
 
   @Get('/:participantId/qr-code')
@@ -291,15 +330,40 @@ export class ParticipantController {
   @UseGuards(AuthGuard, RoleGuard)
   async getQrCode(
     @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest,
-  ): Promise<WebResponse<string>> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'qrCode',
-      user,
-    );
-    const result = fileBuffer.toString('base64');
-    return buildResponse(HttpStatus.OK, result);
+    @Res() res: Response,
+  ): Promise<void> {
+    try {
+      // Cek participant
+      let participant;
+      try {
+        participant = await this.participantService.getParticipantRaw(participantId);
+      } catch (e) {
+        res.status(404).send('Participant not found');
+        return;
+      }
+      // Ambil QR code
+      const fileBuffer = await this.participantService.getQrCode(participantId);
+      let sanitizedNama = 'Participant';
+      if (participant && participant.name) {
+        sanitizedNama = participant.name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+      }
+      const filename = `QRCode_${sanitizedNama}_${participantId}.png`;
+      const encodedFilename = encodeURIComponent(filename);
+      const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`;
+      if (fileBuffer) {
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Content-Disposition', disposition);
+        res.send(fileBuffer);
+      } else {
+        res.status(404).send('QR Code not found');
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'Participant not found');
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+      }
+    }
   }
 
   @Get('/:participantId')
@@ -388,6 +452,17 @@ export class ParticipantController {
     } catch (error) {
       throw new HttpException(error.message, error.status || 500);
     }
+  }
+
+  @Get('/:participantId/download-all')
+  @Roles('super admin', 'lcu')
+  @UseGuards(AuthGuard, RoleGuard)
+  @HttpCode(200)
+  async downloadAllFiles(
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.participantService.downloadAllFilesAsZip(participantId, res);
   }
 
   @Delete('/:participantId')

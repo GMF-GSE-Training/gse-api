@@ -12,17 +12,23 @@ export interface CreateParticipantRequest {
   dateOfBirth?: Date;
   simA?: Buffer;
   simAFileName?: string;
+  simAPath?: string;
   simB?: Buffer;
   simBFileName?: string;
+  simBPath?: string;
   ktp?: Buffer;
   ktpFileName?: string;
+  ktpPath?: string;
   foto?: Buffer;
   fotoFileName?: string;
+  fotoPath?: string;
   suratSehatButaWarna?: Buffer;
   suratSehatButaWarnaFileName?: string;
+  suratSehatButaWarnaPath?: string;
   tglKeluarSuratSehatButaWarna?: Date;
   suratBebasNarkoba?: Buffer;
   suratBebasNarkobaFileName?: string;
+  suratBebasNarkobaPath?: string;
   tglKeluarSuratBebasNarkoba?: Date;
   gmfNonGmf?: string;
 }
@@ -41,17 +47,23 @@ export interface UpdateParticipantRequest {
   dateOfBirth?: Date;
   simA?: Buffer;
   simAFileName?: string;
+  simAPath?: string;
   simB?: Buffer;
   simBFileName?: string;
+  simBPath?: string;
   ktp?: Buffer;
   ktpFileName?: string;
+  ktpPath?: string;
   foto?: Buffer;
   fotoFileName?: string;
+  fotoPath?: string;
   suratSehatButaWarna?: Buffer;
-  suratSehatbutaWarnaFileName?: string;
+  suratSehatButaWarnaFileName?: string;
+  suratSehatButaWarnaPath?: string;
   tglKeluarSuratSehatButaWarna?: Date;
   suratBebasNarkoba?: Buffer;
   suratBebasNarkobaFileName?: string;
+  suratBebasNarkobaPath?: string;
   tglKeluarSuratBebasNarkoba?: Date;
   gmfNonGmf?: string;
 }
@@ -79,12 +91,18 @@ export interface ParticipantResponse {
   placeOfBirth: string;
   dateOfBirth: Date;
   simAFileName?: string;
+  simAPath?: string;
   simBFileName?: string;
+  simBPath?: string;
   ktpFileName?: string;
+  ktpPath?: string;
   fotoFileName?: string;
+  fotoPath?: string;
   suratSehatButaWarnaFileName?: string;
-  suratBebasNarkobaFileName?: string;
+  suratSehatButaWarnaPath?: string;
   tglKeluarSuratSehatButaWarna: Date;
+  suratBebasNarkobaFileName?: string;
+  suratBebasNarkobaPath?: string;
   tglKeluarSuratBebasNarkoba: Date;
   gmfNonGmf: string;
 }

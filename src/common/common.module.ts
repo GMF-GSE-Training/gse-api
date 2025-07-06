@@ -6,17 +6,32 @@ import { ValidationService } from './service/validation.service';
 import { APP_FILTER } from '@nestjs/core';
 import { ErrorFilter } from './error/error.filter';
 import { JwtModule, JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { extname } from 'path';
 import { CoreHelper } from './helpers/core.helper';
+import { UrlHelper } from './helpers/url.helper';
 
 @Global()
 @Module({
   imports: [
-    WinstonModule.forRoot({
+    ConfigModule,
+    WinstonModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
+        const logLevel = nodeEnv === 'production' ? 'debug' : 'silly';
+        return {
       format: winston.format.json(),
-      transports: [new winston.transports.Console()],
+          transports: [
+            new winston.transports.Console({
+              level: logLevel,
+              format: winston.format.simple(),
+            }),
+          ],
+        };
+      },
+      inject: [ConfigService],
     }),
     JwtModule.register({}),
     MulterModule.register({
@@ -48,6 +63,7 @@ import { CoreHelper } from './helpers/core.helper';
       useClass: ErrorFilter,
     },
     CoreHelper,
+    UrlHelper,
     {
       provide: 'ACCESS_JWT_SERVICE',
       useFactory: async (configService: ConfigService) =>
@@ -76,7 +92,7 @@ import { CoreHelper } from './helpers/core.helper';
         new JwtService({
           secret: configService.get<string>('VERIFICATION_TOKEN'),
           signOptions: {
-            expiresIn: '15m',
+            expiresIn: '24h',
           },
         }),
       inject: [ConfigService],
@@ -87,6 +103,7 @@ import { CoreHelper } from './helpers/core.helper';
     ValidationService,
     JwtModule,
     CoreHelper,
+    UrlHelper,
     'ACCESS_JWT_SERVICE',
     'REFRESH_JWT_SERVICE',
     'VERIFICATION_JWT_SERVICE',

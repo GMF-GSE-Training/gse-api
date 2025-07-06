@@ -6,12 +6,15 @@ import { CertificateValidation } from './certificate.validation';
 import { join } from 'path';
 import * as ejs from 'ejs';
 import puppeteer from 'puppeteer';
+import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Injectable()
 export class CertificateService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async createCertificate(
@@ -39,7 +42,7 @@ export class CertificateService {
             participant: {
               select: {
                 name: true,
-                foto: true,
+                fotoPath: true,
                 placeOfBirth: true,
                 dateOfBirth: true,
                 nationality: true,
@@ -82,7 +85,7 @@ export class CertificateService {
       select: {
         name: true,
         role: true,
-        eSign: true,
+        eSignPath: true,
         signatureType: true,
       },
     });
@@ -104,20 +107,42 @@ export class CertificateService {
       (item) => item.type === 'Kompetensi',
     );
 
-    const photoBase64 = Buffer.from(participant.foto).toString('base64');
-    const photoType = this.getMediaType(Buffer.from(participant.foto));
+    const storageType = process.env.STORAGE_TYPE || 'minio';
+    let photoBuffer: Buffer;
+    if (storageType === 'supabase') {
+      const { buffer } = await this.fileUploadService.downloadFile(participant.fotoPath);
+      photoBuffer = buffer;
+    } else {
+      photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+    }
+    const photoBase64 = photoBuffer.toString('base64');
+    const photoType = this.getMediaType(photoBuffer);
 
     const signature1 = eSign.find(
       (item) => item.signatureType === 'SIGNATURE1',
     );
-    const signature1Base64 = Buffer.from(signature1.eSign).toString('base64');
-    const signature1Type = this.getMediaType(Buffer.from(signature1.eSign));
+    let signature1Buffer: Buffer;
+    if (storageType === 'supabase') {
+      const { buffer } = await this.fileUploadService.downloadFile(signature1.eSignPath);
+      signature1Buffer = buffer;
+    } else {
+      signature1Buffer = await getFileBufferFromMinio(signature1.eSignPath);
+    }
+    const signature1Base64 = signature1Buffer.toString('base64');
+    const signature1Type = this.getMediaType(signature1Buffer);
 
     const signature2 = eSign.find(
       (item) => item.signatureType === 'SIGNATURE2',
     );
-    const signature2Base64 = Buffer.from(signature2.eSign).toString('base64');
-    const signature2Type = this.getMediaType(Buffer.from(signature2.eSign));
+    let signature2Buffer: Buffer;
+    if (storageType === 'supabase') {
+      const { buffer } = await this.fileUploadService.downloadFile(signature2.eSignPath);
+      signature2Buffer = buffer;
+    } else {
+      signature2Buffer = await getFileBufferFromMinio(signature2.eSignPath);
+    }
+    const signature2Base64 = signature2Buffer.toString('base64');
+    const signature2Type = this.getMediaType(signature2Buffer);
 
     const formattedStartDate = this.formatDate(new Date(cot.startDate));
     const formattedEndDate = this.formatDate(new Date(cot.endDate));

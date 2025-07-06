@@ -27,13 +27,6 @@ export const validationSchema = Joi.object({
     .uri()
     .required()
     .messages({ 'any.required': 'DATABASE_URL wajib diisi sebagai URI yang valid' }),
-  QR_CODE_LINK: Joi.string()
-    .required()
-    .pattern(/https?:\/\/[\w\-\.]+(:\d+)?\/[\w\-\.\/\{\}]+/)
-    .messages({
-      'any.required': 'QR_CODE_LINK wajib diisi',
-      'string.pattern.base': 'QR_CODE_LINK harus berupa URL template yang valid',
-    }),
   ACCESS_TOKEN: Joi.string()
     .required()
     .messages({ 'any.required': 'ACCESS_TOKEN wajib diisi' }),

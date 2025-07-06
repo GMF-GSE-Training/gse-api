@@ -4,14 +4,18 @@ import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import * as cookieParser from 'cookie-parser';
 import * as os from 'os';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
   let app;
   try {
-    app = await NestFactory.create(AppModule);
+    app = await NestFactory.create<NestExpressApplication>(AppModule);
 
     const winstonLogger = app.get(WINSTON_MODULE_NEST_PROVIDER);
     app.useLogger(winstonLogger);
+
+    app.useStaticAssets(join(__dirname, '..', 'public'));
 
     const configService = app.get(ConfigService);
     app.use(cookieParser());
@@ -22,14 +26,29 @@ async function bootstrap() {
     const host = (configService.get('HOST') as string) || 'localhost';
     const port = (configService.get('PORT') as number) || process.env.PORT || (nodeEnv === 'development' ? 3000 : 3000);
     const protocol = (configService.get('PROTOCOL') as string) || process.env.PROTOCOL || (nodeEnv === 'production' ? 'https' : 'http');
-    const frontendUrl = (configService.get('FRONTEND_URL') as string) || process.env.FRONTEND_URL || 'http://localhost:4200';
+    // Ambil origin CORS dari env, support multi-origin (pisahkan dengan koma)
+    // Prioritaskan CORS_ORIGIN, fallback ke FRONTEND_URL, ORIGIN, dst
+    const corsOrigins = (
+      configService.get('CORS_ORIGIN') ||
+      process.env.CORS_ORIGIN ||
+      configService.get('FRONTEND_URL') ||
+      process.env.FRONTEND_URL ||
+      configService.get('ORIGIN') ||
+      process.env.ORIGIN ||
+      'http://localhost:4200'
+    )
+      .split(',')
+      .map(origin => origin.trim());
 
     app.enableCors({
-      origin: [frontendUrl, `${protocol}://${host}:4200`],
+      origin: corsOrigins,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       allowedHeaders: 'Content-Type,Authorization,Cache-Control',
       credentials: true,
     });
+
+    // Agar IP user terdeteksi dengan benar jika di balik proxy/nginx
+    app.set('trust proxy', true);
 
     await app.listen(port, host);
     winstonLogger.log(`Application is running in ${nodeEnv} mode on ${protocol}://${host}:${port})`);

@@ -11,24 +11,28 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id                        String        @id @default(uuid())
   participantId             String?       @unique
   idNumber                  String?       @unique @db.VarChar(20)
-  email                     String        @db.VarChar(255)
+  email                     String        @unique @db.VarChar(255)
   nik                       String?       @unique @db.VarChar(50)
   name                      String        @db.VarChar(255)
   password                  String        @db.VarChar(255)
-  refreshToken              String?       @db.VarChar(255)
-  accountVerificationToken  String?       @db.VarChar(255)
-  emailChangeToken          String?       @db.VarChar(255)
-  passwordResetToken        String?       @db.VarChar(255)
-  updateEmailToken          String?       @db.VarChar(255)
+  refreshToken              String?       @db.Text
+  accountVerificationToken  String?       @db.VarChar(512)
+  lastVerificationEmailSentAt DateTime?   @map("last_verification_email_sent_at")
+  emailChangeToken          String?       @db.Text
+  passwordResetToken        String?       @db.Text
+  updateEmailToken          String?       @db.Text
   roleId                    String
   dinas                     String?       @db.VarChar(50)
   verifiedAccount           Boolean       @default(false)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   role                      Role          @relation(fields: [roleId], references: [id])
   participant               Participant?  @relation(fields: [participantId], references: [id])
@@ -38,7 +42,7 @@ model User {
 
 model Role {
   id    String  @id @default(uuid())
-  name  String  @db.VarChar(50)
+  name  String  @unique @db.VarChar(50)
 
   users User[]
 
@@ -59,21 +63,22 @@ model Participant {
   nationality                   String?             @db.VarChar(50)
   placeOfBirth                  String?             @db.VarChar(50)
   dateOfBirth                   DateTime?           @db.Date
-  simA                          Bytes?
   simAFileName                  String?             @db.VarChar(255)
-  simB                          Bytes?
+  simAPath                      String?             @db.VarChar(255)
   simBFileName                  String?             @db.VarChar(255)
-  ktp                           Bytes?
+  simBPath                      String?             @db.VarChar(255)
   ktpFileName                   String?             @db.VarChar(255)
-  foto                          Bytes?
+  ktpPath                       String?             @db.VarChar(255)
   fotoFileName                  String?             @db.VarChar(255)
-  suratSehatButaWarna           Bytes?
+  fotoPath                      String?             @db.VarChar(255)
   suratSehatButaWarnaFileName   String?             @db.VarChar(255)
+  suratSehatButaWarnaPath       String?             @db.VarChar(255)
   tglKeluarSuratSehatButaWarna  DateTime?           @db.Date
-  suratBebasNarkoba             Bytes?
   suratBebasNarkobaFileName     String?             @db.VarChar(255)
+  suratBebasNarkobaPath         String?             @db.VarChar(255)
   tglKeluarSuratBebasNarkoba    DateTime?           @db.Date
-  qrCode                        Bytes?
+  qrCodePath                    String?             @db.Text
+  qrCodeLink                    String?             @db.Text
   gmfNonGmf                     String?             @db.VarChar(20)
 
   participantsCots              ParticipantsCOT[]
@@ -157,8 +162,8 @@ model Signature {
   idNumber        String          @db.VarChar(20)
   role            String          @db.VarChar(50)
   name            String          @db.VarChar(50)
-  eSign           Bytes
   eSignFileName   String?         @db.VarChar(255)
+  eSignPath       String?         @db.VarChar(255)
   signatureType   SignatureType
   status          Boolean         @default(false)
 

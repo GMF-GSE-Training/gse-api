@@ -1,73 +1,167 @@
+# GMF GSE Training Backend
+
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
+  <img src="https://nestjs.com/img/logo-small.svg" width="100" alt="Nest Logo" />
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
+<p align="center">
+  Aplikasi *backend* untuk <b>GMF GSE Training</b>, dibangun dengan <b>NestJS</b> dan terhubung ke <b>PostgreSQL</b>.
 </p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+<p align="center">
+  <a href="https://www.npmjs.com/package/@nestjs/core" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
+  <a href="https://www.npmjs.com/package/@nestjs/core" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
+  <a href="https://www.npmjs.com/package/@nestjs/common" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
+</p>
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Installation
+## Deskripsi Proyek
 
-```bash
-$ npm install
+Repositori ini berisi kode *backend* untuk aplikasi 'GMF GSE Training', dibangun menggunakan framework NestJS dan terhubung ke database PostgreSQL. Backend ini menyediakan API untuk manajemen pengguna, autentikasi, otorisasi berbasis peran, serta fitur pelatihan dan sertifikasi.
+
+## Fitur Utama
+
+- **Autentikasi & Otorisasi:** JWT, refresh token, verifikasi email, reset password, dan otorisasi berbasis peran.
+- **Manajemen Pengguna & Peran:** CRUD pengguna dan peran (super admin, supervisor, lcu, user).
+- **Integrasi Database:** Prisma ORM untuk PostgreSQL.
+- **Sistem Notifikasi:** Email untuk verifikasi akun dan reset password.
+- **Manajemen Dokumen:** Upload/download dokumen dan sertifikat.
+- **Logging:** Winston untuk pemantauan aplikasi.
+
+## Struktur Proyek
+
+```
+backend/
+├── src/
+│   ├── auth/              # Modul autentikasi & otorisasi
+│   ├── common/            # Modul umum (Prisma, Validation, Logging)
+│   ├── capability/        # Manajemen kapabilitas
+│   ├── certificate/       # Manajemen sertifikat
+│   ├── config/            # Konfigurasi aplikasi
+│   ├── cot/               # Calendar Of Training (COT)
+│   ├── curriculum-syllabus/# Kurikulum & silabus
+│   ├── e-sign/            # Tanda tangan elektronik
+│   ├── mail/              # Pengiriman email
+│   ├── participant/       # Manajemen peserta
+│   ├── participant-cot/   # Peserta COT
+│   ├── role/              # Manajemen peran
+│   ├── shared/            # Modul & layanan bersama
+│   ├── user/              # Manajemen pengguna
+│   └── main.ts            # Entry point aplikasi
+├── prisma/                # Skema & migrasi database
+├── public/                # File statis (QR code, sertifikat)
+├── uploads/               # File upload
+├── .env.example           # Contoh konfigurasi lingkungan
+├── pnpm-lock.yaml         # Lock file dependensi
+└── package.json           # Definisi proyek & skrip
 ```
 
-## Running the app
+## Instalasi
+
+1. Pastikan [pnpm](https://pnpm.io/installation) sudah terpasang.
+2. Jalankan:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+pnpm install
 ```
 
-## Test
+## Konfigurasi Lingkungan (`.env`)
+
+Buat file `.env` di direktori `backend/` berdasarkan `.env.example`. Jangan gunakan data asli pada file ini. Contoh:
+
+```
+DATABASE_URL="postgresql://<USER>:<PASSWORD>@<HOST>:<PORT>/<DB>?pgbouncer=true"
+NODE_ENV=development
+PROTOCOL=http
+HOST=0.0.0.0
+PORT=3000
+FRONTEND_URL=https://frontend.example.com
+CORS_ORIGIN=http://localhost:4200,https://frontend.example.com
+BACKEND_URL=https://api.example.com
+ACCESS_TOKEN=<ACCESS_TOKEN>
+REFRESH_TOKEN=<REFRESH_TOKEN>
+VERIFICATION_TOKEN=<VERIFICATION_TOKEN>
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USER=<MAIL_USER>
+MAIL_PASS=<MAIL_PASS>
+APP_NAME="Admin GMF GSE Training"
+```
+
+**Catatan:**
+- Jangan pernah commit file `.env` yang berisi data asli.
+- Gunakan variabel dummy pada contoh.
+- Untuk deployment production, sesuaikan domain dan kredensial.
+
+## Migrasi & Seeding Database
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+pnpm prisma migrate deploy
+pnpm run seed
 ```
 
-## Support
+## Menjalankan Aplikasi
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+# Development
+pnpm run start
 
-## Stay in touch
+# Watch mode (hot-reloading)
+pnpm run start:dev
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+# Production mode
+pnpm run start:prod
+```
 
-## License
+## Testing
 
-Nest is [MIT licensed](LICENSE).
+```bash
+# Unit tests
+pnpm run test
+
+# E2E tests
+pnpm run test:e2e
+
+# Test coverage
+pnpm run test:cov
+```
+
+## Deployment ke Google Cloud Run
+
+Deployment otomatis ke Cloud Run via GitHub Actions pada branch `backup/dev-2025-06-15`.
+
+**Pastikan secrets berikut sudah diatur di GitHub:**
+- GCP_SA_KEY
+- DATABASE_URL
+- ACCESS_TOKEN
+- REFRESH_TOKEN
+- VERIFICATION_TOKEN
+- MAIL_USER
+- MAIL_PASS
+- FRONTEND_URL
+- BACKEND_URL
+- APP_NAME
+
+**Penting:**
+- Nama secret harus sama persis dengan variabel environment aplikasi.
+- Jangan pernah menaruh data sensitif di README atau file publik.
+
+## Pemecahan Masalah
+
+### bcrypt_lib.node module not found
+
+Jika error terkait bcrypt, update bcrypt dan pastikan Node.js versi 20.x:
+
+```bash
+pnpm update bcrypt@latest
+pnpm prisma generate
+nvm install 20 && nvm use 20
+rm -rf node_modules pnpm-lock.yaml && pnpm install
+pnpm prisma generate
+pnpm run seed
+```
+
+## Lisensi
+
+MIT License

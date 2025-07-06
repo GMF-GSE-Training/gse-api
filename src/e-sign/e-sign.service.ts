@@ -11,6 +11,8 @@ import { ESignValidation } from './e-sign.validation';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { CurrentUserRequest } from 'src/model/auth.model';
+import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Injectable()
 export class ESignService {
@@ -18,6 +20,7 @@ export class ESignService {
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
     private readonly coreHelper: CoreHelper,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async createESign(request: CreateESign): Promise<string> {
@@ -152,11 +155,18 @@ export class ESignService {
       },
     });
 
-    if (!eSign || !eSign.eSign) {
+    if (!eSign || !eSign.eSignPath) {
       throw new HttpException('File E-Sign tidak ditemukan', 404);
     }
 
-    return Buffer.from(eSign.eSign);
+    // Ambil file dari storage dinamis
+    const storageType = process.env.STORAGE_TYPE || 'minio';
+    if (storageType === 'supabase') {
+      const { buffer } = await this.fileUploadService.downloadFile(eSign.eSignPath);
+      return buffer;
+    } else {
+      return await getFileBufferFromMinio(eSign.eSignPath);
+    }
   }
 
   async deleteESign(eSignId: string): Promise<string> {

@@ -1,360 +1,47 @@
-import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { User } from '@prisma/client';
-import { PrismaService } from '../common/service/prisma.service';
-import { ValidationService } from '../common/service/validation.service';
+import * as bcrypt from 'bcrypt';
+import * as QRCode from 'qrcode';
+import { MailService } from 'src/mail/mail.service';
+import { PrismaService } from 'src/common/service/prisma.service';
+import { ValidationService } from 'src/common/service/validation.service';
+import { AuthValidation } from './auth.validation';
 import {
   AuthResponse,
-  CurrentUserRequest,
+  LoginUserRequest,
   RegisterUserRequest,
+  CurrentUserRequest,
   UpdatePassword,
 } from '../model/auth.model';
-import { LoginUserRequest } from '../model/auth.model';
-import { AuthValidation } from './auth.validation';
-import * as bcrypt from 'bcrypt';
+import { SendEmail } from '../model/mail.model';
 import { JwtService } from '@nestjs/jwt';
-import { SendEmail } from 'src/model/mail.model';
-import { MailService } from 'src/mail/mail.service';
-import { ConfigService } from '@nestjs/config';
-import * as os from 'os';
 import { CoreHelper } from 'src/common/helpers/core.helper';
-import * as QRCode from 'qrcode';
+import { UrlHelper } from 'src/common/helpers/url.helper';
+import { Response } from 'express';
+import { Controller, Get, Param, Res } from '@nestjs/common';
+import axios from 'axios';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
   constructor(
-    private readonly validationService: ValidationService,
     private readonly prismaService: PrismaService,
-    private readonly mailService: MailService,
+    private readonly validationService: ValidationService,
     private readonly configService: ConfigService,
-    private readonly coreHelper: CoreHelper,
-    @Inject('ACCESS_JWT_SERVICE') private readonly accessJwtService: JwtService,
-    @Inject('REFRESH_JWT_SERVICE')
-    private readonly refreshJwtService: JwtService,
+    private readonly mailService: MailService,
+    @Inject('ACCESS_JWT_SERVICE') private accessJwtService: JwtService,
+    @Inject('REFRESH_JWT_SERVICE') private refreshJwtService: JwtService,
     @Inject('VERIFICATION_JWT_SERVICE')
-    private readonly verificationJwtService: JwtService,
+    private verificationJwtService: JwtService,
+    private coreHelper: CoreHelper,
+    private urlHelper: UrlHelper
   ) {}
-
-  private getBaseUrl(type: 'frontend' | 'backend'): string {
-    const protocol = this.configService.get<string>('PROTOCOL') || 'http';
-    const host = this.configService.get<string>('HOST') || 'localhost';
-    const port = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_PORT' : 'PORT') || '4200';
-
-    const envUrl = this.configService.get<string>(type === 'frontend' ? 'FRONTEND_URL' : 'BACKEND_URL');
-    if (envUrl) {
-        this.logger.debug(`Menggunakan ${type} URL dari .env: ${envUrl}`);
-        return envUrl;
-    }
-
-    const constructedUrl = `${protocol}://${host}:${port}`;
-    this.logger.warn(`Tidak ada ${type} URL di .env, menggunakan URL default: ${constructedUrl}`);
-    return constructedUrl;
-}
-
-  // async register(req: RegisterUserRequest): Promise<string> {
-  //   if (req.roleId) {
-  //     throw new HttpException('Anda tidak berhak menentukan role', 403);
-  //   }
-
-  //   const defaultRole = await this.prismaService.role.findFirst({
-  //     where: {
-  //       name: { equals: 'user', mode: 'insensitive' },
-  //     },
-  //   });
-
-  //   if (!defaultRole) {
-  //     throw new HttpException('Role tidak ditemukan', 404);
-  //   }
-
-  //   req.roleId = defaultRole.id;
-  //   const registerRequest: RegisterUserRequest =
-  //     this.validationService.validate(AuthValidation.REGISTER, req);
-
-  //   const participant = await this.prismaService.participant.findUnique({
-  //     where: { nik: req.nik },
-  //   });
-
-  //   if (participant) {
-  //     if (registerRequest.email !== participant.email) {
-  //       throw new HttpException('Email tidak sesuai dengan data peserta', 400);
-  //     }
-
-  //     if (
-  //       participant.idNumber &&
-  //       registerRequest.idNumber !== participant.idNumber
-  //     ) {
-  //       throw new HttpException(
-  //         'No Pegawai tidak sesuai dengan data peserta',
-  //         400,
-  //       );
-  //     }
-
-  //     if (participant.dinas && registerRequest.dinas !== participant.dinas) {
-  //       throw new HttpException('Dinas tidak sesuai dengan data peserta', 400);
-  //     }
-
-  //     req.participantId = participant.id;
-  //   }
-
-  //   await this.checkUserExists(registerRequest.idNumber, registerRequest.email);
-
-  //   registerRequest.password = await bcrypt.hash(registerRequest.password, 10);
-
-  //   const authSelectedFields = this.authSelectedFields();
-
-  //   // Transaksi Prisma
-  //   const [user] = await this.prismaService.$transaction(async (prisma) => {
-  //     await this.coreHelper.ensureUniqueFields('participant', [
-  //       {
-  //         field: 'idNumber',
-  //         value: registerRequest.idNumber,
-  //         message: 'No Pegawai sudah digunakan',
-  //       },
-  //       {
-  //         field: 'nik',
-  //         value: registerRequest.nik,
-  //         message: 'NIK sudah digunakan',
-  //       },
-  //       {
-  //         field: 'email',
-  //         value: registerRequest.email,
-  //         message: 'Email sudah digunakan',
-  //       },
-  //     ]);
-
-  //     // Buat user
-  //     const user = await prisma.user.create({
-  //       data: registerRequest,
-  //       select: authSelectedFields,
-  //     });
-
-  //     // Buat participant
-  //     const createParticipantData = {
-  //       idNumber: registerRequest.idNumber,
-  //       name: registerRequest.name,
-  //       nik: registerRequest.nik,
-  //       email: registerRequest.email,
-  //       dinas: registerRequest.dinas,
-  //     };
-
-  //     const participant = await prisma.participant.create({
-  //       data: createParticipantData,
-  //     });
-
-  //     // Modifikasi qrCodeLink dengan ID peserta
-  //     const link = this.configService
-  //       .get<string>('QR_CODE_LINK')
-  //       .replace('{id}', participant.id);
-
-  //     // Generate QR code
-  //     const qrCodeBase64 = await QRCode.toDataURL(link, { width: 500 });
-  //     const qrCodeBuffer = Buffer.from(
-  //       qrCodeBase64.replace(/^data:image\/png;base64,/, ''),
-  //       'base64',
-  //     );
-
-  //     // Update peserta dengan QR code dan link
-  //     await prisma.participant.update({
-  //       where: { id: participant.id },
-  //       data: {
-  //         qrCode: qrCodeBuffer,
-  //       },
-  //     });
-
-  //     // Update user dengan participantId
-  //     const updatedUser = await prisma.user.update({
-  //       where: { id: user.id },
-  //       data: { participantId: participant.id },
-  //     });
-
-  //     return [updatedUser, participant];
-  //   });
-
-  //   // Generate token
-  //   const payload = { id: user.id };
-  //   const accountVerificationToken =
-  //     await this.verificationJwtService.signAsync(payload);
-
-  //   // Ambil BACKEND_URL dari .env, fallback ke localIp jika tidak ada
-  //   const backendUrl = this.configService.get<string>('BACKEND_URL') || this.getLocalIp();
-  //   const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
-
-  //   const email: SendEmail = {
-  //     from: {
-  //       name: this.configService.get<string>('APP_NAME'),
-  //       address: this.configService.get<string>('MAIL_USER'),
-  //     },
-  //     receptients: [
-  //       {
-  //         name: user.name,
-  //         address: user.email,
-  //       },
-  //     ],
-  //     subject: 'Email Verifikasi',
-  //     html: 'verify-account',
-  //     placeholderReplacements: {
-  //       username: user.name,
-  //       verificationLink: verificationLink,
-  //     },
-  //   };
-
-  //   await this.mailService.sendEmail(email);
-
-  //   await this.prismaService.user.update({
-  //     where: {
-  //       id: user.id,
-  //     },
-  //     data: {
-  //       accountVerificationToken: accountVerificationToken,
-  //     },
-  //   });
-
-  //   return 'Registrasi berhasil';
-  // }
-
-  // async register(req: RegisterUserRequest): Promise<string> {
-  //   this.logger.debug('Memulai registrasi pengguna');
-
-  //   // Validasi role
-  //   if (req.roleId) {
-  //     this.logger.warn('Percobaan menentukan role oleh pengguna');
-  //     throw new HttpException('Anda tidak berhak menentukan role', 403);
-  //   }
-
-  //   const defaultRole = await this.prismaService.role.findFirst({
-  //     where: { name: { equals: 'user', mode: 'insensitive' } },
-  //   });
-
-  //   if (!defaultRole) {
-  //     this.logger.error('Role default "user" tidak ditemukan');
-  //     throw new HttpException('Role tidak ditemukan', 404);
-  //   }
-
-  //   req.roleId = defaultRole.id;
-  //   const registerRequest: RegisterUserRequest = this.validationService.validate(
-  //     AuthValidation.REGISTER,
-  //     req,
-  //   );
-
-  //   // Cek peserta berdasarkan NIK
-  //   const participant = await this.prismaService.participant.findUnique({
-  //     where: { nik: req.nik },
-  //   });
-
-  //   if (participant) {
-  //     if (registerRequest.email !== participant.email) {
-  //       throw new HttpException('Email tidak sesuai dengan data peserta', 400);
-  //     }
-  //     if (
-  //       participant.idNumber &&
-  //       registerRequest.idNumber !== participant.idNumber
-  //     ) {
-  //       throw new HttpException('No Pegawai tidak sesuai dengan data peserta', 400);
-  //     }
-  //     if (participant.dinas && registerRequest.dinas !== participant.dinas) {
-  //       throw new HttpException('Dinas tidak sesuai dengan data peserta', 400);
-  //     }
-  //     req.participantId = participant.id;
-  //   }
-
-  //   await this.checkUserExists(registerRequest.idNumber, registerRequest.email);
-  //   registerRequest.password = await bcrypt.hash(registerRequest.password, 10);
-
-  //   const authSelectedFields = this.authSelectedFields();
-
-  //   // Transaksi Prisma
-  //   const [user, newParticipant] = await this.prismaService.$transaction(
-  //     async (prisma) => {
-  //       try {
-  //         // Pastikan keunikan field hanya menggunakan prisma dari transaksi
-  //         await this.coreHelper.ensureUniqueFields('participant', [
-  //           { field: 'idNumber', value: registerRequest.idNumber, message: 'No Pegawai sudah digunakan' },
-  //           { field: 'nik', value: registerRequest.nik, message: 'NIK sudah digunakan' },
-  //           { field: 'email', value: registerRequest.email, message: 'Email sudah digunakan' },
-  //         ], prisma); // Pastikan coreHelper menerima prisma sebagai parameter
-
-  //         const user = await prisma.user.create({
-  //           data: registerRequest,
-  //           select: authSelectedFields,
-  //         });
-
-  //         const createParticipantData = {
-  //           idNumber: registerRequest.idNumber,
-  //           name: registerRequest.name,
-  //           nik: registerRequest.nik,
-  //           email: registerRequest.email,
-  //           dinas: registerRequest.dinas,
-  //         };
-
-  //         const participant = await prisma.participant.create({
-  //           data: createParticipantData,
-  //         });
-
-  //         const updatedUser = await prisma.user.update({
-  //           where: { id: user.id },
-  //           data: { participantId: participant.id },
-  //         });
-
-  //         return [updatedUser, participant];
-  //       } catch (error) {
-  //         this.logger.error('Gagal dalam transaksi registrasi', error.stack);
-  //         throw error; // Biarkan Prisma menangani rollback
-  //       }
-  //     },
-  //     { timeout: 10000 }, // Tambahkan timeout lebih lama sebagai cadangan
-  //   );
-
-  //   // Generate QR code di luar transaksi
-  //   const link = this.configService
-  //     .get<string>('QR_CODE_LINK')
-  //     .replace('{id}', newParticipant.id);
-  //   const qrCodeBase64 = await QRCode.toDataURL(link, { width: 500 });
-  //   const qrCodeBuffer = Buffer.from(
-  //     qrCodeBase64.replace(/^data:image\/png;base64,/, ''),
-  //     'base64',
-  //   );
-
-  //   await this.prismaService.participant.update({
-  //     where: { id: newParticipant.id },
-  //     data: { qrCode: qrCodeBuffer },
-  //   });
-
-  //   // Generate token verifikasi
-  //   const payload = { id: user.id };
-  //   const accountVerificationToken = await this.verificationJwtService.signAsync(payload);
-
-  //   const backendUrl = this.configService.get<string>('BACKEND_URL') || this.getLocalIp();
-  //   const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
-
-  //   const email: SendEmail = {
-  //     from: {
-  //       name: this.configService.get<string>('APP_NAME'),
-  //       address: this.configService.get<string>('MAIL_USER'),
-  //     },
-  //     receptients: [{ name: user.name, address: user.email }],
-  //     subject: 'Email Verifikasi',
-  //     html: 'verify-account',
-  //     placeholderReplacements: {
-  //       username: user.name,
-  //       verificationLink: verificationLink,
-  //     },
-  //   };
-
-  //   await this.mailService.sendEmail(email);
-
-  //   await this.prismaService.user.update({
-  //     where: { id: user.id },
-  //     data: { accountVerificationToken },
-  //   });
-
-  //   this.logger.debug('Registrasi berhasil untuk pengguna: ' + user.email);
-  //   return 'Registrasi berhasil';
-  // }
 
   async register(req: RegisterUserRequest): Promise<string> {
     this.logger.debug('Memulai registrasi pengguna');
 
-    // Validasi role
     if (req.roleId) {
       this.logger.warn('Percobaan menentukan role oleh pengguna');
       throw new HttpException('Anda tidak berhak menentukan role', 403);
@@ -375,7 +62,6 @@ export class AuthService {
       req,
     );
 
-    // Cek peserta berdasarkan NIK
     const participant = await this.prismaService.participant.findUnique({
       where: { nik: req.nik },
     });
@@ -388,7 +74,10 @@ export class AuthService {
         participant.idNumber &&
         registerRequest.idNumber !== participant.idNumber
       ) {
-        throw new HttpException('No Pegawai tidak sesuai dengan data peserta', 400);
+        throw new HttpException(
+          'No Pegawai tidak sesuai dengan data peserta',
+          400,
+        );
       }
       if (participant.dinas && registerRequest.dinas !== participant.dinas) {
         throw new HttpException('Dinas tidak sesuai dengan data peserta', 400);
@@ -401,20 +90,32 @@ export class AuthService {
 
     const authSelectedFields = this.authSelectedFields();
 
-    // Transaksi Prisma
+    let accountVerificationToken = '';
+
     const [user, newParticipant] = await this.prismaService.$transaction(
       async (prisma) => {
         try {
-          // Pastikan keunikan field menggunakan prisma dari transaksi
           await this.coreHelper.ensureUniqueFields(
             'participant',
             [
-              { field: 'idNumber', value: registerRequest.idNumber, message: 'No Pegawai sudah digunakan' },
-              { field: 'nik', value: registerRequest.nik, message: 'NIK sudah digunakan' },
-              { field: 'email', value: registerRequest.email, message: 'Email sudah digunakan' },
+              {
+                field: 'idNumber',
+                value: registerRequest.idNumber,
+                message: 'No Pegawai sudah digunakan',
+              },
+              {
+                field: 'nik',
+                value: registerRequest.nik,
+                message: 'NIK sudah digunakan',
+              },
+              {
+                field: 'email',
+                value: registerRequest.email,
+                message: 'Email sudah digunakan',
+              },
             ],
             undefined,
-            prisma // Pastikan CoreHelper mendukung instance Prisma
+            prisma,
           );
 
           const user = await prisma.user.create({
@@ -434,6 +135,31 @@ export class AuthService {
             data: createParticipantData,
           });
 
+          const payload = { id: user.id };
+          accountVerificationToken =
+            await this.verificationJwtService.signAsync(payload);
+          this.logger.debug(
+            `Register: Token verifikasi baru dibuat untuk user ${
+              user.id
+            }: ${accountVerificationToken.substring(0, 20)}...`,
+          );
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { accountVerificationToken },
+          });
+          const updatedUserAfterToken = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { accountVerificationToken: true },
+          });
+          this.logger.debug(
+            `Register: Token verifikasi yang disimpan di DB untuk user ${
+              user.id
+            }: ${updatedUserAfterToken?.accountVerificationToken?.substring(
+              0,
+              20,
+            )}...`,
+          );
+
           const updatedUser = await prisma.user.update({
             where: { id: user.id },
             data: { participantId: participant.id },
@@ -442,34 +168,14 @@ export class AuthService {
           return [updatedUser, participant];
         } catch (error) {
           this.logger.error('Gagal dalam transaksi registrasi', error.stack);
-          throw error; // Biarkan Prisma menangani rollback
+          throw error;
         }
       },
-      { timeout: 10000 }, // Timeout lebih lama sebagai cadangan
+      { timeout: 10000 },
     );
 
-    // Generate QR code di luar transaksi
-    const link = this.configService
-      .get<string>('QR_CODE_LINK')
-      .replace('{id}', newParticipant.id);
-    const qrCodeBase64 = await QRCode.toDataURL(link, { width: 500 });
-    const qrCodeBuffer = Buffer.from(
-      qrCodeBase64.replace(/^data:image\/png;base64,/, ''),
-      'base64',
-    );
-
-    await this.prismaService.participant.update({
-      where: { id: newParticipant.id },
-      data: { qrCode: qrCodeBuffer },
-    });
-
-    // Generate token verifikasi
-    const payload = { id: user.id };
-    const accountVerificationToken = await this.verificationJwtService.signAsync(payload);
-
-    // Ambil URL backend dari .env
-    const backendUrl = this.getBaseUrl('backend');
-    const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
+    const link = this.urlHelper.getBaseUrl('backend');
+    const verificationLink = `${link}/auth/verify-account/${accountVerificationToken}`;
 
     const email: SendEmail = {
       from: {
@@ -485,35 +191,54 @@ export class AuthService {
       },
     };
 
-    await this.mailService.sendEmail(email);
-
-    await this.prismaService.user.update({
-      where: { id: user.id },
-      data: { accountVerificationToken },
-    });
+    try {
+      await this.mailService.sendEmail(email);
+      this.logger.log('Email verifikasi berhasil dikirim ke: ' + user.email);
+    } catch (emailError) {
+      this.logger.error('Error sending verification email:', emailError);
+      throw new HttpException(
+        'Gagal mengirim email verifikasi. Silakan coba lagi nanti atau verifikasi secara manual.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
 
     this.logger.debug('Registrasi berhasil untuk pengguna: ' + user.email);
     return 'Registrasi berhasil';
   }
 
   async accountVerification(token: string): Promise<AuthResponse> {
+    this.logger.debug(
+      `Verifikasi Akun: Token diterima di service: ${
+        token ? token.substring(0, 20) + '...' : 'null/undefined/empty'
+      }`,
+    );
+
     try {
       const verifyToken = await this.verificationJwtService.verifyAsync(token);
+      this.logger.debug(
+        `Verifikasi Akun: Token JWT berhasil diverifikasi. Payload: ${JSON.stringify(
+          verifyToken,
+        )}`,
+      );
 
       const user = await this.prismaService.user.findUnique({
         where: {
           id: verifyToken.id,
         },
+        include: { role: true },
       });
 
       if (!user) {
-        throw new HttpException('Pengguna tidak ditemukan', 404);
+        throw new HttpException('Akun tidak ditemukan.', 404);
       }
 
-      if (
-        !user.accountVerificationToken ||
-        user.accountVerificationToken !== token
-      ) {
+      const trimmedToken = token.trim();
+      const trimmedDbToken = user.accountVerificationToken?.trim();
+
+      if (!trimmedDbToken || trimmedDbToken !== trimmedToken) {
+        this.logger.warn(
+          `Verifikasi Akun: Token dari URL tidak cocok dengan token di DB untuk user ${user.id}`,
+        );
         throw new HttpException(
           'Token ini tidak valid atau sudah digunakan',
           400,
@@ -533,15 +258,18 @@ export class AuthService {
           accountVerificationToken: null,
           verifiedAccount: true,
         },
+        include: { role: true },
       });
+      this.logger.debug(
+        `Verifikasi Akun: Akun ${user.id} berhasil diverifikasi. Token verifikasi dihapus, status verifikasi diatur ke true.`,
+      );
 
-      return this.toAuthResponse({
-        refreshToken,
-        accessToken,
-      });
+      return this.toAuthResponse(user, accessToken, refreshToken);
     } catch (error) {
-      console.log(error);
-      throw new HttpException('Token tidak valid atau telah kadaluarsa', 400);
+      this.logger.error(
+        `Verifikasi Akun: Gagal memverifikasi token. Error: ${error.message}. Stack: ${error.stack}`,
+      );
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -551,31 +279,35 @@ export class AuthService {
       req,
     );
 
-    // Gunakan tipe User dari Prisma untuk kejelasan
     let user: User | null;
     if (loginRequest.identifier.includes('@')) {
       user = await this.prismaService.user.findFirst({
         where: {
           email: loginRequest.identifier,
         },
+        include: { role: true },
       });
     } else {
       user = await this.prismaService.user.findFirst({
         where: {
           idNumber: loginRequest.identifier,
         },
+        include: { role: true },
       });
     }
 
     if (!user) {
       throw new HttpException(
-        'Nomor Pegawai, email, atau kata sandi yang Anda masukkan tidak valid.',
-        400,
+        'Akun Anda belum terdaftar. Silakan lakukan pendaftaran untuk mengakses layanan.',
+        HttpStatus.NOT_FOUND,
       );
     }
 
-    if (!user.verifiedAccount) {
-      throw new HttpException('Akun belum diverifikasi', 403);
+    const role = await this.prismaService.role.findUnique({
+      where: { id: user.roleId },
+    });
+    if (role?.name.toLowerCase() === 'user' && !user.verifiedAccount) {
+      throw new HttpException('Akun Anda belum terverifikasi. Silakan cek email Anda atau klik menu "Belum Terverifikasi?" di halaman login.', 403);
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -585,8 +317,8 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw new HttpException(
-        'Nomor Pegawai, email, atau kata sandi yang Anda masukkan tidak valid.',
-        400,
+        'Kata sandi yang Anda masukkan salah.',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -602,13 +334,10 @@ export class AuthService {
         data: {
           refreshToken: refreshToken,
         },
+        include: { role: true, participant: true },
       });
 
-      return this.toAuthResponse({
-        id: user.id,
-        accessToken,
-        refreshToken,
-      });
+      return this.toAuthResponse(user, accessToken, refreshToken);
     } catch (error) {
       console.log(error);
       throw new HttpException('Failed to generate token', 500);
@@ -622,22 +351,20 @@ export class AuthService {
 
       const user = await this.prismaService.user.findUnique({
         where: { id: verifyRefreshToken.id },
+        include: { role: true },
       });
 
       if (!user || user.refreshToken !== refreshToken) {
-        throw new HttpException('Unauthorized', 401);
+        throw new HttpException('Sesi Anda telah berakhir. Silakan login kembali.', 401);
       }
 
       const payload = { id: user.id };
       const newAccessToken = await this.accessJwtService.signAsync(payload);
 
-      return this.toAuthResponse({
-        id: user.id,
-        accessToken: newAccessToken,
-      });
+      return this.toAuthResponse(user, newAccessToken, refreshToken);
     } catch (error) {
       console.log(error);
-      throw new HttpException('Unauthorized', 401);
+      throw new HttpException('Sesi Anda telah berakhir. Silakan login kembali.', 401);
     }
   }
 
@@ -680,8 +407,22 @@ export class AuthService {
       throw new HttpException('User tidak ditemukan', 404);
     }
 
-    const { refreshToken, ...data } = findUser;
-    const result: AuthResponse = data;
+    const authResponse: AuthResponse = {
+      id: findUser.id,
+      email: findUser.email || undefined,
+      name: findUser.name || undefined,
+      idNumber: findUser.idNumber || undefined,
+      dinas: findUser.dinas || undefined,
+      roleId: findUser.roleId || undefined,
+      verifiedAccount: findUser.verifiedAccount || undefined,
+      role: findUser.role
+        ? { id: findUser.role.id, name: findUser.role.name }
+        : undefined,
+      participant: findUser.participant || undefined,
+      accessToken: await this.accessJwtService.signAsync({ id: findUser.id }),
+      refreshToken: findUser.refreshToken || undefined,
+    };
+
     if (findUser.role.name === 'user' && findUser.participant) {
       const requiredFields = [
         'name',
@@ -701,198 +442,169 @@ export class AuthService {
         'tglKeluarSuratBebasNarkoba',
       ];
 
-      // Check if all required fields are not null or undefined
       const isComplete = requiredFields.every(
         (field) =>
           findUser.participant[field] !== null &&
           findUser.participant[field] !== undefined,
       );
-      result.isDataComplete = isComplete;
+      authResponse.isDataComplete = isComplete;
     }
 
-    return this.toAuthResponse(result);
+    return authResponse;
   }
 
-  // async resendVerificationLink(email: string): Promise<string> {
-  //   const emailRequest = this.validationService.validate(
-  //     AuthValidation.EMAIL,
-  //     email,
-  //   );
-  //   const user = await this.prismaService.user.findFirst({
-  //     where: {
-  //       email: emailRequest,
-  //     },
-  //   });
-
-  //   if (!user) {
-  //     throw new HttpException('Pengguna tidak ada', 404);
-  //   }
-
-  //   if (user.verifiedAccount) {
-  //     throw new HttpException('Akun anda sudah terverifikasi', 400);
-  //   }
-
-  //   // Buat token reset password
-  //   const payload = { id: user.id };
-  //   const accountVerificationToken =
-  //     await this.verificationJwtService.signAsync(payload);
-
-  //   // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-  //   const networkInterfaces = os.networkInterfaces();
-  //   let localIp = 'localhost'; // Default fallback
-
-  //   // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-  //   for (const interfaceName in networkInterfaces) {
-  //     const addresses = networkInterfaces[interfaceName];
-  //     if (addresses) {
-  //       for (const addr of addresses) {
-  //         if (addr.family === 'IPv4' && !addr.internal) {
-  //           localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-  //           break;
-  //         }
-  //       }
-  //     }
-  //   }
-
   async resendVerificationLink(email: string): Promise<string> {
-    this.logger.debug(`Memulai pengiriman ulang tautan verifikasi untuk email: ${email}`);
+    this.logger.debug(
+      `Memulai pengiriman ulang tautan verifikasi untuk email: ${email}`,
+    );
 
-    const emailRequest = this.validationService.validate(AuthValidation.EMAIL, email);
+    const emailRequest = this.validationService.validate(
+      AuthValidation.EMAIL,
+      email,
+    );
 
     const user = await this.prismaService.user.findFirst({
       where: {
-      email: emailRequest,
+        email: emailRequest,
       },
     });
 
     if (!user) {
       this.logger.warn(`Pengguna dengan email ${emailRequest} tidak ditemukan`);
-      throw new HttpException('Pengguna tidak ada', 404);
+      throw new HttpException('Akun tidak ditemukan.', 404);
     }
 
     if (user.verifiedAccount) {
-      this.logger.warn(`Akun dengan email ${emailRequest} sudah terverifikasi`);
-      throw new HttpException('Akun anda sudah terverifikasi', 400);
+      this.logger.warn(
+        `Akun dengan email ${emailRequest} sudah terverifikasi`,
+      );
+      throw new HttpException('Akun Anda sudah terverifikasi. Silakan login.', 400);
     }
 
-    // Buat token verifikasi akun
-    const payload = { id: user.id };
-    const accountVerificationToken = await this.verificationJwtService.signAsync(payload);
+    const cooldownMinutes = 30;
+    if (user.lastVerificationEmailSentAt) {
+      const now = new Date();
+      const lastSent = new Date(user.lastVerificationEmailSentAt);
+      const timeElapsed = now.getTime() - lastSent.getTime();
+      const remainingTime = cooldownMinutes * 60 * 1000 - timeElapsed;
 
-    // Ambil URL backend dari .env
-    const backendUrl = this.getBaseUrl('backend');
+      if (remainingTime > 0) {
+        const totalSeconds = Math.ceil(remainingTime / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        let message = 'Tautan verifikasi sudah dikirim. Mohon tunggu ';
+        if (minutes > 0) {
+          message += `${minutes} menit `;
+        }
+        if (seconds > 0 || totalSeconds === 0) {
+          message += `${seconds} detik `;
+        }
+        message += 'sebelum mencoba lagi.';
+
+        throw new HttpException(message, 429);
+      }
+    }
+
+    const payload = { id: user.id };
+    const accountVerificationToken =
+      await this.verificationJwtService.signAsync(payload);
+
+    const backendUrl = this.urlHelper.getBaseUrl('backend');
     const verificationLink = `${backendUrl}/auth/verify-account/${accountVerificationToken}`;
 
     const sendEmail: SendEmail = {
       from: {
-      name: this.configService.get<string>('APP_NAME'),
-      address: this.configService.get<string>('MAIL_USER'),
+        name: this.configService.get<string>('APP_NAME'),
+        address: this.configService.get<string>('MAIL_USER'),
       },
       receptients: [
-      {
-        name: user.name,
-        address: user.email,
-      },
+        {
+          name: user.name,
+          address: user.email,
+        },
       ],
       subject: 'Email Verifikasi',
       html: 'resend-verification-account',
       placeholderReplacements: {
-      username: user.name,
-      verificationLink: verificationLink,
+        username: user.name,
+        verificationLink: verificationLink,
       },
     };
 
-    await this.mailService.sendEmail(sendEmail);
+    try {
+      await this.mailService.sendEmail(sendEmail);
+      this.logger.log('Email verifikasi berhasil dikirim ke: ' + user.email);
+      this.logger.debug(
+        `Token verifikasi tersimpan: ${accountVerificationToken.substring(
+          0,
+          20,
+        )}...`,
+      );
 
-    await this.prismaService.user.update({
-      where: {
-      id: user.id,
-      },
-      data: {
-      accountVerificationToken: accountVerificationToken,
-      },
-    });
+      await this.prismaService.user.update({
+        where: { id: user.id },
+        data: {
+          lastVerificationEmailSentAt: new Date(),
+          accountVerificationToken: accountVerificationToken,
+        },
+      });
 
-    this.logger.debug(`Email verifikasi berhasil dikirim untuk pengguna: ${user.email}`);
-    return 'Email verifikasi sudah dikirim';
+      const updatedUserAfterResend = await this.prismaService.user.findUnique({
+        where: { id: user.id },
+        select: { accountVerificationToken: true },
+      });
+      this.logger.debug(
+        `Resend: Token verifikasi yang disimpan di DB untuk user ${
+          user.id
+        } setelah resend: ${updatedUserAfterResend?.accountVerificationToken?.substring(
+          0,
+          20,
+        )}...`,
+      );
+    } catch (emailError) {
+      this.logger.error('Error sending verification email:', emailError);
+      this.logger.warn(
+        'Registrasi tetap dilanjutkan meskipun email gagal terkirim',
+      );
     }
 
-  // async passwordResetRequest(email: string): Promise<string> {
-  //   const emailRequest = this.validationService.validate(
-  //     AuthValidation.EMAIL,
-  //     email,
-  //   );
+    return 'Email verifikasi sudah dikirim';
+  }
 
-  //   const user = await this.prismaService.user.findFirst({
-  //     where: {
-  //       email: emailRequest,
-  //     },
-  //   });
+  async passwordResetRequest(email: string, hcaptchaToken: string, ip: string): Promise<string> {
+    this.logger.debug(
+      `Memulai permintaan reset password untuk email: ${email}`,
+    );
 
-  //   if (user) {
-  //     // Buat token reset password
-  //     const payload = { id: user.id };
-  //     const passwordResetToken =
-  //       await this.verificationJwtService.signAsync(payload);
+    // Validasi hCaptcha
+    const hcaptchaSecret = this.configService.get<string>('HCAPTCHA_SECRET');
+    let hcaptchaValid = false;
+    try {
+      const hcaptchaRes = await axios.post('https://hcaptcha.com/siteverify',
+        new URLSearchParams({
+          secret: hcaptchaSecret,
+          response: hcaptchaToken,
+          remoteip: ip,
+        }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      this.logger.debug('hCaptcha response:', hcaptchaRes.data);
+      hcaptchaValid = (hcaptchaRes.data as any).success;
+    } catch (e) {
+      this.logger.error('Gagal verifikasi hCaptcha', e);
+    }
+    if (!hcaptchaValid) {
+      this.logger.warn(`hCaptcha tidak valid untuk email: ${email}, ip: ${ip}`);
+      // Log attempt
+      await this.logResetAttempt(email, ip, false, 'hCaptcha invalid');
+      throw new HttpException('Verifikasi hCaptcha gagal. Silakan coba lagi.', 400);
+    }
 
-  //     // Dapatkan alamat IP lokal secara dinamis untuk tahap pengembangan
-  //     const networkInterfaces = os.networkInterfaces();
-  //     let localIp = 'localhost'; // Default fallback
+    const emailRequest = this.validationService.validate(
+      AuthValidation.EMAIL,
+      email,
+    );
 
-  //     // Iterasi melalui antarmuka jaringan untuk menemukan alamat IPv4 pertama
-  //     for (const interfaceName in networkInterfaces) {
-  //       const addresses = networkInterfaces[interfaceName];
-  //       if (addresses) {
-  //         for (const addr of addresses) {
-  //           if (addr.family === 'IPv4' && !addr.internal) {
-  //             localIp = addr.address; // Tetapkan alamat IPv4 non-internal pertama
-  //             break;
-  //           }
-  //         }
-  //       }
-  //     }
-
-  //     // Kirim email reset password
-  //     const resetPasswordLink = `http://${localIp}:3000/auth/verify-reset-password/${passwordResetToken}`;
-  //     await this.mailService.sendEmail({
-  //       from: {
-  //         name: this.configService.get<string>('APP_NAME'),
-  //         address: this.configService.get<string>('MAIL_USER'),
-  //       },
-  //       receptients: [
-  //         {
-  //           name: user.name,
-  //           address: email,
-  //         },
-  //       ],
-  //       subject: 'Reset Password',
-  //       html: 'password-reset-verify',
-  //       placeholderReplacements: {
-  //         username: user.name,
-  //         verificationLink: resetPasswordLink,
-  //       },
-  //     });
-
-  //     await this.prismaService.user.update({
-  //       where: {
-  //         id: user.id,
-  //       },
-  //       data: {
-  //         passwordResetToken,
-  //       },
-  //     });
-  //   }
-
-  //   return 'Email reset password sudah dikirim';
-  // }
-
-  async passwordResetRequest(email: string): Promise<string> {
-    this.logger.debug(`Memulai permintaan reset password untuk email: ${email}`);
-
-    // Validasi email
-    const emailRequest = this.validationService.validate(AuthValidation.EMAIL, email);
-
-    // Cari pengguna berdasarkan email
     const user = await this.prismaService.user.findFirst({
       where: {
         email: emailRequest,
@@ -900,16 +612,14 @@ export class AuthService {
     });
 
     if (user) {
-      // Buat token reset password
       const payload = { id: user.id };
-      const passwordResetToken = await this.verificationJwtService.signAsync(payload);
+      const passwordResetToken =
+        await this.verificationJwtService.signAsync(payload);
 
-      // Ambil URL backend dari .env
-      const backendUrl = this.getBaseUrl('backend');
+      const backendUrl = this.urlHelper.getBaseUrl('backend');
       const resetPasswordLink = `${backendUrl}/auth/verify-reset-password/${passwordResetToken}`;
 
-      // Kirim email reset password
-      await this.mailService.sendEmail({
+      const sendEmail = {
         from: {
           name: this.configService.get<string>('APP_NAME'),
           address: this.configService.get<string>('MAIL_USER'),
@@ -926,9 +636,18 @@ export class AuthService {
           username: user.name,
           verificationLink: resetPasswordLink,
         },
-      });
+      };
 
-      // Simpan token reset password di database
+      try {
+        await this.mailService.sendEmail(sendEmail);
+        this.logger.debug(`Email reset password berhasil dikirim ke: ${email}`);
+      } catch (emailError) {
+        this.logger.error('Error sending reset password email:', emailError);
+        this.logger.warn(
+          'Proses reset password tetap dilanjutkan meskipun email gagal terkirim',
+        );
+      }
+
       await this.prismaService.user.update({
         where: {
           id: user.id,
@@ -938,15 +657,25 @@ export class AuthService {
         },
       });
 
-      this.logger.debug(`Email reset password berhasil dikirim untuk pengguna: ${user.email}`);
+      this.logger.debug(
+        `Email reset password berhasil dikirim untuk pengguna: ${user.email}`,
+      );
+      await this.logResetAttempt(email, ip, true, 'success');
+    } else {
+      await this.logResetAttempt(email, ip, true, 'success (no user)');
     }
 
     return 'Email reset password sudah dikirim';
   }
 
+  private async logResetAttempt(email: string, ip: string, success: boolean, note: string) {
+    // Simpan log ke database atau file sesuai kebutuhan
+    this.logger.log(`[RESET-PASSWORD-LOG] email: ${email}, ip: ${ip}, success: ${success}, note: ${note}, time: ${new Date().toISOString()}`);
+    // TODO: Implementasi simpan ke DB jika perlu
+  }
+
   async verifyPasswordResetRequestToken(token: string): Promise<boolean> {
     try {
-      // Verifikasi token
       const verifyToken = await this.verificationJwtService.verifyAsync(token);
       const user = await this.prismaService.user.findUnique({
         where: {
@@ -960,13 +689,13 @@ export class AuthService {
 
       if (!user.passwordResetToken || user.passwordResetToken !== token) {
         throw new HttpException(
-          'Token ini tidak valid atau sudah digunakan',
+          'Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.',
           400,
         );
       }
       return true;
     } catch (error) {
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -976,11 +705,9 @@ export class AuthService {
       request,
     );
     try {
-      // Verifikasi token
       const verifyToken = await this.verificationJwtService.verifyAsync(
         request.token,
       );
-      // Cari user berdasarkan email
       const user = await this.prismaService.user.findUnique({
         where: {
           id: verifyToken.id,
@@ -996,12 +723,11 @@ export class AuthService {
         user.passwordResetToken !== request.token
       ) {
         throw new HttpException(
-          'Token ini tidak valid atau sudah digunakan',
+          'Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.',
           400,
         );
       }
 
-      // Hash password baru dan update di database
       const hashedPassword = await bcrypt.hash(
         resetPasswordRequest.newPassword,
         10,
@@ -1018,24 +744,33 @@ export class AuthService {
 
       return 'Password berhasil diubah';
     } catch (error) {
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
-  async updateEmailRequest(email: string, user: CurrentUserRequest): Promise<string> {
-    this.logger.debug(`Memulai permintaan perubahan email untuk user ${user.id} ke ${email}`);
+  async updateEmailRequest(
+    email: string,
+    user: CurrentUserRequest,
+  ): Promise<string> {
+    this.logger.debug(
+      `Memulai permintaan perubahan email untuk user ${user.id} ke ${email}`,
+    );
 
-    const emailRequest = this.validationService.validate(AuthValidation.EMAIL, email);
+    const emailRequest = this.validationService.validate(
+      AuthValidation.EMAIL,
+      email,
+    );
 
     if (email === user.email) {
-      this.logger.warn(`Email baru ${email} sama dengan email lama untuk user ${user.id}`);
+      this.logger.warn(
+        `Email baru ${email} sama dengan email lama untuk user ${user.id}`,
+      );
       throw new HttpException(
         'Gagal mengubah alamat email Anda. Email yang baru masih sama dengan email sebelumnya.',
         400,
       );
     }
 
-    // Periksa apakah email sudah digunakan oleh pengguna lain
     await this.checkUserExists(undefined, emailRequest);
 
     const payload = {
@@ -1043,10 +778,10 @@ export class AuthService {
       email: emailRequest,
     };
 
-    const updateEmailToken = await this.verificationJwtService.signAsync(payload);
+    const updateEmailToken =
+      await this.verificationJwtService.signAsync(payload);
 
-    // Ambil BACKEND_URL dari .env
-    const backendUrl = this.getBaseUrl('backend');
+    const backendUrl = this.urlHelper.getBaseUrl('backend');
     const verificationLink = `${backendUrl}/auth/update-email/verify/${updateEmailToken}`;
 
     const sendEmail: SendEmail = {
@@ -1069,7 +804,17 @@ export class AuthService {
       },
     };
 
-    await this.mailService.sendEmail(sendEmail);
+    try {
+      await this.mailService.sendEmail(sendEmail);
+      this.logger.debug(
+        `Email verifikasi untuk email baru ${emailRequest} berhasil dikirim`,
+      );
+    } catch (emailError) {
+      this.logger.error('Error sending verification email:', emailError);
+      this.logger.warn(
+        'Registrasi tetap dilanjutkan meskipun email gagal terkirim',
+      );
+    }
 
     await this.prismaService.user.update({
       where: {
@@ -1080,7 +825,6 @@ export class AuthService {
       },
     });
 
-    this.logger.debug(`Email verifikasi untuk email baru ${emailRequest} berhasil dikirim`);
     return 'Email verifikasi email baru telah terkirim';
   }
 
@@ -1089,7 +833,6 @@ export class AuthService {
     user: CurrentUserRequest,
   ): Promise<string> {
     try {
-      // Verifikasi token
       const verifyToken = await this.verificationJwtService.verifyAsync(token);
       const findUser = await this.prismaService.user.findUnique({
         where: {
@@ -1113,7 +856,6 @@ export class AuthService {
       }
 
       await this.prismaService.$transaction(async (prisma) => {
-        // Update tabel `user`
         await prisma.user.update({
           where: {
             id: verifyToken.id,
@@ -1124,11 +866,10 @@ export class AuthService {
           },
         });
 
-        // Jika role adalah 'user', update tabel `participants`
         if (user.role.name === 'user') {
           const participant = await prisma.participant.findUnique({
             where: {
-              id: user.participantId, // Asumsikan `nik` adalah kolom penghubung
+              id: user.participantId,
             },
           });
 
@@ -1148,7 +889,7 @@ export class AuthService {
       return 'Berhasil mengubah email';
     } catch (error) {
       console.log(error);
-      throw new HttpException('Token tidak valid atau sudah kadaluarsa', 400);
+      throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }
 
@@ -1179,39 +920,106 @@ export class AuthService {
 
   async logout(user: CurrentUserRequest): Promise<string> {
     await this.prismaService.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        refreshToken: null,
-      },
+      where: { id: user.id },
+      data: { refreshToken: null },
     });
-
     return 'Logout berhasil';
   }
 
+  async cleanupUnverifiedUsers(): Promise<number> {
+    this.logger.log('Memulai pembersihan user yang belum terverifikasi');
+    
+    // Cari role 'user'
+    const userRole = await this.prismaService.role.findFirst({
+      where: { name: { equals: 'user', mode: 'insensitive' } },
+    });
+    
+    if (!userRole) {
+      this.logger.warn('Role "user" tidak ditemukan, tidak ada yang dibersihkan');
+      return 0;
+    }
+    
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    // Cari user yang belum terverifikasi dan dibuat lebih dari 24 jam yang lalu
+    const usersToDelete = await this.prismaService.user.findMany({
+      where: {
+        roleId: userRole.id,
+        verifiedAccount: false,
+        createdAt: { lt: twentyFourHoursAgo }
+      },
+      include: {
+        participant: true
+      }
+    });
+    
+    let deletedCount = 0;
+    
+    // Hapus user satu per satu untuk memastikan data terkait juga dihapus
+    for (const user of usersToDelete) {
+      try {
+        // Jika user memiliki data participant, hapus relasi terlebih dahulu
+        if (user.participant) {
+          await this.prismaService.user.update({
+            where: { id: user.id },
+            data: { participantId: null }
+          });
+        }
+        
+        // Hapus user
+        await this.prismaService.user.delete({
+          where: { id: user.id }
+        });
+        
+        deletedCount++;
+      } catch (error) {
+        this.logger.error(`Gagal menghapus user ${user.id}: ${error.message}`);
+      }
+    }
+    
+    this.logger.log(`Berhasil menghapus ${deletedCount} pengguna dengan role 'user' yang belum terverifikasi dalam 24 jam`);
+    return deletedCount;
+  }
+
   private async checkUserExists(idNumber?: string, email?: string) {
+    let user: User | null = null;
+
     if (idNumber) {
-      const totalUserwithSameNoPegawai = await this.prismaService.user.count({
+      user = await this.prismaService.user.findFirst({
         where: {
           idNumber: idNumber,
         },
       });
-
-      if (totalUserwithSameNoPegawai != 0) {
-        throw new HttpException('No pegawai sudah digunakan', 400);
+      if (user) {
+        if (!user.verifiedAccount) {
+          throw new HttpException(
+            'Akun dengan Nomor Pegawai ini sudah terdaftar namun belum terverifikasi. Silakan cek inbox/spam email Anda atau klik menu "Belum Terverifikasi?" di halaman login.',
+            409,
+          );
+        } else {
+          throw new HttpException(
+            'Nomor Pegawai sudah digunakan. Silakan login atau gunakan menu lupa password.',
+            409,
+          );
+        }
       }
     }
 
     if (email) {
-      const totalUserwithSameEmail = await this.prismaService.user.count({
+      user = await this.prismaService.user.findFirst({
         where: {
           email: email,
         },
       });
-
-      if (totalUserwithSameEmail != 0) {
-        throw new HttpException('Email sudah digunakan', 400);
+      if (user) {
+        if (!user.verifiedAccount) {
+          throw new HttpException(
+            'Akun dengan email ini sudah terdaftar namun belum diverifikasi. Silakan cek email Anda atau klik menu "Belum Terverifikasi?" di halaman login.',
+            409,
+          );
+        } else {
+          throw new HttpException('Email sudah digunakan. Silakan login atau gunakan menu lupa password.', 409);
+        }
       }
     }
   }
@@ -1231,18 +1039,44 @@ export class AuthService {
     };
   }
 
-  private toAuthResponse(user: AuthResponse): AuthResponse {
-    return {
+  private toAuthResponse(
+    user: User & { role?: { id: string; name: string }; participant?: any },
+    accessToken?: string,
+    refreshToken?: string,
+  ): AuthResponse {
+    const result: AuthResponse = {
       id: user.id,
-      idNumber: user.idNumber,
-      email: user.email,
-      name: user.name,
-      dinas: user.dinas,
-      refreshToken: user.refreshToken,
-      accessToken: user.accessToken,
-      role: user.role,
-      participant: user.participant,
-      isDataComplete: user.isDataComplete,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      verifiedAccount: user.verifiedAccount || undefined,
+      email: user.email || undefined,
+      name: user.name || undefined,
+      idNumber: user.idNumber || undefined,
+      dinas: user.dinas || undefined,
+      roleId: user.roleId || undefined,
+      role: user.role
+        ? { id: user.role.id, name: user.role.name }
+        : undefined,
+      participant: user.participant || undefined,
     };
+    return result;
   }
 }
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService, private readonly configService: ConfigService) {}
+
+  @Get('verify-account/:token')
+  async verifyAccountRedirect(@Param('token') token: string, @Res() res: Response) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
+    try {
+      await this.authService.accountVerification(token);
+      // Redirect ke frontend dengan status sukses
+      return res.redirect(`${frontendUrl}/verified?status=success`);
+    } catch (e) {
+      // Redirect ke frontend dengan status gagal
+      return res.redirect(`${frontendUrl}/verified?status=failed`);
+    }
+  }
+} 

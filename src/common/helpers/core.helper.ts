@@ -83,7 +83,7 @@ export class CoreHelper {
     for (const [type, signature] of Object.entries(this.signatures)) {
       if (
         buffer.length >= signature.length &&
-        buffer.subarray(0, signature.length).equals(signature)
+        Buffer.from(buffer.subarray(0, signature.length)).equals(signature)
       ) {
         return type;
       }

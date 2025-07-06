@@ -6,8 +6,11 @@ WORKDIR /app
 # Salin file untuk instalasi dependensi
 COPY package*.json nest-cli.json tsconfig*.json ./
 
-# Instal dependensi
-RUN npm install
+# Instal pnpm
+RUN npm install -g pnpm
+
+# Instal dependensi dengan pnpm
+RUN pnpm install
 
 # Salin folder prisma dan generate Prisma client saat build
 COPY prisma ./prisma

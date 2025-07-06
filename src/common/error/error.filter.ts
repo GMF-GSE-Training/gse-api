@@ -32,6 +32,48 @@ export class ErrorFilter implements ExceptionFilter {
       };
     } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
+      // Penanganan khusus untuk 429 (rate limit)
+      if (statusCode === 429) {
+        // Ambil Retry-After dari exception response jika ada, jika tidak default 3600 detik
+        let retryAfter = 3600;
+        let retryAfterHeader = null;
+        if (exception.getResponse && typeof exception.getResponse === 'function') {
+          const resp = exception.getResponse();
+          if (typeof resp === 'object' && resp && 'retryAfter' in resp) {
+            retryAfter = Number(resp['retryAfter']) || 3600;
+          }
+          if (typeof resp === 'object' && resp && 'message' in resp && typeof resp['message'] === 'number') {
+            retryAfter = Number(resp['message']) || 3600;
+          }
+        }
+        // Cek jika ada header Retry-After di exception (misal dari Throttler)
+        if (exception.getResponse && typeof exception.getResponse === 'function') {
+          const resp = exception.getResponse();
+          if (typeof resp === 'object' && resp && 'getResponseHeaders' in resp && typeof resp['getResponseHeaders'] === 'function') {
+            const headers = resp['getResponseHeaders']();
+            if (headers && headers['Retry-After']) {
+              retryAfterHeader = Number(headers['Retry-After']);
+              if (!isNaN(retryAfterHeader)) retryAfter = retryAfterHeader;
+            }
+          }
+        }
+        // Format waktu
+        const minutes = Math.floor(retryAfter / 60);
+        const seconds = retryAfter % 60;
+        const waitMsg = minutes > 0
+          ? `Silakan coba lagi dalam ${minutes} menit${seconds > 0 ? ' ' + seconds + ' detik' : ''}.`
+          : `Silakan coba lagi dalam ${seconds} detik.`;
+        errorResponse = {
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: exception.message || 'Terlalu banyak permintaan.',
+          retryAfter: retryAfter,
+          message: waitMsg,
+        };
+        response.setHeader('Retry-After', retryAfter);
+        response.status(statusCode).json(errorResponse);
+        return;
+      }
       errorResponse = {
         code: statusCode,
         status: HttpStatus[statusCode],
@@ -47,9 +89,15 @@ export class ErrorFilter implements ExceptionFilter {
         },
       };
     } else if (exception instanceof PrismaClientKnownRequestError) {
-      statusCode = HttpStatus.BAD_REQUEST;
-
-      if (exception.code === 'P2002') {
+      // Penanganan khusus error P2024 (connection pool timeout)
+      if (exception.code === 'P2024') {
+        statusCode = HttpStatus.SERVICE_UNAVAILABLE;
+        errorResponse = {
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: 'Server sedang sibuk, silakan coba beberapa saat lagi dalam beberapa menit.',
+        };
+      } else if (exception.code === 'P2002') {
         // Error Unique Constraint Violation
         const target = exception.meta?.target as string | undefined;
         errorResponse = {
@@ -78,10 +126,11 @@ export class ErrorFilter implements ExceptionFilter {
         };
       } else {
         // Error Prisma Lainnya
+        statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
         errorResponse = {
-          code: HttpStatus.INTERNAL_SERVER_ERROR,
-          status: HttpStatus[HttpStatus.INTERNAL_SERVER_ERROR],
-          errors: 'Terjadi kesalahan pada database.',
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: 'Maaf, terjadi gangguan pada sistem. Silakan coba beberapa saat lagi.',
         };
       }
     } else if (exception instanceof PrismaClientValidationError) {
@@ -101,15 +150,26 @@ export class ErrorFilter implements ExceptionFilter {
       errorResponse = {
         code: statusCode,
         status: HttpStatus[statusCode],
-        errors: 'Terjadi kesalahan internal pada layer database.',
+        errors: 'Maaf, terjadi gangguan internal pada sistem. Silakan coba beberapa saat lagi.',
       };
     } else {
       statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      let fallbackMessage = 'Maaf, terjadi gangguan pada sistem. Silakan coba beberapa saat lagi.';
+      // Jika pesan error terlalu teknis (mengandung "Exception" atau "Error"), fallback ke pesan ramah
+      const msg = exception.message || '';
+      if (msg.match(/Exception|Error|database|timeout|connection|prisma|stack|failed|not found|undefined|null|internal/i)) {
+        errorResponse = {
+          code: statusCode,
+          status: HttpStatus[statusCode],
+          errors: fallbackMessage,
+        };
+      } else {
       errorResponse = {
         code: statusCode,
         status: HttpStatus[statusCode],
-        errors: exception.message,
+          errors: msg || fallbackMessage,
       };
+      }
     }
 
     response.status(statusCode).json(errorResponse);

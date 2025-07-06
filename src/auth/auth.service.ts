@@ -334,7 +334,7 @@ export class AuthService {
         data: {
           refreshToken: refreshToken,
         },
-        include: { role: true },
+        include: { role: true, participant: true },
       });
 
       return this.toAuthResponse(user, accessToken, refreshToken);

@@ -35,6 +35,32 @@ jobs:
         run: |
           docker push gcr.io/gmf-training/backend-web-server:latest
 
+      - name: Generate .env for Cloud Run
+        run: |
+          echo "NODE_ENV=production" > .env.deploy
+          echo "PROTOCOL=${{ secrets.PROTOCOL }}" >> .env.deploy
+          echo "HOST=${{ secrets.HOST }}" >> .env.deploy
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env.deploy
+          echo "CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}" >> .env.deploy
+          echo "BACKEND_URL=${{ secrets.BACKEND_URL }}" >> .env.deploy
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env.deploy
+          echo "DIRECT_URL=${{ secrets.DIRECT_URL }}" >> .env.deploy
+          echo "ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}" >> .env.deploy
+          echo "REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN }}" >> .env.deploy
+          echo "VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN }}" >> .env.deploy
+          echo "MAIL_HOST=${{ secrets.MAIL_HOST }}" >> .env.deploy
+          echo "MAIL_PORT=${{ secrets.MAIL_PORT }}" >> .env.deploy
+          echo "MAIL_USER=${{ secrets.MAIL_USER }}" >> .env.deploy
+          echo "MAIL_PASS=${{ secrets.MAIL_PASS }}" >> .env.deploy
+          echo "APP_NAME=${{ secrets.APP_NAME }}" >> .env.deploy
+          echo "STORAGE_TYPE=${{ secrets.STORAGE_TYPE }}" >> .env.deploy
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env.deploy
+          echo "SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}" >> .env.deploy
+          echo "SUPABASE_BUCKET=${{ secrets.SUPABASE_BUCKET }}" >> .env.deploy
+          echo "SUPABASE_PUBLIC_BUCKET=${{ secrets.SUPABASE_PUBLIC_BUCKET }}" >> .env.deploy
+          echo "LOGO_PATH=${{ secrets.LOGO_PATH }}" >> .env.deploy
+          echo "HCAPTCHA_SECRET=${{ secrets.HCAPTCHA_SECRET }}" >> .env.deploy
+
       - name: Deploy To Cloud Run
         run: |
           gcloud run deploy backend-service \
@@ -42,4 +68,4 @@ jobs:
             --platform managed \
             --region us-central1 \
             --allow-unauthenticated \
-            --set-env-vars "NODE_ENV=production,PROTOCOL=${{ secrets.PROTOCOL }},HOST=${{ secrets.HOST }},FRONTEND_URL=${{ secrets.FRONTEND_URL }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN }},BACKEND_URL=${{ secrets.BACKEND_URL }},DATABASE_URL=${{ secrets.DATABASE_URL }},DIRECT_URL=${{ secrets.DIRECT_URL }},ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }},REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN }},VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN }},MAIL_HOST=${{ secrets.MAIL_HOST }},MAIL_PORT=${{ secrets.MAIL_PORT }},MAIL_USER=${{ secrets.MAIL_USER }},MAIL_PASS=${{ secrets.MAIL_PASS }},APP_NAME=${{ secrets.APP_NAME }},STORAGE_TYPE=${{ secrets.STORAGE_TYPE }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }},SUPABASE_BUCKET=${{ secrets.SUPABASE_BUCKET }},SUPABASE_PUBLIC_BUCKET=${{ secrets.SUPABASE_PUBLIC_BUCKET }},LOGO_PATH=${{ secrets.LOGO_PATH }},HCAPTCHA_SECRET=${{ secrets.HCAPTCHA_SECRET }}"
+            --env-vars-file .env.deploy

@@ -35,7 +35,7 @@ jobs:
         run: |
           docker push gcr.io/gmf-training/backend-web-server:latest
 
-      - name: Deploy to Cloud Run
+      - name: Deploy To Cloud Run
         run: |
           gcloud run deploy backend-service \
             --image gcr.io/gmf-training/backend-web-server:latest \

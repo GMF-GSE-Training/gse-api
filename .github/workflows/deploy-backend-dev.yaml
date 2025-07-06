@@ -37,30 +37,30 @@ jobs:
 
       - name: Generate env YAML for Cloud Run
         run: |
-          echo "NODE_ENV: production" > .env.deploy.yaml
-          echo "PROTOCOL: ${{ secrets.PROTOCOL_DEV }}" >> .env.deploy.yaml
-          echo "HOST: ${{ secrets.HOST_DEV }}" >> .env.deploy.yaml
-          echo "FRONTEND_URL: ${{ secrets.FRONTEND_URL_DEV }}" >> .env.deploy.yaml
-          echo "CORS_ORIGIN: ${{ secrets.CORS_ORIGIN_DEV }}" >> .env.deploy.yaml
-          echo "BACKEND_URL: ${{ secrets.BACKEND_URL_DEV }}" >> .env.deploy.yaml
-          echo "DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}" >> .env.deploy.yaml
-          echo "DIRECT_URL: ${{ secrets.DIRECT_URL_DEV }}" >> .env.deploy.yaml
-          echo "QR_CODE_LINK: ${{ secrets.QR_CODE_LINK_DEV }}" >> .env.deploy.yaml
-          echo "ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN_DEV }}" >> .env.deploy.yaml
-          echo "REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN_DEV }}" >> .env.deploy.yaml
-          echo "VERIFICATION_TOKEN: ${{ secrets.VERIFICATION_TOKEN_DEV }}" >> .env.deploy.yaml
-          echo "MAIL_HOST: ${{ secrets.MAIL_HOST_DEV }}" >> .env.deploy.yaml
-          echo "MAIL_PORT: ${{ secrets.MAIL_PORT_DEV }}" >> .env.deploy.yaml
-          echo "MAIL_USER: ${{ secrets.MAIL_USER_DEV }}" >> .env.deploy.yaml
-          echo "MAIL_PASS: ${{ secrets.MAIL_PASS_DEV }}" >> .env.deploy.yaml
-          echo "APP_NAME: ${{ secrets.APP_NAME_DEV }}" >> .env.deploy.yaml
-          echo "STORAGE_TYPE: ${{ secrets.STORAGE_TYPE_DEV }}" >> .env.deploy.yaml
-          echo "SUPABASE_URL: ${{ secrets.SUPABASE_URL_DEV }}" >> .env.deploy.yaml
-          echo "SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY_DEV }}" >> .env.deploy.yaml
-          echo "SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET_DEV }}" >> .env.deploy.yaml
-          echo "SUPABASE_PUBLIC_BUCKET: ${{ secrets.SUPABASE_PUBLIC_BUCKET }}" >> .env.deploy.yaml
-          echo "LOGO_PATH: ${{ secrets.LOGO_PATH }}" >> .env.deploy.yaml
-          echo "HCAPTCHA_SECRET: ${{ secrets.HCAPTCHA_SECRET }}" >> .env.deploy.yaml
+          echo "NODE_ENV: \"production\"" > .env.deploy.yaml
+          echo "PROTOCOL: \"${{ secrets.PROTOCOL_DEV }}\"" >> .env.deploy.yaml
+          echo "HOST: \"${{ secrets.HOST_DEV }}\"" >> .env.deploy.yaml
+          echo "FRONTEND_URL: \"${{ secrets.FRONTEND_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "CORS_ORIGIN: \"${{ secrets.CORS_ORIGIN_DEV }}\"" >> .env.deploy.yaml
+          echo "BACKEND_URL: \"${{ secrets.BACKEND_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "DATABASE_URL: \"${{ secrets.DATABASE_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "DIRECT_URL: \"${{ secrets.DIRECT_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "QR_CODE_LINK: \"${{ secrets.QR_CODE_LINK_DEV }}\"" >> .env.deploy.yaml
+          echo "ACCESS_TOKEN: \"${{ secrets.ACCESS_TOKEN_DEV }}\"" >> .env.deploy.yaml
+          echo "REFRESH_TOKEN: \"${{ secrets.REFRESH_TOKEN_DEV }}\"" >> .env.deploy.yaml
+          echo "VERIFICATION_TOKEN: \"${{ secrets.VERIFICATION_TOKEN_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_HOST: \"${{ secrets.MAIL_HOST_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_PORT: \"${{ secrets.MAIL_PORT_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_USER: \"${{ secrets.MAIL_USER_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_PASS: \"${{ secrets.MAIL_PASS_DEV }}\"" >> .env.deploy.yaml
+          echo "APP_NAME: \"${{ secrets.APP_NAME_DEV }}\"" >> .env.deploy.yaml
+          echo "STORAGE_TYPE: \"${{ secrets.STORAGE_TYPE_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_URL: \"${{ secrets.SUPABASE_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_SERVICE_KEY: \"${{ secrets.SUPABASE_SERVICE_KEY_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_BUCKET: \"${{ secrets.SUPABASE_BUCKET_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_PUBLIC_BUCKET: \"${{ secrets.SUPABASE_PUBLIC_BUCKET }}\"" >> .env.deploy.yaml
+          echo "LOGO_PATH: \"${{ secrets.LOGO_PATH }}\"" >> .env.deploy.yaml
+          echo "HCAPTCHA_SECRET: \"${{ secrets.HCAPTCHA_SECRET }}\"" >> .env.deploy.yaml
 
       - name: Deploy to Cloud Run
         run: |-

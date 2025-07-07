@@ -4,6 +4,7 @@ export interface CreateESign {
   name: string;
   eSign: Buffer;
   eSignFileName?: string;
+  eSignPath?: string;
   signatureType: SignatureType;
   status: boolean;
 }

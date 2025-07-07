@@ -15,6 +15,7 @@ export interface UpdateESign {
   name?: string;
   eSign?: Buffer;
   eSignFileName?: string;
+  eSignPath?: string;
   signatureType?: SignatureType;
   status?: boolean;
 }

@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/service/prisma.service';
 import { ValidationService } from 'src/common/service/validation.service';
 import {
@@ -16,6 +16,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Injectable()
 export class ESignService {
+  private readonly logger = new Logger(ESignService.name);
   constructor(
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
@@ -63,9 +64,37 @@ export class ESignService {
       }
     }
 
+    // Upload file eSign jika ada
+    if (createRequest.eSign) {
+      try {
+          this.logger.log(`Uploading eSign file for signature...`);
+          const fileObj = {
+              buffer: createRequest.eSign,
+              originalname: createRequest.eSignFileName || `esign_${createRequest.idNumber}.jpg`,
+              mimetype: 'application/octet-stream',
+              size: createRequest.eSign.length,
+          };
+          
+          const path = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+          createRequest.eSignPath = path;
+          this.logger.log(`eSign file uploaded, path: ${path}`);
+      } catch (err) {
+          this.logger.error(`Gagal upload eSign file: ${err.message}`);
+          throw new HttpException(`Gagal upload eSign file: ${err.message}`, 500);
+      }
+    }
+
     await this.prismaService.signature.create({
-      data: createRequest,
-    });
+      data: {
+          idNumber: createRequest.idNumber,
+          role: createRequest.role,
+          name: createRequest.name,
+          eSignPath: createRequest.eSignPath,
+          eSignFileName: createRequest.eSignFileName,
+          signatureType: createRequest.signatureType,
+          status: createRequest.status,
+      },
+  });
 
     return 'E-Sign berhasil ditambahkan';
   }
@@ -115,11 +144,39 @@ export class ESignService {
       }
     }
 
+    // Upload file eSign jika ada
+    if (updateRequest.eSign) {
+      try {
+          this.logger.log(`Uploading eSign file for signature...`);
+          const fileObj = {
+              buffer: updateRequest.eSign,
+              originalname: updateRequest.eSignFileName || `esign_${updateRequest.idNumber}.jpg`,
+              mimetype: 'application/octet-stream',
+              size: updateRequest.eSign.length,
+          };
+          
+          const path = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+          updateRequest.eSignPath = path;
+          this.logger.log(`eSign file uploaded, path: ${path}`);
+      } catch (err) {
+          this.logger.error(`Gagal upload eSign file: ${err.message}`);
+          throw new HttpException(`Gagal upload eSign file: ${err.message}`, 500);
+      }
+    }
+
     await this.prismaService.signature.update({
       where: {
         id: eSignId,
       },
-      data: updateRequest,
+      data: {
+        idNumber: updateRequest.idNumber,
+        role: updateRequest.role,
+        name: updateRequest.name,
+        eSignPath: updateRequest.eSignPath,
+        eSignFileName: updateRequest.eSignFileName,
+        signatureType: updateRequest.signatureType,
+        status: updateRequest.status,
+      },
     });
 
     return 'E-Sign berhasil diperbari';

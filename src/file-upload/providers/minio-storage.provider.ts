@@ -34,13 +34,30 @@ export class MinioStorageProvider implements StorageProvider {
   }
 
   async download(filePath: string, requestId?: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    const stream = await this.client.getObject(this.bucket, filePath);
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) {
-      chunks.push(chunk);
+    this.logger.log(`Mencoba download file dari Minio: ${filePath}`, requestId);
+    try {
+      const stream = await this.client.getObject(this.bucket, filePath);
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      if (chunks.length === 0) {
+        this.logger.error(`File ditemukan tapi buffer kosong: ${filePath}`, requestId);
+        throw new Error('File buffer kosong');
+      }
+      // TODO: Ambil mimeType dari metadata jika perlu
+      return { buffer: Buffer.concat(chunks), mimeType: 'application/octet-stream' };
+    } catch (err: any) {
+      if (err.code === 'NoSuchKey' || err.message?.includes('not found')) {
+        this.logger.warn(`File tidak ditemukan di Minio: ${filePath}`, requestId);
+        // Lempar error 404 agar tidak jadi 500
+        const notFoundError: any = new Error('File tidak ditemukan di Minio');
+        notFoundError.status = 404;
+        throw notFoundError;
+      }
+      this.logger.error(`Gagal download file dari Minio: ${filePath} | Error: ${err?.message || err}`, requestId);
+      throw err;
     }
-    // TODO: Ambil mimeType dari metadata jika perlu
-    return { buffer: Buffer.concat(chunks), mimeType: 'application/octet-stream' };
   }
 
   async delete(filePath: string, requestId?: string): Promise<void> {

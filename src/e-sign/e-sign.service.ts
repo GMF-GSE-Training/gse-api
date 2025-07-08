@@ -159,13 +159,15 @@ export class ESignService {
       throw new HttpException('File E-Sign tidak ditemukan', 404);
     }
 
-    // Ambil file dari storage dinamis
-    const storageType = process.env.STORAGE_TYPE || 'minio';
-    if (storageType === 'supabase') {
+    // Ambil file dari storage dinamis (satu jalur)
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(eSign.eSignPath);
       return buffer;
-    } else {
-      return await getFileBufferFromMinio(eSign.eSignPath);
+    } catch (err: any) {
+      if (err.status === 404) {
+        throw new HttpException('File E-Sign tidak ditemukan', 404);
+      }
+      throw new HttpException('Gagal mengambil file E-Sign: ' + (err.message || err), 500);
     }
   }
 

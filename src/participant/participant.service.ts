@@ -180,13 +180,16 @@ export class ParticipantService {
         }
 
         // Ambil file dari storage dinamis
-        const storageType = process.env.STORAGE_TYPE || 'minio';
         let fileBuffer: Buffer;
-        if (storageType === 'supabase') {
+        try {
           const { buffer } = await this.fileUploadService.downloadFile(participant[pathField]);
           fileBuffer = buffer;
-        } else {
-          fileBuffer = await getFileBufferFromMinio(participant[pathField]);
+        } catch (err) {
+          if (err.status === 404) {
+            throw new HttpException(`File ${fileName} tidak ditemukan untuk peserta ini.`, 404);
+          }
+          this.logger.error(`Gagal mengambil file ${fileName}: ${err.message}`);
+          throw new HttpException(`Gagal mengambil file ${fileName}: ${err.message}`, 500);
         }
 
         if (!fileBuffer) {
@@ -358,14 +361,23 @@ export class ParticipantService {
         };
 
         // Tambahkan dokumen ke PDF
-        const simABuffer = await getFileBufferFromMinio(participant.simAPath);
-        const ktpBuffer = await getFileBufferFromMinio(participant.ktpPath);
-        const suratSehatButaWarnaBuffer = await getFileBufferFromMinio(participant.suratSehatButaWarnaPath);
-        const suratBebasNarkobaBuffer = await getFileBufferFromMinio(participant.suratBebasNarkobaPath);
-        await addFileToPdf(simABuffer, 'SIM A');
-        await addFileToPdf(ktpBuffer, 'KTP');
-        await addFileToPdf(suratSehatButaWarnaBuffer, 'Surat Sehat Buta Warna');
-        await addFileToPdf(suratBebasNarkobaBuffer, 'Surat Bebas Narkoba');
+        let simABuffer: Buffer, ktpBuffer: Buffer, suratSehatButaWarnaBuffer: Buffer, suratBebasNarkobaBuffer: Buffer;
+        try {
+          simABuffer = (await this.fileUploadService.downloadFile(participant.simAPath)).buffer;
+        } catch (err: any) { simABuffer = undefined; }
+        try {
+          ktpBuffer = (await this.fileUploadService.downloadFile(participant.ktpPath)).buffer;
+        } catch (err: any) { ktpBuffer = undefined; }
+        try {
+          suratSehatButaWarnaBuffer = (await this.fileUploadService.downloadFile(participant.suratSehatButaWarnaPath)).buffer;
+        } catch (err: any) { suratSehatButaWarnaBuffer = undefined; }
+        try {
+          suratBebasNarkobaBuffer = (await this.fileUploadService.downloadFile(participant.suratBebasNarkobaPath)).buffer;
+        } catch (err: any) { suratBebasNarkobaBuffer = undefined; }
+        if (simABuffer) await addFileToPdf(simABuffer, 'SIM A');
+        if (ktpBuffer) await addFileToPdf(ktpBuffer, 'KTP');
+        if (suratSehatButaWarnaBuffer) await addFileToPdf(suratSehatButaWarnaBuffer, 'Surat Sehat Buta Warna');
+        if (suratBebasNarkobaBuffer) await addFileToPdf(suratBebasNarkobaBuffer, 'Surat Bebas Narkoba');
 
         // Simpan dan kembalikan PDF
         const pdfBytes = await pdfDoc.save();
@@ -772,14 +784,12 @@ export class ParticipantService {
         for (const file of files) {
             if (file.path) {
                 try {
-                    // Ambil buffer dari storage dinamis
+                    // Ambil buffer dari storage dinamis (satu jalur)
                     let buffer: Buffer | null = null;
-                    const storageType = process.env.STORAGE_TYPE || 'minio';
-                    if (storageType === 'supabase') {
-                        const { buffer: buf } = await this.fileUploadService.downloadFile(file.path);
-                        buffer = buf;
-                    } else {
-                        buffer = await getFileBufferFromMinio(file.path);
+                    try {
+                      buffer = (await this.fileUploadService.downloadFile(file.path)).buffer;
+                    } catch (err: any) {
+                      buffer = null;
                     }
                     if (buffer) {
                         archive.append(buffer, { name: file.name });

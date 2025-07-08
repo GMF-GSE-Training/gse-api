@@ -107,13 +107,12 @@ export class CertificateService {
       (item) => item.type === 'Kompetensi',
     );
 
-    const storageType = process.env.STORAGE_TYPE || 'minio';
     let photoBuffer: Buffer;
-    if (storageType === 'supabase') {
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(participant.fotoPath);
       photoBuffer = buffer;
-    } else {
-      photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+    } catch (err: any) {
+      throw new Error('Gagal mengambil foto peserta: ' + (err.message || err));
     }
     const photoBase64 = photoBuffer.toString('base64');
     const photoType = this.getMediaType(photoBuffer);
@@ -122,11 +121,11 @@ export class CertificateService {
       (item) => item.signatureType === 'SIGNATURE1',
     );
     let signature1Buffer: Buffer;
-    if (storageType === 'supabase') {
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(signature1.eSignPath);
       signature1Buffer = buffer;
-    } else {
-      signature1Buffer = await getFileBufferFromMinio(signature1.eSignPath);
+    } catch (err: any) {
+      throw new Error('Gagal mengambil signature1: ' + (err.message || err));
     }
     const signature1Base64 = signature1Buffer.toString('base64');
     const signature1Type = this.getMediaType(signature1Buffer);
@@ -135,11 +134,11 @@ export class CertificateService {
       (item) => item.signatureType === 'SIGNATURE2',
     );
     let signature2Buffer: Buffer;
-    if (storageType === 'supabase') {
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(signature2.eSignPath);
       signature2Buffer = buffer;
-    } else {
-      signature2Buffer = await getFileBufferFromMinio(signature2.eSignPath);
+    } catch (err: any) {
+      throw new Error('Gagal mengambil signature2: ' + (err.message || err));
     }
     const signature2Base64 = signature2Buffer.toString('base64');
     const signature2Type = this.getMediaType(signature2Buffer);

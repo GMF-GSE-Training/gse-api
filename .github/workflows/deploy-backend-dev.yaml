@@ -62,7 +62,7 @@ jobs:
           echo "LOGO_PATH: \"${{ secrets.LOGO_PATH }}\"" >> .env.deploy.yaml
           echo "HCAPTCHA_SECRET: \"${{ secrets.HCAPTCHA_SECRET }}\"" >> .env.deploy.yaml
 
-      - name: Deploy to Cloud Run
+      - name: Deploy To Cloud Run
         run: |-
           gcloud run deploy dev-backend-service \
             --image gcr.io/gmf-training/dev-backend-web-server:latest \

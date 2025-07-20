@@ -33,6 +33,8 @@ export class CotController {
         @Query('size', new ParseIntPipe({ optional: true, exceptionFactory: () => new HttpException('Size must be a positive number', 400) })) size?: number,
         @Query('startDate') startDate?: string,
         @Query('endDate') endDate?: string,
+        @Query('sort_by') sortBy?: string,
+        @Query('sort_order') sortOrder?: 'asc' | 'desc',
     ): Promise<WebResponse<CotResponse[]>> {
         const validateDate = (dateStr: string) => {
             const date = new Date(dateStr);
@@ -48,6 +50,8 @@ export class CotController {
             size: size || 10,
             startDate: startDate ? validateDate(startDate) : undefined,
             endDate: endDate ? validateDate(endDate) : undefined,
+            sortBy: sortBy || 'startDate',
+            sortOrder: sortOrder || 'asc',
         };
         const result = await this.cotService.listCot(query, user);
         return buildResponse(HttpStatus.OK, result.data, null, result.actions, result.paging);

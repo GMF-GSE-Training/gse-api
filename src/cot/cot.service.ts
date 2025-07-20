@@ -6,6 +6,7 @@ import { CotValidation } from "./cot.validation";
 import { ActionAccessRights, ListRequest, Paging } from "src/model/web.model";
 import { CurrentUserRequest } from "src/model/auth.model";
 import { CoreHelper } from "src/common/helpers/core.helper";
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class CotService {
@@ -281,52 +282,151 @@ export class CotService {
                 },
             },
         };
-    
-        // Hitung total data
+
+        // Hitung total data untuk pagination
         const totalCot = await this.prismaService.cOT.count({
             where: whereCondition,
         });
+
+        // Pagination parameters
+        const page = request.page || 1;
+        const size = request.size || 10;
+        const totalPage = Math.ceil(totalCot / size);
     
-        // Ambil data dengan paginasi
-        const cot = await this.prismaService.cOT.findMany({
-            where: whereCondition,
-            include: {
-                capabilityCots: {
-                    select: {
-                        capability: {
-                            select: {
-                                ratingCode: true,
-                                trainingName: true,
+        // ✅ Sorting universal dengan field yang benar dari database
+        const allowedSortFields = ['startDate', 'endDate', 'trainingLocation', 'status', 'id', 'trainingName', 'ratingCode', 'numberOfParticipants'];
+        const naturalSortFields = ['trainingName', 'ratingCode'];
+        const computedFields = ['numberOfParticipants'];
+        const dbSortFields = ['startDate', 'endDate', 'trainingLocation', 'status', 'id'];
+        
+        let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'startDate';
+        let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
+        
+        // ✅ Debug logging untuk sorting
+        console.log('🔍 Backend Sorting Debug:', {
+            originalSortBy: request.sortBy,
+            validatedSortBy: sortBy,
+            originalSortOrder: request.sortOrder,
+            validatedSortOrder: sortOrder,
+            allowedFields: allowedSortFields,
+            isAllowed: allowedSortFields.includes(request.sortBy || '')
+        });
+        
+        let cot: any[];
+        
+        // Optimasi: Strategi berbeda berdasarkan field type
+        if (naturalSortFields.includes(sortBy) || computedFields.includes(sortBy)) {
+            // Untuk field yang perlu natural sort atau computed, ambil semua data dulu
+            cot = await this.prismaService.cOT.findMany({
+                where: whereCondition,
+                include: {
+                    capabilityCots: {
+                        select: {
+                            capability: {
+                                select: {
+                                    ratingCode: true,
+                                    trainingName: true,
+                                },
                             },
                         },
                     },
+                    _count: {
+                      select: {
+                          participantsCots: true
+                      }
+                  },
                 },
-                _count: {
-                  select: {
-                      participantsCots: true
-                  }
-              },
-            },
-            skip: (request.page - 1) * request.size,
-            take: request.size,
-        });
-    
-        // Mapping hasil query ke bentuk CotResponse
-        const cotResponses: CotResponse[] = cot.map(this.formatCotList);
-    
-        const totalPage = Math.ceil(totalCot / request.size);
-    
-        const actions = this.validateActions(userRole);
-    
-        return {
-            data: cotResponses,
-            actions: actions,
-            paging: {
-                currentPage: request.page,
-                totalPage: totalPage,
-                size: request.size,
-            },
-        };
+                orderBy: { startDate: 'asc' }, // Default sorting untuk konsistensi
+            });
+            
+            // Mapping hasil query ke bentuk CotResponse
+            let cotResponses: CotResponse[] = cot.map(this.formatCotList);
+            
+            // Application level sorting untuk field capability dan computed fields
+            if (naturalSortFields.includes(sortBy)) {
+                cotResponses.sort((a, b) => {
+                    const aValue = a.capability?.[sortBy] || '';
+                    const bValue = b.capability?.[sortBy] || '';
+                    return naturalSort(aValue, bValue, sortOrder);
+                });
+            } else if (sortBy === 'numberOfParticipants') {
+                cotResponses.sort((a, b) => {
+                    const aValue = a.numberOfParticipants || 0;
+                    const bValue = b.numberOfParticipants || 0;
+                    if (sortOrder === 'asc') {
+                        return aValue - bValue;
+                    } else {
+                        return bValue - aValue;
+                    }
+                });
+            }
+            
+            // Pagination manual setelah sorting
+            cotResponses = cotResponses.slice((page - 1) * size, page * size);
+            
+            const actions = this.validateActions(userRole);
+            
+            return {
+                data: cotResponses,
+                actions: actions,
+                paging: {
+                    currentPage: page,
+                    totalPage: totalPage,
+                    size: size,
+                },
+            };
+        } else {
+            // Untuk field biasa, gunakan DB sorting dan pagination
+            const orderBy: any = {};
+            orderBy[sortBy] = sortOrder;
+            
+            // ✅ Debug logging untuk orderBy
+            console.log('🔍 Backend OrderBy Debug:', {
+                sortBy,
+                sortOrder,
+                orderBy,
+                isDatabaseSort: !['trainingName', 'ratingCode', 'numberOfParticipants'].includes(sortBy)
+            });
+            
+            cot = await this.prismaService.cOT.findMany({
+                where: whereCondition,
+                include: {
+                    capabilityCots: {
+                        select: {
+                            capability: {
+                                select: {
+                                    ratingCode: true,
+                                    trainingName: true,
+                                },
+                            },
+                        },
+                    },
+                    _count: {
+                      select: {
+                          participantsCots: true
+                      }
+                  },
+                },
+                orderBy,
+                skip: (page - 1) * size,
+                take: size,
+            });
+            
+            // Mapping hasil query ke bentuk CotResponse
+            const cotResponses: CotResponse[] = cot.map(this.formatCotList);
+            
+            const actions = this.validateActions(userRole);
+            
+            return {
+                data: cotResponses,
+                actions: actions,
+                paging: {
+                    currentPage: page,
+                    totalPage: totalPage,
+                    size: size,
+                },
+            };
+        }
     }
 
     private formatCotList(cot: any): CotResponse {

@@ -582,29 +582,17 @@ export class ParticipantController {
   async list(
     @User() user: CurrentUserRequest,
     @Query('q') q?: string,
-    @Query(
-      'page',
-      new ParseIntPipe({
-        optional: true,
-        exceptionFactory: () =>
-          new HttpException('Page must be a positive number', 400),
-      }),
-    )
-    page?: number,
-    @Query(
-      'size',
-      new ParseIntPipe({
-        optional: true,
-        exceptionFactory: () =>
-          new HttpException('Size must be a positive number', 400),
-      }),
-    )
-    size?: number,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('size', new ParseIntPipe({ optional: true })) size?: number,
+    @Query('sort_by') sortBy?: string,
+    @Query('sort_order') sortOrder?: 'asc' | 'desc',
   ): Promise<WebResponse<ParticipantResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
       page: page || 1,
       size: size || 10,
+      sortBy: sortBy || 'idNumber',
+      sortOrder: sortOrder || 'asc',
     };
     const result = await this.participantService.listParticipants(query, user);
     return buildResponse(

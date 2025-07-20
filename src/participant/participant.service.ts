@@ -13,11 +13,12 @@ import { PDFDocument, PDFImage } from "pdf-lib";
 import { join } from "path";
 import * as ejs from 'ejs';
 import { UrlHelper } from '../common/helpers/url.helper';
-import { QrCodeService } from "src/qrcode/qrcode.service";
+import { QrCodeService } from "../qrcode/qrcode.service";
 import * as fs from 'fs';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import * as archiver from 'archiver';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class ParticipantService {
@@ -670,18 +671,61 @@ export class ParticipantService {
             }
         }
     
+        // Hitung total untuk pagination
         const totalUsers = await this.prismaService.participant.count({
             where: whereClause,
         });
-    
-        const participants = await this.prismaService.participant.findMany({
+
+        // Pagination parameters
+        const page = request.page || 1;
+        const size = request.size || 10;
+        const totalPage = Math.ceil(totalUsers / size);
+
+        // Whitelist field yang boleh di-sort
+        const validSortFields = [
+            'id', 'idNumber', 'name', 'nik', 'dinas', 'bidang', 'company', 'email', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth',
+            'simAFileName', 'simAPath', 'simBFileName', 'simBPath', 'ktpFileName', 'ktpPath', 'fotoFileName', 'fotoPath',
+            'suratSehatButaWarnaFileName', 'suratSehatButaWarnaPath', 'tglKeluarSuratSehatButaWarna',
+            'suratBebasNarkobaFileName', 'suratBebasNarkobaPath', 'tglKeluarSuratBebasNarkoba', 'qrCodePath', 'qrCodeLink', 'gmfNonGmf'
+        ];
+        const naturalSortFields = ['idNumber', 'name', 'company', 'dinas', 'bidang', 'email'];
+        const dbSortFields = ['id', 'nik', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth'];
+        
+        let sortBy = request.sortBy && validSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+        let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+
+        // Optimasi: Strategi berbeda berdasarkan field type
+        let participants: any[];
+        
+        if (naturalSortFields.includes(sortBy)) {
+          // Untuk field yang perlu natural sort, gunakan pagination di DB dulu untuk data besar
+          const allParticipants = await this.prismaService.participant.findMany({
             where: whereClause,
             select: participantSelectFields,
-            skip: (request.page - 1) * request.size,
-            take: request.size,
-        });
-    
-        const totalPage = Math.ceil(totalUsers / request.size);
+            skip: (page - 1) * size,
+            take: size,
+          });
+          // Sort manual hanya pada subset data (lebih efisien untuk data besar)
+          participants = allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+        } else {
+          // Untuk field biasa, gunakan DB sorting dan pagination
+          let orderBy: any;
+          if (sortBy !== 'id') {
+            orderBy = [
+              { [sortBy]: sortOrder },
+              { id: 'asc' }
+            ];
+          } else {
+            orderBy = { id: sortOrder };
+          }
+          participants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+            skip: (page - 1) * size,
+            take: size,
+            orderBy,
+          });
+        }
     
         const accessRights = this.validateActions(userRole);
     
@@ -689,9 +733,9 @@ export class ParticipantService {
             data: participants.map(participant => this.toParticipantResponse(participant)),
             actions: accessRights,
             paging: {
-                currentPage: request.page,
+                currentPage: page,
                 totalPage: totalPage,
-                size: request.size,
+                size: size,
             },
         };
     }

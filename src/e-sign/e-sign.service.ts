@@ -13,6 +13,7 @@ import { CoreHelper } from 'src/common/helpers/core.helper';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class ESignService {
@@ -267,30 +268,68 @@ export class ESignService {
       console.log(searchQuery);
     }
 
+    // Hitung total untuk pagination
     const totalESign = await this.prismaService.signature.count({
       where: whereClause,
     });
 
-    const eSign = await this.prismaService.signature.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        idNumber: true,
-        role: true,
-        name: true,
-        signatureType: true,
-        status: true,
-      },
-      skip: (request.page - 1) * request.size,
-      take: request.size,
-    });
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalESign / size);
+
+    // Sorting universal
+    const allowedSortFields = ['idNumber', 'role', 'name', 'signatureType', 'status', 'id'];
+    const naturalSortFields = ['idNumber', 'role', 'name'];
+    const dbSortFields = ['signatureType', 'status', 'id'];
+    
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+    let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
+    
+    // Optimasi: Strategi berbeda berdasarkan field type
+    let eSign: any[];
+    
+    if (naturalSortFields.includes(sortBy)) {
+      // Untuk field yang perlu natural sort, gunakan pagination di DB dulu untuk data besar
+      const allESign = await this.prismaService.signature.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          idNumber: true,
+          role: true,
+          name: true,
+          signatureType: true,
+          status: true,
+        },
+        skip: (page - 1) * size,
+        take: size,
+      });
+      // Sort manual hanya pada subset data (lebih efisien untuk data besar)
+      eSign = allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+    } else {
+      // Untuk field biasa, gunakan DB sorting dan pagination
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+      eSign = await this.prismaService.signature.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          idNumber: true,
+          role: true,
+          name: true,
+          signatureType: true,
+          status: true,
+        },
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
+      });
+    }
 
     const mappedESign = eSign.map((item) => ({
       ...item,
       signatureType: item.signatureType as SignatureType, // Explicitly cast to your enum type
     }));
-
-    const totalPage = Math.ceil(totalESign / request.size);
 
     const userRole = user.role.name.toLowerCase();
     const accessRights = this.validateActions(userRole);
@@ -299,9 +338,9 @@ export class ESignService {
       data: mappedESign,
       actions: accessRights,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }

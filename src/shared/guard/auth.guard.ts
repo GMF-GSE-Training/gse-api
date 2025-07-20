@@ -24,7 +24,11 @@ export class AuthGuard implements CanActivate {
       return true;
     }
     const request = context.switchToHttp().getRequest();
-    const accessToken = this.extractTokenFromCookie(request);
+    // Ambil token dari cookie, jika tidak ada cek header
+    let accessToken = this.extractTokenFromCookie(request);
+    if (!accessToken) {
+      accessToken = this.extractTokenFromHeader(request);
+    }
 
     if (!accessToken) {
       if (request.url.includes('auth/update-email/verify/')) {
@@ -75,5 +79,13 @@ export class AuthGuard implements CanActivate {
 
   private extractTokenFromCookie(request: Request): string | undefined {
     return request.cookies.access_token;
+  }
+
+  private extractTokenFromHeader(request: Request): string | undefined {
+    const authHeader = request.headers['authorization'] || request.headers['Authorization'];
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      return authHeader.substring(7);
+    }
+    return undefined;
   }
 }

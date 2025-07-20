@@ -11,6 +11,7 @@ import { ListParticipantResponse } from 'src/model/participant.model';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { ParticipantCotValidation } from './participant-cot.validation';
 import { CoreHelper } from 'src/common/helpers/core.helper';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class ParticipantCotService {
@@ -238,6 +239,9 @@ export class ParticipantCotService {
           { idNumber: { contains: query, mode: 'insensitive' } },
           { name: { contains: query, mode: 'insensitive' } },
           { dinas: { contains: query, mode: 'insensitive' } },
+          { company: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } },
+          { bidang: { contains: query, mode: 'insensitive' } },
         ],
       };
     }
@@ -272,50 +276,35 @@ export class ParticipantCotService {
       qrCodePath: true,
     };
 
-    const participantCot = await this.prismaService.cOT.findUnique({
+    // Validasi akses user terlebih dahulu
+    if (isUser) {
+      const isParticipantLinked = await this.prismaService.participantsCOT.count({
+        where: {
+          cotId: cotId,
+          participantId: user.participantId,
+        },
+      });
+      if (!isParticipantLinked) {
+        throw new HttpException(
+          'Anda tidak bisa mengakses COT ini karena anda belum terdaftar',
+          403,
+        );
+      }
+    }
+
+    // Ambil data COT dan capability terlebih dahulu
+    const cot = await this.prismaService.cOT.findUnique({
       where: { id: cotId },
-      include: {
-        participantsCots: {
-          where:
-            userRole === 'lcu'
-              ? {
-                  participantId: { not: null },
-                  participant: {
-                    dinas: user.dinas,
-                    ...participantCotWhereClause,
-                  },
-                }
-              : {
-                  participantId: { not: null },
-                  participant: participantCotWhereClause,
-                },
-          select: {
-            participant: {
-              select: participantSelect,
-            },
-          },
-          skip: (request.page - 1) * request.size,
-          take: request.size,
-        },
-        _count: {
-          select: {
-            participantsCots: {
-              where:
-                userRole === 'lcu'
-                  ? {
-                      participantId: { not: null },
-                      participant: {
-                        dinas: user.dinas,
-                        ...participantCotWhereClause,
-                      },
-                    }
-                  : {
-                      participantId: { not: null },
-                      participant: participantCotWhereClause,
-                    },
-            },
-          },
-        },
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+        trainingLocation: true,
+        theoryInstructorRegGse: true,
+        theoryInstructorCompetency: true,
+        practicalInstructor1: true,
+        practicalInstructor2: true,
+        status: true,
         capabilityCots: {
           select: {
             capability: {
@@ -329,68 +318,128 @@ export class ParticipantCotService {
       },
     });
 
-    if (!participantCot) {
+    if (!cot) {
       throw new HttpException('COT tidak ditemukan', 404);
     }
 
-    if (isUser) {
-      const isParticipantLinked = await this.prismaService.participantsCOT.count({
+    // Hitung total participants untuk pagination
+    const totalParticipants = await this.prismaService.participantsCOT.count({
+      where: {
+        cotId: cotId,
+        participantId: { not: null },
+        participant: userRole === 'lcu' 
+          ? { dinas: user.dinas, ...participantCotWhereClause }
+          : participantCotWhereClause,
+      },
+    });
+
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalParticipants / size);
+
+    // Sorting universal
+    const allowedSortFields = ['idNumber', 'name', 'dinas', 'bidang', 'company', 'email', 'id'];
+    const naturalSortFields = ['idNumber', 'name', 'company', 'dinas', 'bidang', 'email'];
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+    let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+
+    // Optimasi: Pagination di DB dulu, lalu sort manual pada page
+    let participants: any[];
+    
+    if (naturalSortFields.includes(sortBy)) {
+      // Untuk field yang perlu natural sort, ambil semua data dulu
+      const allParticipants = await this.prismaService.participantsCOT.findMany({
         where: {
           cotId: cotId,
-          participantId: user.participantId,
+          participantId: { not: null },
+          participant: userRole === 'lcu' 
+            ? { dinas: user.dinas, ...participantCotWhereClause }
+            : participantCotWhereClause,
+        },
+        select: {
+          participant: {
+            select: participantSelect,
+          },
         },
       });
 
-      if (!isParticipantLinked) {
-        throw new HttpException(
-          'Anda tidak bisa mengakses COT ini karena anda belum terdaftar',
-          403,
-        );
+      // Sort manual dengan natural sort
+      participants = allParticipants
+        .map((pc) => pc.participant)
+        .filter((p) => p !== null)
+        .sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+
+      // Pagination manual setelah sorting
+      participants = participants.slice((page - 1) * size, page * size);
+    } else {
+      // Untuk field biasa, gunakan DB sorting dan pagination
+      let orderBy: any;
+      if (sortBy !== 'id') {
+        orderBy = [
+          { participant: { [sortBy]: sortOrder } },
+          { participant: { id: 'asc' } }
+        ];
+      } else {
+        orderBy = { participant: { id: sortOrder } };
       }
+
+      const participantCots = await this.prismaService.participantsCOT.findMany({
+        where: {
+          cotId: cotId,
+          participantId: { not: null },
+          participant: userRole === 'lcu' 
+            ? { dinas: user.dinas, ...participantCotWhereClause }
+            : participantCotWhereClause,
+        },
+        select: {
+          participant: {
+            select: participantSelect,
+          },
+        },
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
+      });
+
+      participants = participantCots
+        .map((pc) => pc.participant)
+        .filter((p) => p !== null);
     }
 
-    const totalParticipants = participantCot._count.participantsCots;
-    const totalPage = Math.ceil(totalParticipants / request.size);
-
-    const participants = participantCot.participantsCots
-      .map((pc) => pc.participant)
-      .filter((p) => p !== null);
-
     const actions = this.validateActions(userRole);
-
-    const capability = participantCot.capabilityCots[0]?.capability || {
+    const capability = cot.capabilityCots[0]?.capability || {
       ratingCode: '',
       trainingName: '',
     };
 
     const response: ParticipantCotResponse = {
       cot: {
-        id: participantCot.id,
-        startDate: participantCot.startDate,
-        endDate: participantCot.endDate,
-        trainingLocation: participantCot.trainingLocation,
-        theoryInstructorRegGse: participantCot.theoryInstructorRegGse,
-        theoryInstructorCompetency: participantCot.theoryInstructorCompetency,
-        practicalInstructor1: participantCot.practicalInstructor1,
-        practicalInstructor2: participantCot.practicalInstructor2,
+        id: cot.id,
+        startDate: cot.startDate,
+        endDate: cot.endDate,
+        trainingLocation: cot.trainingLocation,
+        theoryInstructorRegGse: cot.theoryInstructorRegGse,
+        theoryInstructorCompetency: cot.theoryInstructorCompetency,
+        practicalInstructor1: cot.practicalInstructor1,
+        practicalInstructor2: cot.practicalInstructor2,
         totalParticipants,
-        status: participantCot.status,
+        status: cot.status,
         capability: {
           ratingCode: capability.ratingCode,
           trainingName: capability.trainingName,
         },
         participants: {
-          data: participants,
+          data: participants.map((p) => this.toParticipantCotResponse(p)),
           paging: {
-            currentPage: request.page,
-            totalPage,
-            size: request.size,
+            currentPage: page,
+            totalPage: totalPage,
+            size: size,
           },
           actions,
         },
       },
     };
-
     return response;
   }
 
@@ -424,5 +473,27 @@ export class ParticipantCotService {
     };
 
     return this.coreHelper.validateActions(userRole, accessMap);
+  }
+
+  private toParticipantCotResponse(participant: any): {
+    name: string;
+    id: string;
+    idNumber: string;
+    dinas: string;
+    simA?: boolean;
+    simB?: boolean;
+    tglKeluarSuratSehatButaWarna?: Date;
+    tglKeluarSuratBebasNarkoba?: Date;
+  } {
+    return {
+      name: participant.name,
+      id: participant.id,
+      idNumber: participant.idNumber,
+      dinas: participant.dinas,
+      simA: participant.simAPath ? true : false,
+      simB: participant.simBPath ? true : false,
+      tglKeluarSuratSehatButaWarna: participant.tglKeluarSuratSehatButaWarna,
+      tglKeluarSuratBebasNarkoba: participant.tglKeluarSuratBebasNarkoba,
+    };
   }
 }

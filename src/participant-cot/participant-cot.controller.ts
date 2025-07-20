@@ -130,11 +130,15 @@ export class ParticipantCotController {
       }),
     )
     size?: number,
+    @Query('sort_by') sortBy?: string,
+    @Query('sort_order') sortOrder?: 'asc' | 'desc',
   ): Promise<WebResponse<ParticipantCotResponse>> {
     const query: ListRequest = {
       searchQuery: q,
       page: page || 1,
       size: size || 10,
+      sortBy: sortBy || 'idNumber',
+      sortOrder: sortOrder || 'asc',
     };
     const result = await this.participantCotService.listParticipantsCot(
       cotId,

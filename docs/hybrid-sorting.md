@@ -1,4 +1,4 @@
-# Hybrid Sorting Best Practices
+# Hybrid Sorting Update
 
 ## Overview
 
@@ -213,7 +213,7 @@ if (naturalSortFields.includes(sortBy)) {
 - **Strategi**: Pagination di DB dulu, sort manual pada page (OPTIMAL)
 - **Alasan**: Memory usage optimal, performa terbaik
 
-## Best Practices
+## Update
 
 ### 1. Error Handling
 ```typescript
@@ -466,7 +466,7 @@ toggleSort(col: string) {
 }
 ```
 
-## Frontend Best Practices (Update Terbaru)
+## Frontend Update (Update Terbaru)
 
 ### 1. Consistent Parameter Mapping
 ```typescript
@@ -693,7 +693,7 @@ onSortChange(event: SortParams) {
 5. **Consistency**: Frontend-backend integration sudah sempurna
 6. **User Experience**: Sorting UX sudah excellent
 
-**Keseluruhan implementasi Backend dan Frontend sudah sangat excellent dan mengikuti best practices hybrid sorting!** 🎉
+**Keseluruhan implementasi Backend dan Frontend sudah sangat excellent dan mengikuti update hybrid sorting!** 🎉
 
 ### 📈 **Overall Project Score:**
 

@@ -13,6 +13,7 @@ import { CurrentUserRequest } from 'src/model/auth.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { RoleResponse } from 'src/model/role.model';
 import { Logger } from '@nestjs/common';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class UserService {
@@ -309,21 +310,47 @@ export class UserService {
       ];
     }
 
-    // Hitung total data
-    const totalUsers = await this.prismaService.user.count({
-      where: whereCondition,
-    });
+    // Hitung total untuk pagination
+    const totalUsers = await this.prismaService.user.count({ where: whereCondition });
 
-    // Ambil data dengan paginasi
-    const users = await this.prismaService.user.findMany({
-      where: whereCondition,
-      select: userSelectFields,
-      skip: (request.page - 1) * request.size,
-      take: request.size,
-    });
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalUsers / size);
 
-    // Hitung total halaman
-    const totalPage = Math.ceil(totalUsers / request.size);
+    // Sorting universal
+    const allowedSortFields = ['idNumber', 'email', 'name', 'dinas', 'id'];
+    const naturalSortFields = ['idNumber', 'email', 'name'];
+    const dbSortFields = ['dinas', 'id'];
+    
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+    let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
+
+    // Optimasi: Strategi berbeda berdasarkan field type
+    let users: any[];
+    
+    if (naturalSortFields.includes(sortBy)) {
+      // Untuk field yang perlu natural sort, gunakan pagination di DB dulu untuk data besar
+      const allUsers = await this.prismaService.user.findMany({
+        where: whereCondition,
+        select: userSelectFields,
+        skip: (page - 1) * size,
+        take: size,
+      });
+      // Sort manual hanya pada subset data (lebih efisien untuk data besar)
+      users = allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+    } else {
+      // Untuk field biasa, gunakan DB sorting dan pagination
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+      users = await this.prismaService.user.findMany({
+        where: whereCondition,
+        select: userSelectFields,
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
+      });
+    }
 
     // Dapatkan actions berdasarkan role user
     const userRole = user.role.name.toLowerCase();
@@ -338,9 +365,9 @@ export class UserService {
       data: formattedUsers,
       actions: actions,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }

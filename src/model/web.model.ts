@@ -29,6 +29,8 @@ export interface ListRequest {
   size?: number;
   startDate?: Date;
   endDate?: Date;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export function buildResponse<T>(

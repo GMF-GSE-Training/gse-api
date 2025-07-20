@@ -10,6 +10,7 @@ import { CapabilityValidation } from './capability.validation';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class CapabilityService {
@@ -213,21 +214,83 @@ export class CapabilityService {
       ];
     }
 
+    // Hitung total untuk pagination
     const totalCapability = await this.prismaService.capability.count({
       where: whereClause,
     });
 
-    const capabilities = await this.prismaService.capability.findMany({
-      where: whereClause,
-      skip: (request.page - 1) * request.size,
-      take: request.size,
-    });
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalCapability / size);
 
-    const capabilitiesWithFilteredAttributes = capabilities.map(
-      this.mapCapabilityWithDurations,
-    );
+    // Hybrid sorting: whitelist field DB dan computed
+    const allowedSortFields = [
+      'ratingCode',
+      'trainingCode',
+      'trainingName',
+      'id',
+      'durasiMateriRegulasiGSE',
+      'durasiMateriKompetensi',
+      'totalDuration',
+    ];
+    const naturalSortFields = ['ratingCode', 'trainingCode', 'trainingName'];
+    const computedFields = ['durasiMateriRegulasiGSE', 'durasiMateriKompetensi', 'totalDuration'];
+    const dbSortFields = ['ratingCode', 'trainingCode', 'trainingName', 'id'];
+    
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'ratingCode';
+    let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
 
-    const totalPage = Math.ceil(totalCapability / request.size);
+    let capabilities: any[];
+    
+    // Optimasi: Strategi berbeda berdasarkan field type
+    if (naturalSortFields.includes(sortBy)) {
+      // Untuk field yang perlu natural sort, ambil semua data dulu
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+      });
+      capabilities.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      // Pagination manual setelah sorting
+      capabilities = capabilities.slice((page - 1) * size, page * size);
+    } else if (computedFields.includes(sortBy)) {
+      // Untuk computed fields, ambil semua data dulu
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+      });
+      // Mapping ke computed field
+      const capabilitiesWithFilteredAttributes = capabilities.map(this.mapCapabilityWithDurations);
+      // Sort manual untuk computed fields
+      const sortedData = [...capabilitiesWithFilteredAttributes].sort((a, b) => {
+        let aValue: number = 0;
+        let bValue: number = 0;
+        if (sortBy === 'durasiMateriRegulasiGSE') {
+          aValue = a.totalMaterialDurationRegGse || 0;
+          bValue = b.totalMaterialDurationRegGse || 0;
+        } else if (sortBy === 'durasiMateriKompetensi') {
+          aValue = a.totalMaterialDurationCompetency || 0;
+          bValue = b.totalMaterialDurationCompetency || 0;
+        } else if (sortBy === 'totalDuration') {
+          aValue = (a.totalMaterialDurationRegGse || 0) + (a.totalMaterialDurationCompetency || 0);
+          bValue = (b.totalMaterialDurationRegGse || 0) + (b.totalMaterialDurationCompetency || 0);
+        }
+        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+      });
+      // Pagination manual setelah sorting
+      capabilities = sortedData.slice((page - 1) * size, page * size);
+    } else {
+      // Untuk field biasa, gunakan DB sorting dan pagination
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
+      });
+    }
+
+    // Mapping ke computed field untuk response
+    const capabilitiesWithFilteredAttributes = capabilities.map(this.mapCapabilityWithDurations);
 
     const userRole = user.role.name.toLowerCase();
     const actions = this.validateActions(userRole);
@@ -236,9 +299,9 @@ export class CapabilityService {
       data: capabilitiesWithFilteredAttributes,
       actions: actions,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }
@@ -271,8 +334,8 @@ export class CapabilityService {
 
     return {
       ...rest,
-      totalMaterialDurationRegGse,
-      totalMaterialDurationCompetency,
+      totalMaterialDurationRegGse, // durasiMateriRegulasiGSE di FE
+      totalMaterialDurationCompetency, // durasiMateriKompetensi di FE
     };
   }
 }

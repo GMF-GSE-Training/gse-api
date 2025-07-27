@@ -541,17 +541,43 @@ async function seedCapabilities() {
     });
     Logger.info(`Menggunakan data dari capabilities.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, (_, i) => ({
-      id: faker.string.uuid(),
-      ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
-      trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
-      trainingName: faker.lorem.words({ min: 2, max: 5 }),
-      totalTheoryDurationRegGse: faker.number.int({ min: 10, max: 100 }),
-      totalPracticeDurationRegGse: faker.number.int({ min: 10, max: 100 }),
-      totalTheoryDurationCompetency: faker.number.int({ min: 10, max: 100 }),
-      totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
-      totalDuration: faker.number.int({ min: 50, max: 500 }),
-    }));
+    data = Array.from({ length: count }, (_, i) => {
+      // Generate training name yang sesuai dengan schema length constraint (max 50 chars)
+      const trainingOptions = [
+        'Forklift Training',
+        'GSE Basic Training', 
+        'Aircraft Ground Handling',
+        'Baggage Tractor',
+        'Pushback Training',
+        'Catering Truck',
+        'Air Conditioning Unit',
+        'Ground Power Unit',
+        'Cargo Loader',
+        'Belt Loader',
+        'Conveyor Belt',
+        'Lavatory Service',
+        'Water Service',
+        'Fuel Truck',
+        'De-icing Equipment'
+      ];
+      
+      const selectedTraining = faker.helpers.arrayElement(trainingOptions);
+      const trainingName = selectedTraining.length > 45 
+        ? selectedTraining.substring(0, 45) + '...' 
+        : selectedTraining;
+      
+      return {
+        id: faker.string.uuid(),
+        ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
+        trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
+        trainingName: trainingName,
+        totalTheoryDurationRegGse: faker.number.int({ min: 10, max: 100 }),
+        totalPracticeDurationRegGse: faker.number.int({ min: 10, max: 100 }),
+        totalTheoryDurationCompetency: faker.number.int({ min: 10, max: 100 }),
+        totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
+        totalDuration: faker.number.int({ min: 50, max: 500 }),
+      };
+    });
     Logger.info(`File capabilities.json kosong, generate data dummy (${count} item)`);
   }
   if (data.length > 0) {
@@ -837,17 +863,30 @@ async function seedCots() {
     });
     Logger.info(`Menggunakan data dari cots.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, () => ({
+    data = Array.from({ length: count }, () => {
+      // Generate names yang sesuai dengan schema length constraint (max 50 chars)
+      const locations = [
+        'Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Semarang',
+        'Makassar', 'Palembang', 'Tangerang', 'Depok', 'Bekasi'
+      ];
+      
+      const generateInstructorName = () => {
+        const name = faker.person.fullName();
+        return name.length > 45 ? name.substring(0, 45) + '...' : name;
+      };
+      
+      return {
         id: faker.string.uuid(),
         startDate: faker.date.recent({ days: 30 }),
-      endDate: faker.date.future({ years: 1 }),
-        trainingLocation: faker.location.city(),
-        theoryInstructorRegGse: faker.person.fullName(),
-        theoryInstructorCompetency: faker.person.fullName(),
-        practicalInstructor1: faker.person.fullName(),
-        practicalInstructor2: faker.person.fullName(),
+        endDate: faker.date.future({ years: 1 }),
+        trainingLocation: faker.helpers.arrayElement(locations),
+        theoryInstructorRegGse: generateInstructorName(),
+        theoryInstructorCompetency: generateInstructorName(),
+        practicalInstructor1: generateInstructorName(),
+        practicalInstructor2: generateInstructorName(),
         status: faker.helpers.arrayElement(['Menunggu', 'Berlangsung', 'Selesai']),
-    }));
+      };
+    });
     Logger.info(`File cots.json kosong, generate data dummy (${count} item)`);
   }
   if (data.length > 0) {
@@ -908,16 +947,35 @@ async function seedSignatures() {
   await backupTableIfRequested('signatures');
   const count = parseInt(process.env.DUMMY_SIGNATURE_COUNT || '2', 10);
   const data = await loadOrGenerate('signatures.json', () => {
-    return Array.from({ length: count }, (_, i) => ({
-      id: randomUUID(),
-      idNumber: `SIGNER${(i + 1).toString().padStart(3, '0')}`,
-      role: faker.person.jobTitle(),
-      name: faker.person.fullName(),
-      eSignFileName: `e-sign${i + 1}.png`,
-      eSignPath: `/esign/${faker.string.uuid()}.png`,
-      signatureType: i % 2 === 0 ? SignatureType.SIGNATURE1 : SignatureType.SIGNATURE2,
-      status: true,
-    }));
+    return Array.from({ length: count }, (_, i) => {
+      // Generate role and name yang sesuai dengan schema length constraint (max 50 chars)
+      const roles = [
+        'Manager', 'Supervisor', 'Director', 'Coordinator',
+        'Head of Department', 'Senior Manager', 'Assistant Manager',
+        'Team Leader', 'Administrator', 'Executive'
+      ];
+      
+      const generateName = () => {
+        const name = faker.person.fullName();
+        return name.length > 45 ? name.substring(0, 45) + '...' : name;
+      };
+      
+      const generateRole = () => {
+        const role = faker.helpers.arrayElement(roles);
+        return role.length > 45 ? role.substring(0, 45) + '...' : role;
+      };
+      
+      return {
+        id: randomUUID(),
+        idNumber: `SIGNER${(i + 1).toString().padStart(3, '0')}`,
+        role: generateRole(),
+        name: generateName(),
+        eSignFileName: `e-sign${i + 1}.png`,
+        eSignPath: `/esign/${faker.string.uuid()}.png`,
+        signatureType: i % 2 === 0 ? SignatureType.SIGNATURE1 : SignatureType.SIGNATURE2,
+        status: true,
+      };
+    });
   }, 'DUMMY_SIGNATURE_COUNT', count);
 
   // --- PATCH: filter hanya field valid ---
@@ -1078,14 +1136,35 @@ async function seedCurriculumSyllabus() {
     });
     Logger.info(`Menggunakan data dari curriculumsyllabus.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, () => ({
-      id: faker.string.uuid(),
-      capabilityId: faker.helpers.arrayElement(capabilities).id,
-      theoryDuration: faker.number.int({ min: 10, max: 100 }),
-      practiceDuration: faker.number.int({ min: 10, max: 100 }),
-      name: faker.lorem.words({ min: 2, max: 4 }),
-      type: faker.helpers.arrayElement(['Kompetensi', 'Reguler', 'Lainnya']),
-    }));
+    data = Array.from({ length: count }, () => {
+      // Generate curriculum name yang sesuai dengan schema length constraint (max 50 chars)
+      const curriculumOptions = [
+        'Basic Theory',
+        'Advanced Practice', 
+        'Safety Protocol',
+        'Equipment Operation',
+        'Maintenance Procedure',
+        'Emergency Response',
+        'Quality Control',
+        'Technical Skills',
+        'Ground Operations',
+        'Aircraft Handling'
+      ];
+      
+      const selectedName = faker.helpers.arrayElement(curriculumOptions);
+      const name = selectedName.length > 45 
+        ? selectedName.substring(0, 45) + '...' 
+        : selectedName;
+      
+      return {
+        id: faker.string.uuid(),
+        capabilityId: faker.helpers.arrayElement(capabilities).id,
+        theoryDuration: faker.number.int({ min: 10, max: 100 }),
+        practiceDuration: faker.number.int({ min: 10, max: 100 }),
+        name: name,
+        type: faker.helpers.arrayElement(['Kompetensi', 'Reguler', 'Lainnya']),
+      };
+    });
     Logger.info(`File curriculumsyllabus.json kosong, generate data dummy (${count} item)`);
   }
   if (data.length > 0) {

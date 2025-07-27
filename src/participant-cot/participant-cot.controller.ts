@@ -43,8 +43,7 @@ export class ParticipantCotController {
       'page',
       new ParseIntPipe({
         optional: true,
-        exceptionFactory: () =>
-          new HttpException('Page must be a positive number', 400),
+        exceptionFactory: () => new HttpException('Page must be a positive number', 400),
       }),
     )
     page?: number,
@@ -52,16 +51,19 @@ export class ParticipantCotController {
       'size',
       new ParseIntPipe({
         optional: true,
-        exceptionFactory: () =>
-          new HttpException('Size must be a positive number', 400),
+        exceptionFactory: () => new HttpException('Size must be a positive number', 400),
       }),
     )
     size?: number,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ): Promise<WebResponse<ListParticipantResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
       page: page || 1,
       size: size || 10,
+      sortBy: sortBy || 'idNumber',
+      sortOrder: sortOrder || 'asc',
     };
 
     const result = await this.participantCotService.getUnregisteredParticipants(

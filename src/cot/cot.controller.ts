@@ -54,7 +54,7 @@ export class CotController {
             sortOrder: sortOrder || 'asc',
         };
         const result = await this.cotService.listCot(query, user);
-        return buildResponse(HttpStatus.OK, result.data, null, result.actions, result.paging);
+        return buildResponse(HttpStatus.OK, result.data, null, result.actions, result.paging, undefined, result.info);
     }
 
     @Get('/:cotId')

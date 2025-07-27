@@ -290,7 +290,7 @@ export class ESignService {
     let eSign: any[];
     
     if (naturalSortFields.includes(sortBy)) {
-      // Untuk field yang perlu natural sort, gunakan pagination di DB dulu untuk data besar
+      // Natural sort global: ambil seluruh data, sort, lalu pagination manual
       const allESign = await this.prismaService.signature.findMany({
         where: whereClause,
         select: {
@@ -301,11 +301,9 @@ export class ESignService {
           signatureType: true,
           status: true,
         },
-        skip: (page - 1) * size,
-        take: size,
       });
-      // Sort manual hanya pada subset data (lebih efisien untuk data besar)
-      eSign = allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      eSign = allESign.slice((page - 1) * size, page * size);
     } else {
       // Untuk field biasa, gunakan DB sorting dan pagination
       const orderBy: any = {};

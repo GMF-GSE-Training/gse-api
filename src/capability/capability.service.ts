@@ -236,7 +236,17 @@ export class CapabilityService {
     ];
     const naturalSortFields = ['ratingCode', 'trainingCode', 'trainingName'];
     const computedFields = ['durasiMateriRegulasiGSE', 'durasiMateriKompetensi', 'totalDuration'];
-    const dbSortFields = ['ratingCode', 'trainingCode', 'trainingName', 'id'];
+    const dbSortFields = [
+      'ratingCode',
+      'trainingCode',
+      'trainingName',
+      'id',
+      'totalDuration',
+      'totalTheoryDurationRegGse',
+      'totalPracticeDurationRegGse',
+      'totalTheoryDurationCompetency',
+      'totalPracticeDurationCompetency',
+    ];
     
     let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'ratingCode';
     let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
@@ -252,33 +262,50 @@ export class CapabilityService {
       capabilities.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
       // Pagination manual setelah sorting
       capabilities = capabilities.slice((page - 1) * size, page * size);
-    } else if (computedFields.includes(sortBy)) {
-      // Untuk computed fields, ambil semua data dulu
-      capabilities = await this.prismaService.capability.findMany({
-        where: whereClause,
-      });
-      // Mapping ke computed field
-      const capabilitiesWithFilteredAttributes = capabilities.map(this.mapCapabilityWithDurations);
-      // Sort manual untuk computed fields
-      const sortedData = [...capabilitiesWithFilteredAttributes].sort((a, b) => {
-        let aValue: number = 0;
-        let bValue: number = 0;
-        if (sortBy === 'durasiMateriRegulasiGSE') {
-          aValue = a.totalMaterialDurationRegGse || 0;
-          bValue = b.totalMaterialDurationRegGse || 0;
-        } else if (sortBy === 'durasiMateriKompetensi') {
-          aValue = a.totalMaterialDurationCompetency || 0;
-          bValue = b.totalMaterialDurationCompetency || 0;
-        } else if (sortBy === 'totalDuration') {
-          aValue = (a.totalMaterialDurationRegGse || 0) + (a.totalMaterialDurationCompetency || 0);
-          bValue = (b.totalMaterialDurationRegGse || 0) + (b.totalMaterialDurationCompetency || 0);
-        }
-        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
-      });
-      // Pagination manual setelah sorting
-      capabilities = sortedData.slice((page - 1) * size, page * size);
-    } else {
-      // Untuk field biasa, gunakan DB sorting dan pagination
+    } else if (sortBy === 'durasiMateriRegulasiGSE') {
+      // Sorting & paging kolom computed di DB
+      const offset = (page - 1) * size;
+      const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      capabilities = await this.prismaService.$queryRawUnsafe(
+        `SELECT *, (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0)) AS "totalMaterialDurationRegGse" FROM "capabilities" ORDER BY (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0)) ${order} OFFSET ${offset} LIMIT ${size}`
+      );
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: item.totalMaterialDurationRegGse ?? 0,
+        totalMaterialDurationCompetency: (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+        totalDuration: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0) + (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+      }));
+    } else if (sortBy === 'durasiMateriKompetensi') {
+      // Sorting & paging kolom computed di DB
+      const offset = (page - 1) * size;
+      const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      capabilities = await this.prismaService.$queryRawUnsafe(
+        `SELECT *, (COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) AS "totalMaterialDurationCompetency" FROM "capabilities" ORDER BY (COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) ${order} OFFSET ${offset} LIMIT ${size}`
+      );
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0),
+        totalMaterialDurationCompetency: item.totalMaterialDurationCompetency ?? 0,
+        totalDuration: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0) + (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+      }));
+    } else if (sortBy === 'totalDuration') {
+      // Sorting & paging kolom totalDuration sebagai computed field di DB
+      const offset = (page - 1) * size;
+      const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      capabilities = await this.prismaService.$queryRawUnsafe(
+        `SELECT *, (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0) + COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) AS "totalDuration" FROM "capabilities" ORDER BY (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0) + COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) ${order} OFFSET ${offset} LIMIT ${size}`
+      );
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0),
+        totalMaterialDurationCompetency: (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+        totalDuration: item.totalDuration ?? 0,
+      }));
+    } else if (dbSortFields.includes(sortBy)) {
+      // Untuk field angka dan field DB, sorting dan pagination di DB
       const orderBy: any = {};
       orderBy[sortBy] = sortOrder;
       capabilities = await this.prismaService.capability.findMany({
@@ -287,6 +314,21 @@ export class CapabilityService {
         skip: (page - 1) * size,
         take: size,
       });
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0),
+        totalMaterialDurationCompetency: (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+        totalDuration: item.totalDuration ?? 0,
+      }));
+    } else {
+      // Fallback: ambil semua data, sort manual, slice
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+      });
+      capabilities = capabilities.map(this.mapCapabilityWithDurations);
+      capabilities.sort((a, b) => (a[sortBy] || 0) - (b[sortBy] || 0));
+      capabilities = capabilities.slice((page - 1) * size, page * size);
     }
 
     // Mapping ke computed field untuk response
@@ -326,16 +368,15 @@ export class CapabilityService {
       ...rest
     } = capability;
 
-    const totalMaterialDurationRegGse =
-      (totalTheoryDurationRegGse || 0) + (totalPracticeDurationRegGse || 0);
-    const totalMaterialDurationCompetency =
-      (totalTheoryDurationCompetency || 0) +
-      (totalPracticeDurationCompetency || 0);
+    const totalMaterialDurationRegGse = (Number(totalTheoryDurationRegGse) || 0) + (Number(totalPracticeDurationRegGse) || 0);
+    const totalMaterialDurationCompetency = (Number(totalTheoryDurationCompetency) || 0) + (Number(totalPracticeDurationCompetency) || 0);
+    const totalDuration = totalMaterialDurationRegGse + totalMaterialDurationCompetency;
 
     return {
       ...rest,
-      totalMaterialDurationRegGse, // durasiMateriRegulasiGSE di FE
-      totalMaterialDurationCompetency, // durasiMateriKompetensi di FE
+      totalMaterialDurationRegGse,
+      totalMaterialDurationCompetency,
+      totalDuration,
     };
   }
 }

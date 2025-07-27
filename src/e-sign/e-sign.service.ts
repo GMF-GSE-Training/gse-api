@@ -14,6 +14,7 @@ import { CurrentUserRequest } from 'src/model/auth.model';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import { naturalSort } from '../common/helpers/natural-sort';
+import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
 
 @Injectable()
 export class ESignService {
@@ -278,79 +279,48 @@ export class ESignService {
     const size = request.size || 10;
     const totalPage = Math.ceil(totalESign / size);
 
-    // Sorting universal
-    const allowedSortFields = ['idNumber', 'role', 'name', 'signatureType', 'status', 'id', 'createdAt', 'updatedAt'];
-    const naturalSortFields = ['idNumber', 'role', 'name'];
-    const dateFields = ['createdAt', 'updatedAt'];
-    const dbSortFields = ['signatureType', 'status', 'id', 'createdAt', 'updatedAt'];
+    // Configurasi sorting yang sesuai dengan kolom yang ada di tabel signatures
+    const sortingConfig = SortingConfigBuilder
+      .create()
+      .allowFields(['idNumber', 'role', 'name', 'signatureType', 'status', 'id'])
+      .naturalSort(['idNumber', 'role', 'name']) // String fields for natural sorting
+      .databaseSort(['signatureType', 'status', 'id']) // Fields that can be sorted in DB
+      .defaultSort('idNumber')
+      .build();
     
-    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
-    let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
+    // Validasi dan normalisasi sorting parameters
+    const { sortBy, sortOrder, strategy } = SortingHelper.validateAndNormalizeSorting(
+      request.sortBy,
+      request.sortOrder,
+      sortingConfig
+    );
     
     // Optimasi: Strategi berbeda berdasarkan field type
     let eSign: any[];
     
-    if (naturalSortFields.includes(sortBy)) {
+    const selectFields = {
+      id: true,
+      idNumber: true,
+      role: true,
+      name: true,
+      signatureType: true,
+      status: true,
+    };
+    
+    if (strategy === 'natural' || strategy === 'fallback') {
       // Natural sort global: ambil seluruh data, sort, lalu pagination manual
       const allESign = await this.prismaService.signature.findMany({
         where: whereClause,
-        select: {
-          id: true,
-          idNumber: true,
-          role: true,
-          name: true,
-          signatureType: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: selectFields,
       });
-      allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
-      eSign = allESign.slice((page - 1) * size, page * size);
-    } else if (dateFields.includes(sortBy)) {
-      // Date sort global: ambil seluruh data, sort berdasarkan tanggal, lalu pagination manual
-      const allESign = await this.prismaService.signature.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          idNumber: true,
-          role: true,
-          name: true,
-          signatureType: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-      allESign.sort((a, b) => {
-        const aDate = a[sortBy] ? new Date(a[sortBy]) : null;
-        const bDate = b[sortBy] ? new Date(b[sortBy]) : null;
-        
-        // Handle null values - put them at the end
-        if (!aDate && !bDate) return 0;
-        if (!aDate) return 1;
-        if (!bDate) return -1;
-        
-        const comparison = aDate.getTime() - bDate.getTime();
-        return sortOrder === 'asc' ? comparison : -comparison;
-      });
-      eSign = allESign.slice((page - 1) * size, page * size);
-    } else if (dbSortFields.includes(sortBy)) {
+      eSign = SortingHelper.sortArrayNaturally(allESign, sortBy, sortOrder)
+        .slice((page - 1) * size, page * size);
+    } else if (strategy === 'database') {
       // Database sorting
-      const orderBy: any = {};
-      orderBy[sortBy] = sortOrder;
+      const orderBy = SortingHelper.createPrismaOrderBy(sortBy, sortOrder);
       eSign = await this.prismaService.signature.findMany({
         where: whereClause,
-        select: {
-          id: true,
-          idNumber: true,
-          role: true,
-          name: true,
-          signatureType: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: selectFields,
         orderBy,
         skip: (page - 1) * size,
         take: size,
@@ -359,19 +329,10 @@ export class ESignService {
       // Fallback: natural sort
       const allESign = await this.prismaService.signature.findMany({
         where: whereClause,
-        select: {
-          id: true,
-          idNumber: true,
-          role: true,
-          name: true,
-          signatureType: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: selectFields,
       });
-      allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
-      eSign = allESign.slice((page - 1) * size, page * size);
+      eSign = SortingHelper.sortArrayNaturally(allESign, sortBy, sortOrder)
+        .slice((page - 1) * size, page * size);
     }
 
     const mappedESign = eSign.map((item) => ({

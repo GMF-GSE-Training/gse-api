@@ -698,15 +698,13 @@ export class ParticipantService {
         let participants: any[];
         
         if (naturalSortFields.includes(sortBy)) {
-          // Untuk field yang perlu natural sort, gunakan pagination di DB dulu untuk data besar
+          // Natural sort global: ambil seluruh data, sort, lalu pagination manual
           const allParticipants = await this.prismaService.participant.findMany({
             where: whereClause,
             select: participantSelectFields,
-            skip: (page - 1) * size,
-            take: size,
           });
-          // Sort manual hanya pada subset data (lebih efisien untuk data besar)
-          participants = allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+          allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+          participants = allParticipants.slice((page - 1) * size, page * size);
         } else {
           // Untuk field biasa, gunakan DB sorting dan pagination
           let orderBy: any;

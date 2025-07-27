@@ -64,28 +64,70 @@ export class ParticipantCotService {
           { name: { contains: request.searchQuery, mode: 'insensitive' } },
           { dinas: { contains: request.searchQuery, mode: 'insensitive' } },
           { company: { contains: request.searchQuery, mode: 'insensitive' } },
+          { bidang: { contains: request.searchQuery, mode: 'insensitive' } },
         ],
       });
     }
 
-    const [unregisteredParticipants, totalParticipants] = await Promise.all([
-      this.prismaService.participant.findMany({
+    // Count total participants for pagination
+    const totalParticipants = await this.prismaService.participant.count({ where: baseWhereClause });
+    const totalPage = Math.ceil(totalParticipants / request.size);
+
+    // Sorting configuration
+    const allowedSortFields = ['idNumber', 'name', 'dinas', 'bidang', 'company', 'id'];
+    const naturalSortFields = ['idNumber', 'name', 'company', 'dinas', 'bidang'];
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+    let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+
+    const participantSelect = {
+      id: true,
+      idNumber: true,
+      name: true,
+      dinas: true,
+      bidang: true,
+      company: true,
+    };
+
+    let unregisteredParticipants: any[];
+
+    // Apply sorting strategy based on field type
+    if (naturalSortFields.includes(sortBy)) {
+      // Natural sort: fetch all data, sort manually, then paginate
+      const allParticipants = await this.prismaService.participant.findMany({
         where: baseWhereClause,
-        select: {
-          id: true,
-          idNumber: true,
-          name: true,
-          dinas: true,
-          bidang: true,
-          company: true,
-        },
+        select: participantSelect,
+      });
+
+      // Sort manually with natural sort
+      const sortedParticipants = allParticipants.sort((a, b) => 
+        naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder)
+      );
+
+      // Manual pagination after sorting
+      unregisteredParticipants = sortedParticipants.slice(
+        (request.page - 1) * request.size,
+        request.page * request.size
+      );
+    } else {
+      // For regular fields, use database sorting and pagination
+      let orderBy: any;
+      if (sortBy !== 'id') {
+        orderBy = [
+          { [sortBy]: sortOrder },
+          { id: 'asc' }
+        ];
+      } else {
+        orderBy = { id: sortOrder };
+      }
+
+      unregisteredParticipants = await this.prismaService.participant.findMany({
+        where: baseWhereClause,
+        select: participantSelect,
+        orderBy,
         skip: (request.page - 1) * request.size,
         take: request.size,
-      }),
-      this.prismaService.participant.count({ where: baseWhereClause }),
-    ]);
-
-    const totalPage = Math.ceil(totalParticipants / request.size);
+      });
+    }
 
     return {
       data: unregisteredParticipants,

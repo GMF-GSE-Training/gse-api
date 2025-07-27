@@ -339,16 +339,17 @@ export class ParticipantCotService {
     const totalPage = Math.ceil(totalParticipants / size);
 
     // Sorting universal
-    const allowedSortFields = ['idNumber', 'name', 'dinas', 'bidang', 'company', 'email', 'id'];
+    const allowedSortFields = ['idNumber', 'name', 'dinas', 'bidang', 'company', 'email', 'id', 'expSuratSehatButaWarna', 'expSuratBebasNarkoba'];
     const naturalSortFields = ['idNumber', 'name', 'company', 'dinas', 'bidang', 'email'];
+    const dateFields = ['expSuratSehatButaWarna', 'expSuratBebasNarkoba'];
     let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
     let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
 
-    // Optimasi: Pagination di DB dulu, lalu sort manual pada page
+    // Optimasi: Strategi berbeda berdasarkan field type
     let participants: any[];
     
     if (naturalSortFields.includes(sortBy)) {
-      // Untuk field yang perlu natural sort, ambil semua data dulu
+      // Natural sort global: ambil seluruh data, sort, lalu pagination manual
       const allParticipants = await this.prismaService.participantsCOT.findMany({
         where: {
           cotId: cotId,
@@ -369,6 +370,50 @@ export class ParticipantCotService {
         .map((pc) => pc.participant)
         .filter((p) => p !== null)
         .sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+
+      // Pagination manual setelah sorting
+      participants = participants.slice((page - 1) * size, page * size);
+    } else if (dateFields.includes(sortBy)) {
+      // Date sort global: ambil seluruh data, sort berdasarkan tanggal, lalu pagination manual
+      const allParticipants = await this.prismaService.participantsCOT.findMany({
+        where: {
+          cotId: cotId,
+          participantId: { not: null },
+          participant: userRole === 'lcu' 
+            ? { dinas: user.dinas, ...participantCotWhereClause }
+            : participantCotWhereClause,
+        },
+        select: {
+          participant: {
+            select: participantSelect,
+          },
+        },
+      });
+
+      // Sort manual berdasarkan tanggal
+      participants = allParticipants
+        .map((pc) => pc.participant)
+        .filter((p) => p !== null)
+        .sort((a, b) => {
+          let aDate: Date | null = null;
+          let bDate: Date | null = null;
+          
+          if (sortBy === 'expSuratSehatButaWarna') {
+            aDate = a.tglKeluarSuratSehatButaWarna ? new Date(a.tglKeluarSuratSehatButaWarna) : null;
+            bDate = b.tglKeluarSuratSehatButaWarna ? new Date(b.tglKeluarSuratSehatButaWarna) : null;
+          } else if (sortBy === 'expSuratBebasNarkoba') {
+            aDate = a.tglKeluarSuratBebasNarkoba ? new Date(a.tglKeluarSuratBebasNarkoba) : null;
+            bDate = b.tglKeluarSuratBebasNarkoba ? new Date(b.tglKeluarSuratBebasNarkoba) : null;
+          }
+          
+          // Handle null values - put them at the end
+          if (!aDate && !bDate) return 0;
+          if (!aDate) return 1;
+          if (!bDate) return -1;
+          
+          const comparison = aDate.getTime() - bDate.getTime();
+          return sortOrder === 'asc' ? comparison : -comparison;
+        });
 
       // Pagination manual setelah sorting
       participants = participants.slice((page - 1) * size, page * size);

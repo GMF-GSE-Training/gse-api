@@ -319,34 +319,39 @@ export class UserService {
     const totalPage = Math.ceil(totalUsers / size);
 
     // Sorting universal
-    const allowedSortFields = ['idNumber', 'email', 'name', 'dinas', 'id'];
-    const dbSortFields = ['idNumber', 'email', 'name', 'dinas', 'id', 'roleName'];
+    const allowedSortFields = ['idNumber', 'email', 'name', 'dinas', 'id', 'roleName'];
+    const naturalSortFields = ['idNumber', 'email', 'name', 'dinas'];
+    const relationFields = ['roleName']; // Special handling for relations
+    const dbSortFields = ['id'];
+    
     let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
     let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
     let users: any[];
 
-    if (sortBy === 'roleName') {
-      // Sorting by role name (relasi), lakukan join dan orderBy di DB
-      users = await this.prismaService.user.findMany({
-        where: whereCondition,
-        select: {
-          ...userSelectFields,
-          role: { select: { name: true } },
-        },
-        orderBy: { role: { name: sortOrder } },
-        skip: (page - 1) * size,
-        take: size,
-      });
-    } else if (sortBy === 'email') {
-      // Natural sort untuk email: ambil seluruh data, sort, lalu pagination manual
+    if (relationFields.includes(sortBy)) {
+      // Special handling for relation fields
+      if (sortBy === 'roleName') {
+        users = await this.prismaService.user.findMany({
+          where: whereCondition,
+          select: {
+            ...userSelectFields,
+            role: { select: { name: true } },
+          },
+          orderBy: { role: { name: sortOrder } },
+          skip: (page - 1) * size,
+          take: size,
+        });
+      }
+    } else if (naturalSortFields.includes(sortBy)) {
+      // Natural sort global: ambil seluruh data, sort, lalu pagination manual
       const allUsers = await this.prismaService.user.findMany({
         where: whereCondition,
         select: userSelectFields,
       });
-      allUsers.sort((a, b) => naturalSort(a.email || '', b.email || '', sortOrder));
+      allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
       users = allUsers.slice((page - 1) * size, page * size);
     } else if (dbSortFields.includes(sortBy)) {
-      // Sorting by field DB langsung
+      // Database sorting
       const orderBy: any = {};
       orderBy[sortBy] = sortOrder;
       users = await this.prismaService.user.findMany({
@@ -357,14 +362,13 @@ export class UserService {
         take: size,
       });
     } else {
-      // Fallback: natural sort/manual sort jika benar-benar perlu
-      users = await this.prismaService.user.findMany({
+      // Fallback: natural sort
+      const allUsers = await this.prismaService.user.findMany({
         where: whereCondition,
         select: userSelectFields,
-        skip: (page - 1) * size,
-        take: size,
       });
-      users.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      users = allUsers.slice((page - 1) * size, page * size);
     }
 
     // Dapatkan actions berdasarkan role user

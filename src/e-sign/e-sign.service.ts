@@ -279,9 +279,10 @@ export class ESignService {
     const totalPage = Math.ceil(totalESign / size);
 
     // Sorting universal
-    const allowedSortFields = ['idNumber', 'role', 'name', 'signatureType', 'status', 'id'];
+    const allowedSortFields = ['idNumber', 'role', 'name', 'signatureType', 'status', 'id', 'createdAt', 'updatedAt'];
     const naturalSortFields = ['idNumber', 'role', 'name'];
-    const dbSortFields = ['signatureType', 'status', 'id'];
+    const dateFields = ['createdAt', 'updatedAt'];
+    const dbSortFields = ['signatureType', 'status', 'id', 'createdAt', 'updatedAt'];
     
     let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
     let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
@@ -300,12 +301,42 @@ export class ESignService {
           name: true,
           signatureType: true,
           status: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
       allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
       eSign = allESign.slice((page - 1) * size, page * size);
-    } else {
-      // Untuk field biasa, gunakan DB sorting dan pagination
+    } else if (dateFields.includes(sortBy)) {
+      // Date sort global: ambil seluruh data, sort berdasarkan tanggal, lalu pagination manual
+      const allESign = await this.prismaService.signature.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          idNumber: true,
+          role: true,
+          name: true,
+          signatureType: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      allESign.sort((a, b) => {
+        const aDate = a[sortBy] ? new Date(a[sortBy]) : null;
+        const bDate = b[sortBy] ? new Date(b[sortBy]) : null;
+        
+        // Handle null values - put them at the end
+        if (!aDate && !bDate) return 0;
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        
+        const comparison = aDate.getTime() - bDate.getTime();
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+      eSign = allESign.slice((page - 1) * size, page * size);
+    } else if (dbSortFields.includes(sortBy)) {
+      // Database sorting
       const orderBy: any = {};
       orderBy[sortBy] = sortOrder;
       eSign = await this.prismaService.signature.findMany({
@@ -317,11 +348,30 @@ export class ESignService {
           name: true,
           signatureType: true,
           status: true,
+          createdAt: true,
+          updatedAt: true,
         },
         orderBy,
         skip: (page - 1) * size,
         take: size,
       });
+    } else {
+      // Fallback: natural sort
+      const allESign = await this.prismaService.signature.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          idNumber: true,
+          role: true,
+          name: true,
+          signatureType: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      allESign.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      eSign = allESign.slice((page - 1) * size, page * size);
     }
 
     const mappedESign = eSign.map((item) => ({

@@ -681,17 +681,17 @@ export class ParticipantService {
         const size = request.size || 10;
         const totalPage = Math.ceil(totalUsers / size);
 
-        // Whitelist field yang boleh di-sort
-        const validSortFields = [
+        // Sorting universal
+        const allowedSortFields = [
             'id', 'idNumber', 'name', 'nik', 'dinas', 'bidang', 'company', 'email', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth',
-            'simAFileName', 'simAPath', 'simBFileName', 'simBPath', 'ktpFileName', 'ktpPath', 'fotoFileName', 'fotoPath',
-            'suratSehatButaWarnaFileName', 'suratSehatButaWarnaPath', 'tglKeluarSuratSehatButaWarna',
-            'suratBebasNarkobaFileName', 'suratBebasNarkobaPath', 'tglKeluarSuratBebasNarkoba', 'qrCodePath', 'qrCodeLink', 'gmfNonGmf'
+            'tglKeluarSuratSehatButaWarna', 'tglKeluarSuratBebasNarkoba', 'expSuratSehatButaWarna', 'expSuratBebasNarkoba'
         ];
         const naturalSortFields = ['idNumber', 'name', 'company', 'dinas', 'bidang', 'email'];
-        const dbSortFields = ['id', 'nik', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth'];
+        const dateFields = ['dateOfBirth', 'tglKeluarSuratSehatButaWarna', 'tglKeluarSuratBebasNarkoba'];
+        const computedFields = ['expSuratSehatButaWarna', 'expSuratBebasNarkoba'];
+        const dbSortFields = ['id', 'nik', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth', 'tglKeluarSuratSehatButaWarna', 'tglKeluarSuratBebasNarkoba'];
         
-        let sortBy = request.sortBy && validSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+        let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
         let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
 
         // Optimasi: Strategi berbeda berdasarkan field type
@@ -705,8 +705,64 @@ export class ParticipantService {
           });
           allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
           participants = allParticipants.slice((page - 1) * size, page * size);
-        } else {
-          // Untuk field biasa, gunakan DB sorting dan pagination
+        } else if (dateFields.includes(sortBy)) {
+          // Date sort global: ambil seluruh data, sort berdasarkan tanggal, lalu pagination manual
+          const allParticipants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+          });
+          allParticipants.sort((a, b) => {
+            const aDate = a[sortBy] ? new Date(a[sortBy]) : null;
+            const bDate = b[sortBy] ? new Date(b[sortBy]) : null;
+            
+            // Handle null values - put them at the end
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            
+            const comparison = aDate.getTime() - bDate.getTime();
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+          participants = allParticipants.slice((page - 1) * size, page * size);
+        } else if (computedFields.includes(sortBy)) {
+          // Computed field sorting: calculate expiry dates and sort
+          const allParticipants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+          });
+          
+          // Add computed fields to each participant
+          const participantsWithComputed = allParticipants.map(p => {
+            const expSuratSehatButaWarna = p.tglKeluarSuratSehatButaWarna 
+              ? new Date(new Date(p.tglKeluarSuratSehatButaWarna).setMonth(new Date(p.tglKeluarSuratSehatButaWarna).getMonth() + 6))
+              : null;
+            const expSuratBebasNarkoba = p.tglKeluarSuratBebasNarkoba
+              ? new Date(new Date(p.tglKeluarSuratBebasNarkoba).setMonth(new Date(p.tglKeluarSuratBebasNarkoba).getMonth() + 6))
+              : null;
+            
+            return {
+              ...p,
+              expSuratSehatButaWarna,
+              expSuratBebasNarkoba
+            };
+          });
+          
+          // Sort by computed field
+          participantsWithComputed.sort((a, b) => {
+            const aDate = a[sortBy];
+            const bDate = b[sortBy];
+            
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            
+            const comparison = aDate.getTime() - bDate.getTime();
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+          
+          participants = participantsWithComputed.slice((page - 1) * size, page * size);
+        } else if (dbSortFields.includes(sortBy)) {
+          // Database sorting
           let orderBy: any;
           if (sortBy !== 'id') {
             orderBy = [
@@ -723,6 +779,14 @@ export class ParticipantService {
             take: size,
             orderBy,
           });
+        } else {
+          // Fallback: natural sort
+          const allParticipants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+          });
+          allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+          participants = allParticipants.slice((page - 1) * size, page * size);
         }
     
         const accessRights = this.validateActions(userRole);

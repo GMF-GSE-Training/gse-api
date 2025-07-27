@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/service/prisma.service';
 import { ValidationService } from 'src/common/service/validation.service';
 import { CreateCertificate } from 'src/model/certificate.model';
@@ -11,6 +11,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Injectable()
 export class CertificateService {
+  private readonly logger = new Logger(CertificateService.name);
   constructor(
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
@@ -21,7 +22,7 @@ export class CertificateService {
     cotId: string,
     participantId: string,
     request: CreateCertificate,
-  ): Promise<any> {
+  ): Promise<string> {
     const createCertificateRequest = this.validationService.validate(
       CertificateValidation.CREATE,
       request,
@@ -68,6 +69,23 @@ export class CertificateService {
             },
           },
         },
+        // Tambahkan untuk mengecek sertifikat yang sudah ada
+        certificate: {
+          where: {
+              // Cek berdasarkan participant melalui participantsCots
+              cot: {
+                  participantsCots: {
+                      some: {
+                          participantId: participantId,
+                      },
+                  },
+              },
+          },
+          select: {
+              id: true,
+              certificateNumber: true,
+          },
+        },
       },
     });
 
@@ -78,11 +96,40 @@ export class CertificateService {
       );
     }
 
+    // Validasi 1: Cek apakah COT sudah selesai (endDate sudah terlewat)
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0); // Reset time untuk perbandingan tanggal saja
+    
+    const endDate = new Date(cot.endDate);
+    endDate.setHours(0, 0, 0, 0); // Reset time untuk perbandingan tanggal saja
+    
+    if (currentDate <= endDate) {
+        throw new HttpException('Gagal membuat sertifikat. COT belum selesai', 400);
+    }
+    2
+    // Validasi 2: Cek apakah sertifikat untuk participant di COT ini sudah ada
+    const existingCertificate = await this.prismaService.certificate.findFirst({
+      where: {
+          cotId: cotId,
+          participantId: participantId,
+      },
+  });
+
+    if (existingCertificate) {
+        throw new HttpException('Gagal membuat sertifikat. Sertifikat untuk participant sudah ada di COT ini', 409);
+    }
+
+    // Validasi 3: Cek apakah participant terdaftar di COT ini
+    if (!cot.participantsCots || cot.participantsCots.length === 0) {
+        throw new HttpException('Gagal membuat sertifikat. Participant tidak terdaftar di COT ini', 404);
+    }
+
     const eSign = await this.prismaService.signature.findMany({
       where: {
         status: true,
       },
       select: {
+        id: true,
         name: true,
         role: true,
         eSignPath: true,
@@ -90,7 +137,7 @@ export class CertificateService {
       },
     });
 
-    if (!eSign) {
+    if (!eSign || eSign.length === 0) {
       throw new HttpException(
         'Gagal membuat sertifikat. Tidak ada Esign yang aktif',
         404,
@@ -149,6 +196,9 @@ export class CertificateService {
       new Date(participant.dateOfBirth),
     );
 
+    // Generate certificate number
+    const certificateNumber = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const backgroundImage = `${process.env.BACKEND_URL}/assets/images/background_sertifikat.png`;
     const templatePath = join(
       __dirname,
       '..',
@@ -157,6 +207,7 @@ export class CertificateService {
       'certificate.ejs',
     );
     const certificate = await ejs.renderFile(templatePath, {
+      backgroundImage: backgroundImage,
       photoType: photoType,
       photoBase64: photoBase64,
       name: participant.name,
@@ -164,7 +215,7 @@ export class CertificateService {
       nationality: participant.nationality,
       competencies: capability.trainingName,
       date: this.formatDate(new Date()),
-      certificateNumber: '12345',
+      certificateNumber: certificateNumber,
       duration: capability.totalDuration,
       coursePeriode: `${formattedStartDate} - ${formattedEndDate}`,
       nameSignature1: signature1.name,
@@ -194,7 +245,103 @@ export class CertificateService {
 
     await browser.close();
 
-    return Buffer.from(certificateBuffer);
+    // Upload PDF file seperti yang dilakukan di createESign
+    let certificatePath: string;
+    try {
+      this.logger.log(`Uploading certificate PDF file...`);
+      const fileObj = {
+        buffer: certificateBuffer,
+        originalname: `certificates/certificate_${certificateNumber}.pdf`,
+        mimetype: 'application/pdf',
+        size: certificateBuffer.length,
+      };
+      
+      certificatePath = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+      this.logger.log(`Certificate PDF file uploaded, path: ${certificatePath}`);
+    } catch (err) {
+      this.logger.error(`Gagal upload certificate PDF file: ${err.message}`);
+      throw new HttpException(`Gagal upload certificate PDF file: ${err.message}`, 500);
+    }
+
+    // Simpan data sertifikat ke database
+    // Menggunakan signature pertama yang aktif (bisa disesuaikan dengan kebutuhan)
+    const activeSignature = eSign[0];
+    
+    await this.prismaService.certificate.create({
+      data: {
+        cotId: cotId,
+        participantId: participantId,
+        signatureId: activeSignature.id,
+        certificateNumber: certificateNumber,
+        attendance: createCertificateRequest.attendance, // Default true jika tidak ada
+        theoryScore: createCertificateRequest.theoryScore,
+        practiceScore: createCertificateRequest.practiceScore,
+        certificatePath: certificatePath, // Tambahkan path file PDF
+      },
+    });
+
+    return 'Sertifikat berhasil dibuat';
+  }
+
+  async getCertificate(certificateId: string): Promise<any> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      }
+    });
+
+    if (!certificate) {
+      throw new HttpException('Sertifikat tidak ditemukan', 404);
+    }
+
+    return certificate;
+  }
+
+  async streamFile(certificateId: string): Promise<Buffer> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      },
+    });
+
+    if (!certificate || !certificate.certificatePath) {
+      throw new HttpException('File Sertifikat tidak ditemukan', 404);
+    }
+
+    // Ambil file dari storage dinamis (satu jalur)
+    try {
+      const { buffer } = await this.fileUploadService.downloadFile(certificate.certificatePath);
+      return buffer;
+    } catch (err: any) {
+      if (err.status === 404) {
+        throw new HttpException('File Sertifikat tidak ditemukan', 404);
+      }
+      throw new HttpException('Gagal mengambil file Sertifikat: ' + (err.message || err), 500);
+    }
+  }
+
+  async deleteCertificate(certificateId: string): Promise<string> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      },
+    });
+
+    if (!certificate) {
+      throw new HttpException('Sertifikat tidak ditemukan', 404);
+    }
+
+    this.fileUploadService.deleteFile(certificate.certificatePath);
+
+    await this.prismaService.certificate.delete({
+      where: {
+        id: certificate.id,
+      },
+    });
+
+    
+
+    return 'Sertifikat berhadil dihapus';
   }
 
   private getMediaType(buffer: Buffer): string {

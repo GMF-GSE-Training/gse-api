@@ -72,7 +72,7 @@ export class ESignService {
           this.logger.log(`Uploading eSign file for signature...`);
           const fileObj = {
               buffer: createRequest.eSign,
-              originalname: createRequest.eSignFileName || `esign_${createRequest.idNumber}.jpg`,
+              originalname: `esign/${createRequest.eSignFileName}` || `esign/esign_${createRequest.idNumber}.jpg`,
               mimetype: 'application/octet-stream',
               size: createRequest.eSign.length,
           };

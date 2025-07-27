@@ -966,53 +966,53 @@ async function seedSignatures() {
 }
 
 // Refactor seedCertificates
-async function seedCertificates() {
-  Logger.info('Starting certificates seeding');
-  await backupTableIfRequested('certificates');
-  const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '5', 10);
-  const numFields = ['theoryScore', 'practiceScore'];
-  const raw = await loadJson<any>('certificates.json');
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  let data = raw.filter(c => {
-      const sig = c.signatureId ?? c[6];
-      const cot = c.cotId ?? c[5];
-      return uuid.test(sig) && uuid.test(cot);
-  }).map(c => {
-    const item: any = { ...c };
-    numFields.forEach(f => {
-      item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
-    });
-    return item;
-  });
-  if (data.length === 0) {
-    Logger.warn('No valid certificate entries found, generating dummy data');
-    const [cots, signatures] = await Promise.all([
-      prisma.cOT.findMany(),
-      prisma.signature.findMany(),
-    ]);
-    data = Array.from({ length: count }, () => {
-      const cot = faker.helpers.arrayElement(cots);
-      const sig = faker.helpers.arrayElement(signatures);
-      return {
-      id: randomUUID(),
-        cotId: cot.id,
-        signatureId: sig.id,
-        certificateNumber: `CERT-${cot.id.substring(0, 6).toUpperCase()}`,
-      attendance: true,
-        theoryScore: faker.number.int({ min: 60, max: 100 }),
-        practiceScore: faker.number.int({ min: 60, max: 100 }),
-      };
-    });
-  }
-  if (data.length > 0) {
-    await processBatch(data, async (certificate) => {
-      await prisma.certificate.create({ data: certificate });
-    }, BATCH_SIZE, 'seed-certificates');
-    Logger.info(`Seeded ${data.length} certificates`);
-  } else {
-    Logger.info('No certificates to seed');
-  }
-}
+// async function seedCertificates() {
+//   Logger.info('Starting certificates seeding');
+//   await backupTableIfRequested('certificates');
+//   const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '5', 10);
+//   const numFields = ['theoryScore', 'practiceScore'];
+//   const raw = await loadJson<any>('certificates.json');
+//   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+//   let data = raw.filter(c => {
+//       const sig = c.signatureId ?? c[6];
+//       const cot = c.cotId ?? c[5];
+//       return uuid.test(sig) && uuid.test(cot);
+//   }).map(c => {
+//     const item: any = { ...c };
+//     numFields.forEach(f => {
+//       item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
+//     });
+//     return item;
+//   });
+//   if (data.length === 0) {
+//     Logger.warn('No valid certificate entries found, generating dummy data');
+//     const [cots, signatures] = await Promise.all([
+//       prisma.cOT.findMany(),
+//       prisma.signature.findMany(),
+//     ]);
+//     data = Array.from({ length: count }, () => {
+//       const cot = faker.helpers.arrayElement(cots);
+//       const sig = faker.helpers.arrayElement(signatures);
+//       return {
+//       id: randomUUID(),
+//         cotId: cot.id,
+//         signatureId: sig.id,
+//         certificateNumber: `CERT-${cot.id.substring(0, 6).toUpperCase()}`,
+//       attendance: true,
+//         theoryScore: faker.number.int({ min: 60, max: 100 }),
+//         practiceScore: faker.number.int({ min: 60, max: 100 }),
+//       };
+//     });
+//   }
+//   if (data.length > 0) {
+//     await processBatch(data, async (certificate) => {
+//       await prisma.certificate.create({ data: certificate });
+//     }, BATCH_SIZE, 'seed-certificates');
+//     Logger.info(`Seeded ${data.length} certificates`);
+//   } else {
+//     Logger.info('No certificates to seed');
+//   }
+// }
 
 // Refactor seedParticipantsCot
 async function seedParticipantsCot() {
@@ -1130,7 +1130,7 @@ async function main() {
     await seedCots();
     await seedCapabilityCots();
     await seedSignatures();
-    await seedCertificates();
+    // await seedCertificates();
     await seedParticipantsAndUsers();
     await seedParticipantsCot();
     await seedCurriculumSyllabus();

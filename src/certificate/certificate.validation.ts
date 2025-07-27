@@ -10,5 +10,9 @@ export class CertificateValidation {
       .number()
       .positive()
       .max(100, { message: 'Nilai tidak boleh lebih dari 100' }),
+    attendance: z
+      .number()
+      .positive()
+      .max(100, { message: 'Kehadiran tidak boleh lebih dari 100' }),
   });
 }

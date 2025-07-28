@@ -8,6 +8,7 @@ import { CurrentUserRequest } from "src/model/auth.model";
 import { CoreHelper } from "src/common/helpers/core.helper";
 import { naturalSort } from '../common/helpers/natural-sort';
 import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
+import { EnhancedSearchHelper, EnhancedSearchConfig } from '../common/helpers/enhanced-search.helper';
 
 @Injectable()
 export class CotService {
@@ -252,13 +253,58 @@ export class CotService {
             };
         }
     
-        let whereClauseCapability: any = {};
+        // ✅ Enhanced search with date support
+        let searchClause: any = {};
         if(request.searchQuery) {
-            const searchQuery = request.searchQuery;
-            whereClauseCapability.OR = [
-                { ratingCode: { contains: searchQuery, mode: 'insensitive' } },
-                { trainingName: { contains: searchQuery, mode: 'insensitive' } },
-            ]
+            const searchConfig: EnhancedSearchConfig = {
+                textFields: ['ratingCode', 'trainingName', 'trainingLocation', 'status'],
+                dateFields: ['startDate', 'endDate'],
+                numericFields: []
+            };
+            
+            // Build enhanced search clause that includes date search
+            const enhancedSearch = EnhancedSearchHelper.buildEnhancedSearchClause(
+                request.searchQuery, 
+                searchConfig
+            );
+            
+            // For capability fields, we still need to nest them properly
+            const capabilityFields = ['ratingCode', 'trainingName'];
+            const cotFields = ['trainingLocation', 'status'];
+            const dateFields = ['startDate', 'endDate'];
+            
+            const searchClauses: any[] = [];
+            
+            if (enhancedSearch.OR) {
+                for (const clause of enhancedSearch.OR) {
+                    const fieldName = Object.keys(clause)[0];
+                    
+                    if (capabilityFields.includes(fieldName)) {
+                        // Nest capability fields properly
+                        searchClauses.push({
+                            capabilityCots: {
+                                some: {
+                                    capability: clause
+                                }
+                            }
+                        });
+                    } else if (cotFields.includes(fieldName) || dateFields.includes(fieldName)) {
+                        // Direct COT fields
+                        searchClauses.push(clause);
+                    }
+                }
+            }
+            
+            if (searchClauses.length > 0) {
+                searchClause = { OR: searchClauses };
+            }
+            
+            // Log search info for debugging
+            console.log('🔍 Enhanced Search Debug:', {
+                originalQuery: request.searchQuery,
+                searchInfo: EnhancedSearchHelper.getSearchInfo(request.searchQuery),
+                generatedClauses: searchClauses.length
+            });
         }
     
         const whereCondition = userRole === 'user' ? {
@@ -270,18 +316,10 @@ export class CotService {
                     ...dateFilter,
                 },
             },
-            capabilityCots: {
-                some: {
-                    capability: whereClauseCapability,
-                },
-            },
+            ...searchClause,
         } : {
             ...dateFilter,
-            capabilityCots: {
-                some: {
-                    capability: whereClauseCapability,
-                },
-            },
+            ...searchClause,
         };
 
         // Hitung total data untuk pagination

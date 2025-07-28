@@ -187,7 +187,9 @@ export class CapabilityService {
   }
 
   async getAllCapability(): Promise<CapabilityResponse[]> {
-    const capability = await this.prismaService.capability.findMany();
+    const capability = await this.prismaService.capability.findMany({
+      orderBy: { ratingCode: 'asc' },
+    });
     return capability.map((item) => ({
       id: item.id,
       ratingCode: item.ratingCode,

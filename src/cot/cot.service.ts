@@ -7,6 +7,7 @@ import { ActionAccessRights, ListRequest, Paging } from "src/model/web.model";
 import { CurrentUserRequest } from "src/model/auth.model";
 import { CoreHelper } from "src/common/helpers/core.helper";
 import { naturalSort } from '../common/helpers/natural-sort';
+import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
 
 @Injectable()
 export class CotService {
@@ -293,14 +294,24 @@ export class CotService {
         const size = request.size || 10;
         const totalPage = Math.ceil(totalCot / size);
     
-        // ✅ Sorting universal dengan field yang benar dari database
-        const allowedSortFields = ['startDate', 'endDate', 'trainingLocation', 'status', 'id', 'trainingName', 'ratingCode', 'numberOfParticipants'];
-        const naturalSortFields = ['trainingName', 'ratingCode'];
-        const computedFields = ['numberOfParticipants'];
-        const dbSortFields = ['startDate', 'endDate', 'trainingLocation', 'status', 'id'];
+        // ✅ Create sorting configuration
+        const sortingConfig = SortingConfigBuilder.create()
+            .allowFields(['startDate', 'endDate', 'trainingLocation', 'status', 'id', 'trainingName', 'ratingCode', 'numberOfParticipants'])
+            .naturalSort(['trainingName', 'ratingCode'])
+            .computedSort(['numberOfParticipants'])
+            .databaseSort(['startDate', 'endDate', 'trainingLocation', 'status', 'id'])
+            .defaultSort('startDate')
+            .build();
         
-        let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'startDate';
-        let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
+        // ✅ Validate sorting with search awareness
+        const sortingResult = SortingHelper.validateAndNormalizeSorting(
+            request.sortBy,
+            request.sortOrder,
+            sortingConfig,
+            request.searchQuery
+        );
+        
+        const { sortBy, sortOrder, strategy, searchActive, fallbackReason } = sortingResult;
         
         // ✅ Debug logging untuk sorting
         console.log('🔍 Backend Sorting Debug:', {
@@ -308,8 +319,10 @@ export class CotService {
             validatedSortBy: sortBy,
             originalSortOrder: request.sortOrder,
             validatedSortOrder: sortOrder,
-            allowedFields: allowedSortFields,
-            isAllowed: allowedSortFields.includes(request.sortBy || '')
+            strategy: strategy,
+            searchActive: searchActive,
+            searchQuery: request.searchQuery,
+            fallbackReason: fallbackReason
         });
         
         // Hybrid natural sort threshold
@@ -319,7 +332,11 @@ export class CotService {
         let cot: any[];
         let cotResponses: CotResponse[];
 
-        if ((naturalSortFields.includes(sortBy) || computedFields.includes(sortBy))) {
+        // Get field arrays from config for comparison
+        const naturalSortFields = sortingConfig.naturalSortFields || [];
+        const computedFields = sortingConfig.computedFields || [];
+        
+        if ((naturalSortFields.includes(sortBy) || computedFields.includes(sortBy)) && strategy !== 'search-disabled') {
           // Hitung total sesuai role dan filter (bukan total seluruh DB)
           if (totalCot < NATURAL_SORT_THRESHOLD) {
             // Natural sort global: ambil semua data, sort, pagination manual

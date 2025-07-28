@@ -26,7 +26,9 @@ export interface SortingConfig {
 export interface SortingResult {
   sortBy: string;
   sortOrder: 'asc' | 'desc';
-  strategy: 'natural' | 'date' | 'computed' | 'relation' | 'database' | 'fallback';
+  strategy: 'natural' | 'date' | 'computed' | 'relation' | 'database' | 'fallback' | 'search-disabled';
+  searchActive?: boolean;
+  fallbackReason?: string;
 }
 
 export class SortingHelper {
@@ -64,29 +66,46 @@ export class SortingHelper {
   }
   
   /**
-   * Validasi dan normalisasi sorting parameters
+   * Validasi dan normalisasi sorting parameters dengan search awareness
    */
   static validateAndNormalizeSorting(
     requestSortBy: string | undefined,
     requestSortOrder: string | undefined,
-    config: SortingConfig
+    config: SortingConfig,
+    searchQuery?: string
   ): SortingResult {
     
-    // Validasi sortBy
+    const hasActiveSearch = searchQuery && searchQuery.trim().length > 0;
+    
+    // Jika search aktif, prioritaskan relevance sorting atau disable complex sorting
+    if (hasActiveSearch) {
+      // Untuk search, gunakan strategi sorting yang sederhana
+      const searchOptimizedSortBy = config.defaultSortField || config.allowedSortFields[0];
+      const searchOptimizedOrder: 'asc' | 'desc' = 'asc'; // Default untuk search
+      
+      return {
+        sortBy: searchOptimizedSortBy,
+        sortOrder: searchOptimizedOrder,
+        strategy: 'search-disabled',
+        searchActive: true,
+        fallbackReason: 'Active search query detected, using simple sorting for better performance'
+      };
+    }
+    
+    // Normal sorting logic jika tidak ada search
     const sortBy = requestSortBy && config.allowedSortFields.includes(requestSortBy) 
       ? requestSortBy 
       : (config.defaultSortField || config.allowedSortFields[0]);
     
-    // Validasi sortOrder
     const sortOrder: 'asc' | 'desc' = requestSortOrder === 'desc' ? 'desc' : 'asc';
     
-    // Tentukan strategy
     const strategy = this.determineSortingStrategy(sortBy, config);
     
     return {
       sortBy,
       sortOrder,
-      strategy
+      strategy,
+      searchActive: false
     };
   }
   

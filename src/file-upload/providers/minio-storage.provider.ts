@@ -1,17 +1,8 @@
 import { Client } from 'minio';
-import { Logger } from '@nestjs/common';
-// import { StorageProvider } from '../storage-provider.interface'; // Uncomment jika sudah ada interface
+import { Injectable, Logger } from '@nestjs/common';
+import { StorageProvider } from '../storage-provider.interface';
 
-// TODO: Ganti dengan import interface StorageProvider jika sudah tersedia di be-dev
-export interface StorageProvider {
-  upload(file: Express.Multer.File, fileName: string, requestId?: string): Promise<string>;
-  download(filePath: string, requestId?: string): Promise<{ buffer: Buffer; mimeType: string }>;
-  delete(filePath: string, requestId?: string): Promise<void>;
-  exists(filePath: string, requestId?: string): Promise<boolean>;
-  getSignedUrl(filePath: string, expiresIn: number, requestId?: string): Promise<string>;
-  getPublicUrl(filePath: string, bucketOverride?: string): string;
-}
-
+@Injectable()
 export class MinioStorageProvider implements StorageProvider {
   private client: Client;
   private bucket: string;
@@ -26,11 +17,90 @@ export class MinioStorageProvider implements StorageProvider {
       secretKey: options.secretKey,
     });
     this.bucket = options.bucket;
+    
+    // Initialize bucket if not exists
+    this.ensureBucketExists();
+  }
+
+  private async ensureBucketExists(): Promise<void> {
+    try {
+      const exists = await this.client.bucketExists(this.bucket);
+      if (!exists) {
+        await this.client.makeBucket(this.bucket, 'us-east-1');
+        this.logger.log(`Created MinIO bucket: ${this.bucket}`);
+      }
+    } catch (error: any) {
+      this.logger.warn(`Could not ensure bucket exists: ${error.message}`);
+    }
   }
 
   async upload(file: Express.Multer.File, fileName: string, requestId?: string): Promise<string> {
-    await this.client.putObject(this.bucket, fileName, file.buffer, file.size, { 'Content-Type': file.mimetype });
-    return fileName;
+    this.logger.log(`Uploading file to MinIO: ${fileName}`, requestId);
+    
+    try {
+      // Validate input parameters
+      if (!file || !file.buffer) {
+        throw new Error('Invalid file object: missing buffer');
+      }
+      
+      if (!Buffer.isBuffer(file.buffer)) {
+        throw new Error('Invalid file buffer: not a Buffer instance');
+      }
+      
+      if (!fileName || typeof fileName !== 'string') {
+        throw new Error('Invalid fileName: must be a non-empty string');
+      }
+      
+      // Normalize file path for cross-platform compatibility
+      const normalizedFileName = fileName.replace(/\\/g, '/').replace(/^\/+/, '');
+      
+      // Prepare metadata
+      const metadata = {
+        'Content-Type': file.mimetype || 'application/octet-stream',
+        'X-Amz-Meta-Original-Name': file.originalname || 'unknown',
+        'X-Amz-Meta-Upload-Date': new Date().toISOString(),
+        'X-Amz-Meta-Platform': process.platform,
+        'X-Amz-Meta-Request-Id': requestId || 'unknown'
+      };
+      
+      this.logger.debug(`MinIO upload attempt:`, {
+        fileName: normalizedFileName,
+        bufferSize: file.buffer.length,
+        contentType: metadata['Content-Type'],
+        platform: process.platform,
+        requestId
+      });
+      
+      // Perform upload with proper parameters
+      const uploadInfo = await this.client.putObject(
+        this.bucket,
+        normalizedFileName,
+        file.buffer,
+        file.buffer.length, // Use actual buffer length
+        metadata
+      );
+      
+      this.logger.log(`File uploaded successfully to MinIO: ${normalizedFileName}`, {
+        etag: uploadInfo.etag,
+        versionId: uploadInfo.versionId,
+        requestId
+      });
+      
+      return normalizedFileName;
+      
+    } catch (error: any) {
+      this.logger.error(`MinIO upload failed:`, {
+        error: error.message,
+        code: error.code,
+        fileName,
+        fileSize: file?.buffer?.length,
+        platform: process.platform,
+        requestId
+      });
+      
+      // Re-throw with enhanced error message
+      throw new Error(`MinIO upload failed: ${error.message}`);
+    }
   }
 
   async download(filePath: string, requestId?: string): Promise<{ buffer: Buffer; mimeType: string }> {

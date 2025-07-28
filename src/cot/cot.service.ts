@@ -330,6 +330,7 @@ export class CotService {
                   select: {
                     capability: {
                       select: {
+                        id: true,
                         ratingCode: true,
                         trainingName: true,
                       },
@@ -373,6 +374,7 @@ export class CotService {
                   select: {
                     capability: {
                       select: {
+                        id: true,
                         ratingCode: true,
                         trainingName: true,
                       },
@@ -422,6 +424,7 @@ export class CotService {
                         select: {
                             capability: {
                                 select: {
+                                    id: true,
                                     ratingCode: true,
                                     trainingName: true,
                                 },
@@ -441,6 +444,7 @@ export class CotService {
             
             // Mapping hasil query ke bentuk CotResponse
             const cotResponses: CotResponse[] = cot.map(this.formatCotList);
+            console.log(cotResponses);
             
             const actions = this.validateActions(userRole);
             
@@ -465,6 +469,7 @@ export class CotService {
             trainingLocation: cot.trainingLocation,
             capability: cot.capabilityCots[0]?.capability
                 ? {
+                    id: cot.capabilityCots[0].capability.id,
                     ratingCode: cot.capabilityCots[0].capability.ratingCode,
                     trainingName: cot.capabilityCots[0].capability.trainingName
                 }

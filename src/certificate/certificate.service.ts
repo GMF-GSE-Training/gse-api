@@ -324,22 +324,41 @@ export class CertificateService {
       );
     }
 
-    // Upload PDF file
+    // Upload PDF file with proper Express.Multer.File format
     let certificatePath: string;
     try {
       this.logger.log(`Uploading certificate PDF file...`);
-      const fileObj = {
-        buffer: certificateBuffer,
-        originalname: `certificates/certificate_${certificateNumber}.pdf`,
+      
+      // Create proper Express.Multer.File object for cross-platform compatibility
+      const fileObj: Express.Multer.File = {
+        fieldname: 'certificate',
+        originalname: `certificate_${certificateNumber}.pdf`,
+        encoding: '7bit',
         mimetype: 'application/pdf',
+        buffer: certificateBuffer,
         size: certificateBuffer.length,
+        // Optional fields for compatibility
+        destination: '',
+        filename: '',
+        path: '',
+        stream: undefined
       };
       
-      certificatePath = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
-      this.logger.log(`Certificate PDF file uploaded, path: ${certificatePath}`);
-    } catch (err) {
-      this.logger.error(`Gagal upload certificate PDF file: ${err.message}`);
-      throw new HttpException(`Gagal upload certificate PDF file: ${err.message}`, 500);
+      const uploadPath = `certificates/certificate_${certificateNumber}.pdf`;
+      certificatePath = await this.fileUploadService.uploadFile(fileObj, uploadPath);
+      this.logger.log(`Certificate PDF file uploaded successfully, path: ${certificatePath}`);
+      
+    } catch (err: any) {
+      this.logger.error(`Gagal upload certificate PDF file:`, {
+        error: err.message,
+        stack: err.stack,
+        bufferSize: certificateBuffer?.length,
+        platform: process.platform
+      });
+      throw new HttpException(
+        `Gagal upload certificate PDF file: ${err.message}. Periksa konfigurasi storage.`,
+        500
+      );
     }
 
     // Simpan data sertifikat ke database

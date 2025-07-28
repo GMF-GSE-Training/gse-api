@@ -106,7 +106,6 @@ export class CertificateService {
     if (currentDate <= endDate) {
         throw new HttpException('Gagal membuat sertifikat. COT belum selesai', 400);
     }
-    2
     // Validasi 2: Cek apakah sertifikat untuk participant di COT ini sudah ada
     const existingCertificate = await this.prismaService.certificate.findFirst({
       where: {
@@ -233,19 +232,99 @@ export class CertificateService {
       practiceScore: createCertificateRequest.practiceScore,
     });
 
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
-    await page.setContent(certificate, { waitUntil: 'load' });
+    // Enhanced Puppeteer configuration with cross-platform support
+    const puppeteerOptions: any = {
+      headless: 'new', // Use new headless mode
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
+      ]
+    };
 
-    const certificateBuffer = await page.pdf({
-      format: 'A4',
-      landscape: true,
-      printBackground: true, // Pastikan background termasuk dalam PDF
-    });
+    // Try to find Chrome executable for different platforms
+    const possiblePaths = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser', 
+      '/usr/bin/chromium',
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+    ];
 
-    await browser.close();
+    // Check if Chrome exists in system PATH or use bundled Chromium
+    for (const chromePath of possiblePaths) {
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(chromePath)) {
+          puppeteerOptions.executablePath = chromePath;
+          break;
+        }
+      } catch (error) {
+        // Continue checking other paths
+      }
+    }
 
-    // Upload PDF file seperti yang dilakukan di createESign
+    let browser;
+    try {
+      this.logger.log('Launching Puppeteer with options:', puppeteerOptions);
+      browser = await puppeteer.launch(puppeteerOptions);
+    } catch (error) {
+      this.logger.error('Failed to launch Puppeteer:', error.message);
+      throw new HttpException(
+        `Gagal menjalankan PDF generator: ${error.message}. Pastikan Chrome ter-install di sistem.`,
+        500
+      );
+    }
+
+    let certificateBuffer: Buffer;
+    try {
+      const page = await browser.newPage();
+      
+      // Set viewport for consistent rendering
+      await page.setViewport({ width: 1200, height: 800 });
+      
+      // Set content with enhanced options
+      await page.setContent(certificate, { 
+        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+        timeout: 30000 // 30 second timeout
+      });
+
+      // Generate PDF with enhanced options
+      certificateBuffer = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: {
+          top: '0mm',
+          right: '0mm', 
+          bottom: '0mm',
+          left: '0mm'
+        }
+      });
+
+      await browser.close();
+      this.logger.log('PDF generated successfully');
+      
+    } catch (error) {
+      if (browser) {
+        await browser.close();
+      }
+      this.logger.error('Failed to generate PDF:', error.message);
+      throw new HttpException(
+        `Gagal generate PDF certificate: ${error.message}`,
+        500
+      );
+    }
+
+    // Upload PDF file
     let certificatePath: string;
     try {
       this.logger.log(`Uploading certificate PDF file...`);
@@ -264,7 +343,6 @@ export class CertificateService {
     }
 
     // Simpan data sertifikat ke database
-    // Menggunakan signature pertama yang aktif (bisa disesuaikan dengan kebutuhan)
     const activeSignature = eSign[0];
     
     await this.prismaService.certificate.create({
@@ -273,10 +351,10 @@ export class CertificateService {
         participantId: participantId,
         signatureId: activeSignature.id,
         certificateNumber: certificateNumber,
-        attendance: createCertificateRequest.attendance, // Default true jika tidak ada
+        attendance: createCertificateRequest.attendance,
         theoryScore: createCertificateRequest.theoryScore,
         practiceScore: createCertificateRequest.practiceScore,
-        certificatePath: certificatePath, // Tambahkan path file PDF
+        certificatePath: certificatePath,
       },
     });
 

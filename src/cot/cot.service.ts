@@ -335,8 +335,14 @@ export class CotService {
         // Get field arrays from config for comparison
         const naturalSortFields = sortingConfig.naturalSortFields || [];
         const computedFields = sortingConfig.computedFields || [];
+        const dbSortFields = sortingConfig.dbSortFields || [];
         
-        if ((naturalSortFields.includes(sortBy) || computedFields.includes(sortBy)) && strategy !== 'search-disabled') {
+        // Update info message for search + sort scenarios
+        if (searchActive && fallbackReason) {
+            infoMessage = `ℹ️ ${fallbackReason}`;
+        }
+        
+        if ((naturalSortFields.includes(sortBy) || computedFields.includes(sortBy))) {
           // Hitung total sesuai role dan filter (bukan total seluruh DB)
           if (totalCot < NATURAL_SORT_THRESHOLD) {
             // Natural sort global: ambil semua data, sort, pagination manual

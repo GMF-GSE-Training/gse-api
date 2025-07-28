@@ -67,6 +67,7 @@ export class SortingHelper {
   
   /**
    * Validasi dan normalisasi sorting parameters dengan search awareness
+   * Now supports sorting within search results!
    */
   static validateAndNormalizeSorting(
     requestSortBy: string | undefined,
@@ -77,30 +78,36 @@ export class SortingHelper {
     
     const hasActiveSearch = searchQuery && searchQuery.trim().length > 0;
     
-    // Jika search aktif, prioritaskan relevance sorting atau disable complex sorting
-    if (hasActiveSearch) {
-      // Untuk search, gunakan strategi sorting yang sederhana
-      const searchOptimizedSortBy = config.defaultSortField || config.allowedSortFields[0];
-      const searchOptimizedOrder: 'asc' | 'desc' = 'asc'; // Default untuk search
-      
-      return {
-        sortBy: searchOptimizedSortBy,
-        sortOrder: searchOptimizedOrder,
-        strategy: 'search-disabled',
-        searchActive: true,
-        fallbackReason: 'Active search query detected, using simple sorting for better performance'
-      };
-    }
-    
-    // Normal sorting logic jika tidak ada search
+    // Validasi sortBy - tetap gunakan user request atau fallback
     const sortBy = requestSortBy && config.allowedSortFields.includes(requestSortBy) 
       ? requestSortBy 
       : (config.defaultSortField || config.allowedSortFields[0]);
     
     const sortOrder: 'asc' | 'desc' = requestSortOrder === 'desc' ? 'desc' : 'asc';
     
-    const strategy = this.determineSortingStrategy(sortBy, config);
+    // Tentukan strategy berdasarkan field dan search state
+    let strategy = this.determineSortingStrategy(sortBy, config);
     
+    if (hasActiveSearch) {
+      // Untuk search + sort, gunakan strategi yang optimal untuk performa
+      if (config.naturalSortFields?.includes(sortBy) || config.computedFields?.includes(sortBy)) {
+        // Natural/computed sort pada search results - masih memungkinkan tapi dengan peringatan
+        strategy = 'natural'; // Keep original strategy but mark as search-active
+      } else {
+        // Database fields dapat di-sort dengan baik pada search results
+        strategy = this.determineSortingStrategy(sortBy, config);
+      }
+      
+      return {
+        sortBy,
+        sortOrder,
+        strategy,
+        searchActive: true,
+        fallbackReason: hasActiveSearch ? `Sorting '${sortBy}' on search results (${strategy} strategy)` : undefined
+      };
+    }
+    
+    // Normal sorting logic jika tidak ada search
     return {
       sortBy,
       sortOrder,

@@ -337,8 +337,10 @@ export class CotService {
         const computedFields = sortingConfig.computedFields || [];
         const dbSortFields = sortingConfig.dbSortFields || [];
         
-        // Update info message for search + sort scenarios
-        if (searchActive && fallbackReason) {
+        // Only show info messages that are actually useful to users
+        // Technical strategy messages are not user-relevant
+        if (searchActive && fallbackReason && fallbackReason.includes('threshold')) {
+            // Only show messages about performance fallbacks, not technical strategies
             infoMessage = `ℹ️ ${fallbackReason}`;
         }
         

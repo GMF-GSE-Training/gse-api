@@ -324,12 +324,46 @@ export class CertificateService {
       );
     }
 
-    // Upload PDF file with proper Express.Multer.File format
+    // Validate PDF buffer before upload
+    if (!certificateBuffer || !Buffer.isBuffer(certificateBuffer)) {
+      this.logger.error('Invalid certificate buffer generated');
+      throw new HttpException(
+        'Gagal generate PDF certificate: Invalid buffer generated',
+        500
+      );
+    }
+    
+    if (certificateBuffer.length === 0) {
+      this.logger.error('Empty certificate buffer generated');
+      throw new HttpException(
+        'Gagal generate PDF certificate: Empty buffer generated',
+        500
+      );
+    }
+    
+    // Verify PDF signature
+    const pdfSignature = certificateBuffer.subarray(0, 4).toString();
+    if (!pdfSignature.includes('%PDF')) {
+      this.logger.error('Invalid PDF buffer generated', {
+        signature: pdfSignature,
+        bufferStart: certificateBuffer.subarray(0, 20).toString('hex')
+      });
+      throw new HttpException(
+        'Gagal generate PDF certificate: Invalid PDF format generated',
+        500
+      );
+    }
+    
+    // Upload PDF file with enhanced validation and cross-platform support
     let certificatePath: string;
     try {
-      this.logger.log(`Uploading certificate PDF file...`);
+      this.logger.log(`Uploading certificate PDF file...`, {
+        bufferSize: certificateBuffer.length,
+        platform: process.platform,
+        pdfValid: pdfSignature.includes('%PDF')
+      });
       
-      // Create proper Express.Multer.File object for cross-platform compatibility
+      // Create proper Express.Multer.File object with Windows compatibility
       const fileObj: Express.Multer.File = {
         fieldname: 'certificate',
         originalname: `certificate_${certificateNumber}.pdf`,
@@ -337,28 +371,51 @@ export class CertificateService {
         mimetype: 'application/pdf',
         buffer: certificateBuffer,
         size: certificateBuffer.length,
-        // Optional fields for compatibility
+        // Required fields for full compatibility
         destination: '',
-        filename: '',
+        filename: `certificate_${certificateNumber}.pdf`,
         path: '',
         stream: undefined
       };
       
-      const uploadPath = `certificates/certificate_${certificateNumber}.pdf`;
-      certificatePath = await this.fileUploadService.uploadFile(fileObj, uploadPath);
-      this.logger.log(`Certificate PDF file uploaded successfully, path: ${certificatePath}`);
+      // Normalize path for cross-platform compatibility
+      const uploadPath = `certificates/certificate_${certificateNumber}.pdf`
+        .replace(/\\/g, '/')  // Convert Windows backslashes
+        .replace(/\/+/g, '/') // Remove duplicate slashes
+        .replace(/^\//, '');  // Remove leading slash
       
-    } catch (err: any) {
-      this.logger.error(`Gagal upload certificate PDF file:`, {
-        error: err.message,
-        stack: err.stack,
-        bufferSize: certificateBuffer?.length,
+      // Perform upload with enhanced error context
+      certificatePath = await this.fileUploadService.uploadFile(fileObj, uploadPath);
+      
+      this.logger.log(`Certificate PDF file uploaded successfully`, {
+        path: certificatePath,
+        size: certificateBuffer.length,
         platform: process.platform
       });
-      throw new HttpException(
-        `Gagal upload certificate PDF file: ${err.message}. Periksa konfigurasi storage.`,
-        500
-      );
+      
+    } catch (err: any) {
+      this.logger.error(`Certificate PDF upload failed:`, {
+        error: err.message,
+        stack: err.stack?.split('\n').slice(0, 5),
+        bufferSize: certificateBuffer?.length,
+        bufferValid: Buffer.isBuffer(certificateBuffer),
+        platform: process.platform,
+        storageType: process.env.STORAGE_TYPE,
+        nodeVersion: process.version
+      });
+      
+      // Enhanced error message for better debugging
+      let errorMessage = `Gagal upload certificate PDF file: ${err.message}`;
+      
+      if (err.message.includes('stream.Readable')) {
+        errorMessage += ' - Buffer format issue detected. Please check storage configuration.';
+      }
+      
+      if (err.message.includes('third argument')) {
+        errorMessage += ' - Storage provider compatibility issue. Try switching to MinIO for development.';
+      }
+      
+      throw new HttpException(errorMessage, 500);
     }
 
     // Simpan data sertifikat ke database

@@ -247,7 +247,7 @@ export class ESignService {
       },
     });
 
-    return 'E-Sign berhadil dihapus';
+    return 'E-Sign berhasil dihapus';
   }
 
   async listESign(

@@ -527,7 +527,7 @@ export class CertificateService {
 
     
 
-    return 'Sertifikat berhadil dihapus';
+    return 'Sertifikat berhasil dihapus';
   }
 
   private getMediaType(buffer: Buffer): string {

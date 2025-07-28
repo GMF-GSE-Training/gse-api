@@ -37,7 +37,7 @@ export class EnhancedSearchHelper {
   };
 
   /**
-   * Parse search query untuk deteksi tanggal
+   * Parse search query untuk deteksi tanggal dengan smart combination
    */
   static parseSearchQuery(searchQuery: string): DateSearchResult {
     const query = searchQuery.toLowerCase().trim();
@@ -48,16 +48,20 @@ export class EnhancedSearchHelper {
     // Split query by spaces untuk handle multiple terms
     const terms = query.split(/\s+/);
     
+    // Collect date components untuk smart combination
+    const dateComponents = {
+      day: null as number | null,
+      month: null as number | null,
+      year: null as number | null
+    };
+    
     for (const term of terms) {
       // Check if term is a year (4 digits)
       if (/^\d{4}$/.test(term)) {
         const year = parseInt(term);
         if (year >= 1900 && year <= 2100) {
           isDateSearch = true;
-          dateQueries.push({
-            year: year,
-            type: 'year'
-          });
+          dateComponents.year = year;
           continue;
         }
       }
@@ -67,10 +71,7 @@ export class EnhancedSearchHelper {
         const day = parseInt(term);
         if (day >= 1 && day <= 31) {
           isDateSearch = true;
-          dateQueries.push({
-            day: day,
-            type: 'day'
-          });
+          dateComponents.day = day;
           continue;
         }
       }
@@ -78,10 +79,7 @@ export class EnhancedSearchHelper {
       // Check if term is an Indonesian month
       if (this.INDONESIAN_MONTHS[term]) {
         isDateSearch = true;
-        dateQueries.push({
-          month: this.INDONESIAN_MONTHS[term],
-          type: 'month'
-        });
+        dateComponents.month = this.INDONESIAN_MONTHS[term];
         continue;
       }
 
@@ -97,6 +95,53 @@ export class EnhancedSearchHelper {
 
       // If not a date component, treat as regular search term
       searchTerms.push(term);
+    }
+
+    // Smart combination of date components
+    if (isDateSearch && (dateComponents.day || dateComponents.month || dateComponents.year)) {
+      if (dateComponents.day && dateComponents.month && dateComponents.year) {
+        // Full date: 22 juli 2025
+        dateQueries.push({
+          day: dateComponents.day,
+          month: dateComponents.month,
+          year: dateComponents.year,
+          type: 'combined-full-date'
+        });
+      } else if (dateComponents.day && dateComponents.month) {
+        // Day + Month: 22 juli
+        dateQueries.push({
+          day: dateComponents.day,
+          month: dateComponents.month,
+          type: 'combined-day-month'
+        });
+      } else if (dateComponents.month && dateComponents.year) {
+        // Month + Year: juli 2025
+        dateQueries.push({
+          month: dateComponents.month,
+          year: dateComponents.year,
+          type: 'combined-month-year'
+        });
+      } else {
+        // Individual components (fallback to original logic but more limited)
+        if (dateComponents.day) {
+          dateQueries.push({
+            day: dateComponents.day,
+            type: 'day'
+          });
+        }
+        if (dateComponents.month) {
+          dateQueries.push({
+            month: dateComponents.month,
+            type: 'month'
+          });
+        }
+        if (dateComponents.year) {
+          dateQueries.push({
+            year: dateComponents.year,
+            type: 'year'
+          });
+        }
+      }
     }
 
     return {
@@ -271,6 +316,50 @@ export class EnhancedSearchHelper {
               }
             }
             break;
+
+          case 'combined-full-date':
+            // Exact date match: 22 juli 2025
+            if (dateQuery.year && dateQuery.month && dateQuery.day) {
+              const targetDate = new Date(dateQuery.year, dateQuery.month - 1, dateQuery.day);
+              clauses.push({
+                [field]: {
+                  gte: targetDate,
+                  lt: new Date(targetDate.getTime() + 24 * 60 * 60 * 1000)
+                }
+              });
+            }
+            break;
+
+          case 'combined-day-month':
+            // Specific day and month across multiple years: 22 juli
+            if (dateQuery.month && dateQuery.day) {
+              const currentYear = new Date().getFullYear();
+              // Search across reasonable year range for this specific day/month
+              for (let year = currentYear - 3; year <= currentYear + 3; year++) {
+                const targetDate = new Date(year, dateQuery.month - 1, dateQuery.day);
+                if (targetDate.getMonth() === dateQuery.month - 1 && targetDate.getDate() === dateQuery.day) {
+                  clauses.push({
+                    [field]: {
+                      gte: targetDate,
+                      lt: new Date(targetDate.getTime() + 24 * 60 * 60 * 1000)
+                    }
+                  });
+                }
+              }
+            }
+            break;
+
+          case 'combined-month-year':
+            // Specific month and year: juli 2025
+            if (dateQuery.month && dateQuery.year) {
+              clauses.push({
+                [field]: {
+                  gte: new Date(dateQuery.year, dateQuery.month - 1, 1),
+                  lt: new Date(dateQuery.year, dateQuery.month, 1)
+                }
+              });
+            }
+            break;
         }
       }
     }
@@ -303,6 +392,24 @@ export class EnhancedSearchHelper {
             break;
           case 'full-date':
             dateDescriptions.push(`tanggal ${query.day}/${query.month}/${query.year}`);
+            break;
+          case 'combined-full-date':
+            const monthNameFull = Object.keys(this.INDONESIAN_MONTHS).find(
+              key => this.INDONESIAN_MONTHS[key] === query.month
+            );
+            dateDescriptions.push(`tanggal ${query.day} ${monthNameFull} ${query.year}`);
+            break;
+          case 'combined-day-month':
+            const monthNameDayMonth = Object.keys(this.INDONESIAN_MONTHS).find(
+              key => this.INDONESIAN_MONTHS[key] === query.month
+            );
+            dateDescriptions.push(`tanggal ${query.day} ${monthNameDayMonth}`);
+            break;
+          case 'combined-month-year':
+            const monthNameMonthYear = Object.keys(this.INDONESIAN_MONTHS).find(
+              key => this.INDONESIAN_MONTHS[key] === query.month
+            );
+            dateDescriptions.push(`${monthNameMonthYear} ${query.year}`);
             break;
         }
       }

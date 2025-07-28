@@ -233,7 +233,7 @@ async function retry<T>(
   throw lastError!;
 }
 
-// Enhanced error classification
+// Enhanced error classification with Windows-specific patterns
 function isRetryableError(error: Error): boolean {
   const retryablePatterns = [
     /ECONNRESET/,
@@ -243,10 +243,25 @@ function isRetryableError(error: Error): boolean {
     /network/i,
     /timeout/i,
     /temporary/i,
-    /rate limit/i
+    /rate limit/i,
+    // Windows-specific network errors
+    /ECONNREFUSED/,
+    /ENOTFOUND/,
+    /EHOSTDOWN/,
+    /EHOSTUNREACH/,
+    // Supabase-specific errors that might be retryable
+    /connection/i,
+    /fetch/i,
+    /request/i
   ];
   
-  return retryablePatterns.some(pattern => pattern.test(error.message));
+  // Check for HTML error responses (usually means network issues)
+  const isHtmlError = error.message.includes('<!doctype') || 
+                     error.message.includes('<html') ||
+                     error.message.includes('Invalid St') || // Common truncated HTML error
+                     error.message.includes('is not valid JSON');
+  
+  return retryablePatterns.some(pattern => pattern.test(error.message)) || isHtmlError;
 }
 
 // Enhanced file upload with buffer support and detailed logging
@@ -264,6 +279,14 @@ async function uploadToStorage(localPath: string, destName: string): Promise<str
   return retry(async () => {
     if (storageConfig.type === 'supabase') {
       const fileBuffer = await fs.readFile(localPath);
+      
+      // Add more detailed error logging for debugging
+      Logger.debug(`Attempting Supabase upload: ${destName}`, {
+        fileSize: fileBuffer.length,
+        contentType: getContentType(path.extname(localPath)),
+        bucket: storageConfig.bucket
+      });
+      
       const { data, error } = await (storageConfig.client as StorageClient)
         .from(storageConfig.bucket)
         .upload(destName, fileBuffer, {
@@ -271,7 +294,15 @@ async function uploadToStorage(localPath: string, destName: string): Promise<str
           upsert: true,
         });
       
-      if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+      if (error) {
+        // Enhanced error logging for better debugging
+        Logger.error(`Supabase upload failed for ${destName}`, {
+          error: error.message,
+          statusCode: (error as any).statusCode || 'unknown',
+          details: error
+        });
+        throw new Error(`Supabase upload failed: ${error.message}`);
+      }
       
       const duration = (Date.now() - startTime) / 1000;
       Logger.debug(`Uploaded ${destName} to Supabase in ${duration}s`);
@@ -285,7 +316,7 @@ async function uploadToStorage(localPath: string, destName: string): Promise<str
       
       const duration = (Date.now() - startTime) / 1000;
       Logger.debug(`Uploaded ${destName} to MinIO in ${duration}s`);
-  return destName;
+      return destName;
     }
   }, MAX_RETRIES, `upload-${destName}`);
 }

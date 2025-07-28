@@ -297,7 +297,7 @@ export class CertificateService {
       });
 
       // Generate PDF with enhanced options
-      certificateBuffer = await page.pdf({
+      const pdfResult = await page.pdf({
         format: 'A4',
         landscape: true,
         printBackground: true,
@@ -309,9 +309,17 @@ export class CertificateService {
           left: '0mm'
         }
       });
+      
+      // Convert Uint8Array to Buffer if necessary (Puppeteer returns Uint8Array)
+      certificateBuffer = Buffer.isBuffer(pdfResult) ? pdfResult : Buffer.from(pdfResult);
+      
+      this.logger.log('PDF generated successfully', {
+        originalType: pdfResult.constructor.name,
+        convertedType: certificateBuffer.constructor.name,
+        size: certificateBuffer.length
+      });
 
       await browser.close();
-      this.logger.log('PDF generated successfully');
       
     } catch (error) {
       if (browser) {
@@ -341,11 +349,21 @@ export class CertificateService {
       );
     }
     
-    // Verify PDF signature
-    const pdfSignature = certificateBuffer.subarray(0, 4).toString();
-    if (!pdfSignature.includes('%PDF')) {
+    // Verify PDF signature (Puppeteer returns bytes, need proper conversion)
+    const pdfSignatureBytes = certificateBuffer.subarray(0, 5);
+    const pdfSignature = String.fromCharCode(...pdfSignatureBytes);
+    
+    this.logger.debug('PDF signature validation', {
+      signatureBytes: Array.from(pdfSignatureBytes),
+      signatureString: pdfSignature,
+      bufferStart: certificateBuffer.subarray(0, 20).toString('hex'),
+      isValidPDF: pdfSignature.startsWith('%PDF')
+    });
+    
+    if (!pdfSignature.startsWith('%PDF')) {
       this.logger.error('Invalid PDF buffer generated', {
         signature: pdfSignature,
+        signatureBytes: Array.from(pdfSignatureBytes),
         bufferStart: certificateBuffer.subarray(0, 20).toString('hex')
       });
       throw new HttpException(

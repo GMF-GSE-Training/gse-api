@@ -101,6 +101,10 @@ pnpm prisma migrate deploy
 pnpm run seed
 ```
 
+**📚 Dokumentasi Lengkap:**
+- [Database Seeding Guide](./docs/database-seeding.md) - Panduan lengkap seeding dengan cross-platform support
+- [Windows Troubleshooting](./docs/windows-troubleshooting.md) - Solusi masalah upload Supabase di Windows
+
 ## Menjalankan Aplikasi
 
 ```bash

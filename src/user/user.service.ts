@@ -13,6 +13,7 @@ import { CurrentUserRequest } from 'src/model/auth.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { RoleResponse } from 'src/model/role.model';
 import { Logger } from '@nestjs/common';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class UserService {
@@ -309,38 +310,85 @@ export class UserService {
       ];
     }
 
-    // Hitung total data
-    const totalUsers = await this.prismaService.user.count({
-      where: whereCondition,
-    });
+    // Hitung total untuk pagination
+    const totalUsers = await this.prismaService.user.count({ where: whereCondition });
 
-    // Ambil data dengan paginasi
-    const users = await this.prismaService.user.findMany({
-      where: whereCondition,
-      select: userSelectFields,
-      skip: (request.page - 1) * request.size,
-      take: request.size,
-    });
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalUsers / size);
 
-    // Hitung total halaman
-    const totalPage = Math.ceil(totalUsers / request.size);
+    // Sorting universal
+    const allowedSortFields = ['idNumber', 'email', 'name', 'dinas', 'id', 'roleName'];
+    const naturalSortFields = ['idNumber', 'email', 'name', 'dinas'];
+    const relationFields = ['roleName']; // Special handling for relations
+    const dbSortFields = ['id'];
+    
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+    let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+    let users: any[];
+
+    if (relationFields.includes(sortBy)) {
+      // Special handling for relation fields
+      if (sortBy === 'roleName') {
+        users = await this.prismaService.user.findMany({
+          where: whereCondition,
+          select: {
+            ...userSelectFields,
+            role: { select: { name: true } },
+          },
+          orderBy: { role: { name: sortOrder } },
+          skip: (page - 1) * size,
+          take: size,
+        });
+      }
+    } else if (naturalSortFields.includes(sortBy)) {
+      // Natural sort global: ambil seluruh data, sort, lalu pagination manual
+      const allUsers = await this.prismaService.user.findMany({
+        where: whereCondition,
+        select: userSelectFields,
+      });
+      allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      users = allUsers.slice((page - 1) * size, page * size);
+    } else if (dbSortFields.includes(sortBy)) {
+      // Database sorting
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+      users = await this.prismaService.user.findMany({
+        where: whereCondition,
+        select: userSelectFields,
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
+      });
+    } else {
+      // Fallback: natural sort
+      const allUsers = await this.prismaService.user.findMany({
+        where: whereCondition,
+        select: userSelectFields,
+      });
+      allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      users = allUsers.slice((page - 1) * size, page * size);
+    }
 
     // Dapatkan actions berdasarkan role user
     const userRole = user.role.name.toLowerCase();
     const actions = this.validateActions(userRole);
 
     // Format data user
-    const formattedUsers = users.map(({ nik, ...rest }) =>
-      this.toUserResponse(rest),
-    );
+    const formattedUsers = users.map(({ nik, ...rest }) => {
+      // roleName untuk konsistensi FE
+      const roleName = users[0]?.role?.name || rest.role?.name || '';
+      return { ...this.toUserResponse(rest), roleName };
+    });
 
     return {
       data: formattedUsers,
       actions: actions,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }

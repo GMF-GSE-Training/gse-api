@@ -29,6 +29,8 @@ export interface ListRequest {
   size?: number;
   startDate?: Date;
   endDate?: Date;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export function buildResponse<T>(
@@ -38,15 +40,17 @@ export function buildResponse<T>(
   actions?: ActionAccessRights,
   paging?: Paging,
   fileStream?: StreamableFile,
+  info?: string // Tambahkan parameter info opsional
 ): WebResponse<T> {
   const statusMessage = HttpStatus[statusCode] || 'UNKNOWN_STATUS';
   return {
     code: statusCode,
     status: statusMessage,
-    ...(data && { data }), // Hanya tambahkan data jika ada
-    ...(errors && { errors }), // Hanya tambahkan errors jika ada
-    ...(actions && { actions }), // Tambahkan actions jika ada
-    ...(paging && { paging }), // Tambahkan paging jika ada
-    ...(fileStream && { fileStream }), // Tambahkan fileStream jika ada
+    ...(data && { data }),
+    ...(errors && { errors }),
+    ...(actions && { actions }),
+    ...(paging && { paging }),
+    ...(fileStream && { fileStream }),
+    ...(info && { info }), // Tambahkan info jika ada
   };
 }

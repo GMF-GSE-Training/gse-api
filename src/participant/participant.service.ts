@@ -13,11 +13,12 @@ import { PDFDocument, PDFImage } from "pdf-lib";
 import { join } from "path";
 import * as ejs from 'ejs';
 import { UrlHelper } from '../common/helpers/url.helper';
-import { QrCodeService } from "src/qrcode/qrcode.service";
+import { QrCodeService } from "../qrcode/qrcode.service";
 import * as fs from 'fs';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import * as archiver from 'archiver';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class ParticipantService {
@@ -180,13 +181,16 @@ export class ParticipantService {
         }
 
         // Ambil file dari storage dinamis
-        const storageType = process.env.STORAGE_TYPE || 'minio';
         let fileBuffer: Buffer;
-        if (storageType === 'supabase') {
+        try {
           const { buffer } = await this.fileUploadService.downloadFile(participant[pathField]);
           fileBuffer = buffer;
-        } else {
-          fileBuffer = await getFileBufferFromMinio(participant[pathField]);
+        } catch (err) {
+          if (err.status === 404) {
+            throw new HttpException(`File ${fileName} tidak ditemukan untuk peserta ini.`, 404);
+          }
+          this.logger.error(`Gagal mengambil file ${fileName}: ${err.message}`);
+          throw new HttpException(`Gagal mengambil file ${fileName}: ${err.message}`, 500);
         }
 
         if (!fileBuffer) {
@@ -358,14 +362,23 @@ export class ParticipantService {
         };
 
         // Tambahkan dokumen ke PDF
-        const simABuffer = await getFileBufferFromMinio(participant.simAPath);
-        const ktpBuffer = await getFileBufferFromMinio(participant.ktpPath);
-        const suratSehatButaWarnaBuffer = await getFileBufferFromMinio(participant.suratSehatButaWarnaPath);
-        const suratBebasNarkobaBuffer = await getFileBufferFromMinio(participant.suratBebasNarkobaPath);
-        await addFileToPdf(simABuffer, 'SIM A');
-        await addFileToPdf(ktpBuffer, 'KTP');
-        await addFileToPdf(suratSehatButaWarnaBuffer, 'Surat Sehat Buta Warna');
-        await addFileToPdf(suratBebasNarkobaBuffer, 'Surat Bebas Narkoba');
+        let simABuffer: Buffer, ktpBuffer: Buffer, suratSehatButaWarnaBuffer: Buffer, suratBebasNarkobaBuffer: Buffer;
+        try {
+          simABuffer = (await this.fileUploadService.downloadFile(participant.simAPath)).buffer;
+        } catch (err: any) { simABuffer = undefined; }
+        try {
+          ktpBuffer = (await this.fileUploadService.downloadFile(participant.ktpPath)).buffer;
+        } catch (err: any) { ktpBuffer = undefined; }
+        try {
+          suratSehatButaWarnaBuffer = (await this.fileUploadService.downloadFile(participant.suratSehatButaWarnaPath)).buffer;
+        } catch (err: any) { suratSehatButaWarnaBuffer = undefined; }
+        try {
+          suratBebasNarkobaBuffer = (await this.fileUploadService.downloadFile(participant.suratBebasNarkobaPath)).buffer;
+        } catch (err: any) { suratBebasNarkobaBuffer = undefined; }
+        if (simABuffer) await addFileToPdf(simABuffer, 'SIM A');
+        if (ktpBuffer) await addFileToPdf(ktpBuffer, 'KTP');
+        if (suratSehatButaWarnaBuffer) await addFileToPdf(suratSehatButaWarnaBuffer, 'Surat Sehat Buta Warna');
+        if (suratBebasNarkobaBuffer) await addFileToPdf(suratBebasNarkobaBuffer, 'Surat Bebas Narkoba');
 
         // Simpan dan kembalikan PDF
         const pdfBytes = await pdfDoc.save();
@@ -620,10 +633,30 @@ export class ParticipantService {
             id: true,
             idNumber: true,
             name: true,
+            nik: true,
             dinas: true,
             bidang: true,
             company: true,
             email: true,
+            phoneNumber: true,
+            nationality: true,
+            placeOfBirth: true,
+            dateOfBirth: true,
+            simAPath: true,
+            simAFileName: true,
+            simBPath: true,
+            simBFileName: true,
+            ktpPath: true,
+            ktpFileName: true,
+            fotoPath: true,
+            fotoFileName: true,
+            suratSehatButaWarnaPath: true,
+            suratSehatButaWarnaFileName: true,
+            tglKeluarSuratSehatButaWarna: true,
+            suratBebasNarkobaPath: true,
+            suratBebasNarkobaFileName: true,
+            tglKeluarSuratBebasNarkoba: true,
+            gmfNonGmf: true,
         }
     
         let whereClause: any = {};
@@ -658,18 +691,123 @@ export class ParticipantService {
             }
         }
     
+        // Hitung total untuk pagination
         const totalUsers = await this.prismaService.participant.count({
             where: whereClause,
         });
-    
-        const participants = await this.prismaService.participant.findMany({
+
+        // Pagination parameters
+        const page = request.page || 1;
+        const size = request.size || 10;
+        const totalPage = Math.ceil(totalUsers / size);
+
+        // Sorting universal
+        const allowedSortFields = [
+            'id', 'idNumber', 'name', 'nik', 'dinas', 'bidang', 'company', 'email', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth',
+            'tglKeluarSuratSehatButaWarna', 'tglKeluarSuratBebasNarkoba', 'expSuratSehatButaWarna', 'expSuratBebasNarkoba'
+        ];
+        const naturalSortFields = ['idNumber', 'name', 'company', 'dinas', 'bidang', 'email'];
+        const dateFields = ['dateOfBirth', 'tglKeluarSuratSehatButaWarna', 'tglKeluarSuratBebasNarkoba'];
+        const computedFields = ['expSuratSehatButaWarna', 'expSuratBebasNarkoba'];
+        const dbSortFields = ['id', 'nik', 'phoneNumber', 'nationality', 'placeOfBirth', 'dateOfBirth', 'tglKeluarSuratSehatButaWarna', 'tglKeluarSuratBebasNarkoba'];
+        
+        let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
+        let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+
+        // Optimasi: Strategi berbeda berdasarkan field type
+        let participants: any[];
+        
+        if (naturalSortFields.includes(sortBy)) {
+          // Natural sort global: ambil seluruh data, sort, lalu pagination manual
+          const allParticipants = await this.prismaService.participant.findMany({
             where: whereClause,
             select: participantSelectFields,
-            skip: (request.page - 1) * request.size,
-            take: request.size,
-        });
-    
-        const totalPage = Math.ceil(totalUsers / request.size);
+          });
+          allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+          participants = allParticipants.slice((page - 1) * size, page * size);
+        } else if (dateFields.includes(sortBy)) {
+          // Date sort global: ambil seluruh data, sort berdasarkan tanggal, lalu pagination manual
+          const allParticipants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+          });
+          allParticipants.sort((a, b) => {
+            const aDate = a[sortBy] ? new Date(a[sortBy]) : null;
+            const bDate = b[sortBy] ? new Date(b[sortBy]) : null;
+            
+            // Handle null values - put them at the end
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            
+            const comparison = aDate.getTime() - bDate.getTime();
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+          participants = allParticipants.slice((page - 1) * size, page * size);
+        } else if (computedFields.includes(sortBy)) {
+          // Computed field sorting: calculate expiry dates and sort
+          const allParticipants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+          });
+          
+          // Add computed fields to each participant
+          const participantsWithComputed = allParticipants.map(p => {
+            const expSuratSehatButaWarna = p.tglKeluarSuratSehatButaWarna 
+              ? new Date(new Date(p.tglKeluarSuratSehatButaWarna).setMonth(new Date(p.tglKeluarSuratSehatButaWarna).getMonth() + 6))
+              : null;
+            const expSuratBebasNarkoba = p.tglKeluarSuratBebasNarkoba
+              ? new Date(new Date(p.tglKeluarSuratBebasNarkoba).setMonth(new Date(p.tglKeluarSuratBebasNarkoba).getMonth() + 6))
+              : null;
+            
+            return {
+              ...p,
+              expSuratSehatButaWarna,
+              expSuratBebasNarkoba
+            };
+          });
+          
+          // Sort by computed field
+          participantsWithComputed.sort((a, b) => {
+            const aDate = a[sortBy];
+            const bDate = b[sortBy];
+            
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            
+            const comparison = aDate.getTime() - bDate.getTime();
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+          
+          participants = participantsWithComputed.slice((page - 1) * size, page * size);
+        } else if (dbSortFields.includes(sortBy)) {
+          // Database sorting
+          let orderBy: any;
+          if (sortBy !== 'id') {
+            orderBy = [
+              { [sortBy]: sortOrder },
+              { id: 'asc' }
+            ];
+          } else {
+            orderBy = { id: sortOrder };
+          }
+          participants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+            skip: (page - 1) * size,
+            take: size,
+            orderBy,
+          });
+        } else {
+          // Fallback: natural sort
+          const allParticipants = await this.prismaService.participant.findMany({
+            where: whereClause,
+            select: participantSelectFields,
+          });
+          allParticipants.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+          participants = allParticipants.slice((page - 1) * size, page * size);
+        }
     
         const accessRights = this.validateActions(userRole);
     
@@ -677,9 +815,9 @@ export class ParticipantService {
             data: participants.map(participant => this.toParticipantResponse(participant)),
             actions: accessRights,
             paging: {
-                currentPage: request.page,
+                currentPage: page,
                 totalPage: totalPage,
-                size: request.size,
+                size: size,
             },
         };
     }
@@ -772,14 +910,12 @@ export class ParticipantService {
         for (const file of files) {
             if (file.path) {
                 try {
-                    // Ambil buffer dari storage dinamis
+                    // Ambil buffer dari storage dinamis (satu jalur)
                     let buffer: Buffer | null = null;
-                    const storageType = process.env.STORAGE_TYPE || 'minio';
-                    if (storageType === 'supabase') {
-                        const { buffer: buf } = await this.fileUploadService.downloadFile(file.path);
-                        buffer = buf;
-                    } else {
-                        buffer = await getFileBufferFromMinio(file.path);
+                    try {
+                      buffer = (await this.fileUploadService.downloadFile(file.path)).buffer;
+                    } catch (err: any) {
+                      buffer = null;
                     }
                     if (buffer) {
                         archive.append(buffer, { name: file.name });

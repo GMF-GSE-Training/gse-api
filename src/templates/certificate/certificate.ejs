@@ -3,157 +3,396 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Certificate</title>
+    <title>Certificate of Refreshment</title>
     <style>
-        @media print {
-            body { margin: 0; }
-            .page-break { page-break-before: always; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-family: Verdana, Geneva, Tahoma, sans-serif;
         }
-        img {
-            height: 150px;
-            width: auto;
+        
+        @page {
+            size: A4 landscape;
+            margin: 0;
         }
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+        
+        .certificate-page {
+            width: 297mm;
+            height: 210mm;
+            position: relative;
+            background-image: url('<%= backgroundImage %>');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            page-break-after: always;
+            overflow: hidden;
         }
+        
+        .certificate {
+            padding: 20px;
+            position: relative;
+            width: calc(100% - 44px);
+            height: calc(100% - 44px);
+            box-sizing: border-box;
+        }
+        
+        .approval {
+            position: absolute;
+            top: 27px;
+            right: -15px;
+            font-size: 0.8em;
+            font-family: 'Times New Roman', Times, serif;
+            text-align: left;
+        }
+        
+        .company-info {
+            text-align: center;
+            margin-top: 115px;
+            margin-bottom: 10px;
+        }
+        
+        .company-info span {
+            font-size: 11px;
+        }
+        
+        .company-info .company-name {
+            font-size: 13px;
+        }
+        
+        .title {
+            text-align: center;
+            font-size: 38px;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            margin: 0;
+            font-size: 14px;
+        }
+        
+        .participant-info {
+            display: flex;
+            align-items: center;
+            margin: 0;
+        }
+        
+        .photo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 100px;
+            height: 170px;
+        }
+        
+        .photo img {
+            width: 120px;
+            border: 1px solid #000;
+            padding: 5px;
+        }
+        
+        .personal-info {
+            margin-left: 50px;
+        }
+        
+        .personal-info p {
+            display: flex;
+            align-items: center;
+            margin: 3px 0;
+        }
+        
+        .personal-info p span {
+            min-width: 180px;
+            font-size: 14px;
+        }
+        
+        .personal-info p strong {
+            font-size: 20px;
+            margin-left: 3px;
+        }
+        
+        .completion-text {
+            font-size: 18px;
+            clear: both;
+            text-align: center;
+            font-style: italic;
+            margin: 0;
+        }
+        
+        .course-period {
+            font-size: 12px;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .signatures {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            position: relative;
+        }
+        
+        .signature {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .signature img {
+            width: 160px;
+            min-height: 80px;
+            max-height: 80px;
+        }
+        
+        .signature hr {
+            border: 1px solid black;
+            width: 40%;
+        }
+        
+        .signature p {
+            font-size: 12px;
+            margin: 5px 0;
+        }
+        
+        .qr-code {
+            position: absolute;
+            right: 20px;
+            bottom: 20px; 
+            width: 100px;
+            height: 100px;
+        }
+        
+        .form-number {
+            font-size: 15px;
+            margin-top: 5px;
+            color: #666;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .training-details-container {
+            width: 297mm;
+            height: 210mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 5% 10%;
+            gap: 25px;
+            box-sizing: border-box;
+        }
+        
+        .section-title {
+            width: 100%;
+            text-align: center;
+            color: #808080;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
         }
-        th, td {
-            border: 1px solid #000;
+        
+        th {
+            border: 3px solid #000;
+            padding: 8px;
+            font-size: 14px;
+        }
+        
+        td {
+            border: 3px solid #000;
+            border-top: none;
+            border-bottom: none; 
             text-align: center;
             padding: 8px;
+            font-size: 12px;
         }
+        
         th {
             background-color: #87CEEB;
         }
-        .header {
-            font-weight: bold;
-            text-align: left;
-            background-color: #f0f8ff;
+        
+        .total-row td {
+            border: 3px solid #000;
         }
-        .section-title {
-            font-weight: bold;
-            font-size: 1.2em;
-            margin-top: 20px;
-            margin-bottom: 10px;
+        
+        .training-report-table th,
+        .training-report-table td {
+            border: 2px solid #000;
         }
-        .total {
-            font-weight: bold;
+        
+        .training-report-table th {
+            color: #808080;
         }
-    </style>      
+        
+        .curriculum,
+        .training-name {
+            text-align: start;
+        }
+    </style>
 </head>
 <body>
-    <img src="data:image/<%= photoType %>;base64,<%= photoBase64 %>" alt="Profile Picture">
-    <br>
+    <div class="certificate-page">
+        <div class="certificate">
+            <div class="approval">
+                Approved By Directorat General of Civil Aviation<br>
+                No. 030/SLP/BU-DBU/XII/2020
+            </div>
+            
+            <div class="company-info">
+                <span class="company-name">PT. Garuda Maintenance Facility Aero Asia Tbk</span><br>
+                <span>Management Building PT. Garuda Indonesia 3<sup>rd</sup> Floor</span><br>
+                <span>Soekarno-Hatta International Airport</span><br>
+                <span>Tangerang Indonesia</span>
+            </div>
 
-    <div>
-        <p><span>Name</span><span>: <%= name %></span></p>
-        <p><span>Place/Date of Birth</span><span>: <%= placeOrDateOfBirth %></span></p>
-        <p><span>Nationality</span><span>: <%= nationality %></span></p>
-        <p><span>Competencies</span><span>: <%= competencies %></span></p>
-        <p><span>Date</span><span>: Jakarta, <%= date %></span></p>
-        <p><span>Certificate Number</span><span>: <%= certificateNumber %></span></p>
+            <div class="title">Certificate of Refreshment</div>
+            <div class="subtitle">
+                For Airport Personnel in<br>
+                Peralatan Pelayanan Darat Pesawat Udara<br>
+                (Ground Support Equipment)
+            </div>
+
+            <div class="participant-info">
+                <div class="photo">
+                    <img src="data:image/<%= photoType %>;base64,<%= photoBase64 %>" alt="Pass-Photo">
+                </div>
+                
+                <div class="personal-info">
+                    <p>This is to certify that :</p>
+                    <p><span>Name</span>: <strong><%= name %></strong></p>
+                    <p><span>Place/Date of Birth</span>: <%= placeOrDateOfBirth %></p>
+                    <p><span>Nationality</span>: <%= nationality %></p>
+                    <p><span>Competencies</span>: <%= competencies %></p>
+                </div>
+            </div>
+
+            <div class="completion-text">
+                Has successfully completed the <span><%= duration %></span> hours training,<br>
+                passed the written and practical examination
+            </div>
+
+            <div class="course-period">
+                course period<br>
+                <%= coursePeriode %>
+            </div>
+
+            <div class="signatures">
+                <div class="signature">
+                    <p>Date: Jakarta, <strong><%= date %></strong></p>
+                    <img src="data:image/<%= signature1Type %>;base64,<%= signature1Base64 %>" alt="Signature 1">
+                    <hr>
+                    <p><%= nameSignature1 %><br>
+                    Director</p>
+                </div>
+                <div class="signature">
+                    <p>Cert. No: <%= certificateNumber %></p>
+                    <img src="data:image/<%= signature2Type %>;base64,<%= signature2Base64 %>" alt="Signature 2">
+                    <hr>
+                    <p><%= nameSignature2 %><br>
+                    <%= roleSignature2 %></p>
+                </div>
+            </div>
+
+            <img class="qr-code" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="QR Code">
+            
+            <div class="form-number">
+                Form No: <%= certificateNumber %>
+            </div>
+        </div>
     </div>
 
-    <br>
+    <div class="page-break"></div>
 
-    <p>
-        Has successfully completed the <span><%= duration %></span> hours training, passed the written and practical examination
-    </p>
-    <p><span>Course Period</span><span>: <%= coursePeriode %></span></p>
-
-    <br>
-
-    <div>
-        <img src="data:image/<%= signature1Type %>;base64,<%= signature1Base64 %>" alt="Signature 1">
-        <p><span>Name</span><span>: <%= nameSignature1 %></span></p>
-        <p><span>Role</span><span>: <%= roleSignature1 %></span></p>
+    <div class="training-details-container">
+        <div class="curriculum-section">
+            <h1 class="section-title">Curriculum & Syllabus</h1>
+            <table class="curriculum-table">
+                <tr class="header">
+                    <th rowspan="2">No.</th>
+                    <th rowspan="2">Subject</th>
+                    <th colspan="2">Hours</th>
+                </tr>
+                <tr>
+                    <th>Theory</th>
+                    <th>Practical</th>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td class="curriculum"><strong><u>GSE Regulation :</u></strong></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <% let index = 1; %>
+                <% GSERegulation.forEach(item => { %>
+                <tr>
+                    <td><%= index++ %></td>
+                    <td class="curriculum"><%= item.name %></td>
+                    <td><%= item.theoryDuration %></td>
+                    <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
+                </tr>
+                <% }); %>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td class="curriculum"><strong><u>Competencies : </u></strong></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <% Competencies.forEach(item => { %>
+                <tr>
+                    <td><%= index++ %></td>
+                    <td class="curriculum"><%= item.name %></td>
+                    <td><%= item.theoryDuration %></td>
+                    <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
+                </tr>
+                <% }); %>
+                <tr class="total-row">
+                    <td colspan="2">TOTAL</td>
+                    <td colspan="2"><%= totalDuration %></td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="2">TOTAL</td>
+                    <td colspan="2">40</td>
+                </tr>
+            </table>
+        </div>
+    
+        <div class="report-section">
+            <h1 class="section-title">Training Report</h1>
+            <table class="training-report-table">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Training Name</th>
+                        <th>Theory</th>
+                        <th>Practical</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td class="training-name"><%= competencies %></td>
+                        <td><%= theoryScore %></td>
+                        <td><%= practiceScore %></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-
-    <br>
-
-    <div>
-        <img src="data:image/<%= signature2Type %>;base64,<%= signature2Base64 %>" alt="Signature 2">
-        <p><span>Name</span><span>: <%= nameSignature2 %></span></p>
-        <p><span>Role</span><span>: <%= roleSignature2 %></span></p>
-    </div>
-
-    <div class="section-title">Curriculum & Syllabus</div>
-    <table>
-        <thead>
-            <tr>
-                <th>No.</th>
-                <th>Subject</th>
-                <th colspan="2">Hours</th>
-            </tr>
-            <tr>
-                <th></th>
-                <th></th>
-                <th>Theory</th>
-                <th>Practical</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td></td>
-                <td class="header">GSE Regulation</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <% let index = 1; %>
-            <% GSERegulation.forEach(item => { %>
-            <tr>
-                <td><%= index %></td>
-                <td><%= item.name %></td>
-                <td><%= item.theoryDuration %></td>
-                <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
-            </tr>
-            <% }); %>
-            <tr>
-                <td></td>
-                <td class="header">Competencies</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <% Competencies.forEach(item => { %>
-            <tr>
-                <td><%= index %></td>
-                <td><%= item.name %></td>
-                <td><%= item.theoryDuration %></td>
-                <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
-            </tr>
-            <% }); %>
-            <tr>
-                <td colspan="2" class="total">TOTAL</td>
-                <td>
-                    <%= totalDuration %>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-
-    <div class="section-title">Training Report</div>
-    <table>
-        <thead>
-            <tr>
-                <th>No.</th>
-                <th>Training Name</th>
-                <th>Theory</th>
-                <th>Practical</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>1</td>
-                <td><%= competencies %></td>
-                <td><%= theoryScore %></td>
-                <td><%= practiceScore %></td>
-            </tr>
-        </tbody>
-    </table>
 </body>
 </html>

@@ -10,6 +10,7 @@ import { CapabilityValidation } from './capability.validation';
 import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
+import { naturalSort } from '../common/helpers/natural-sort';
 
 @Injectable()
 export class CapabilityService {
@@ -213,21 +214,125 @@ export class CapabilityService {
       ];
     }
 
+    // Hitung total untuk pagination
     const totalCapability = await this.prismaService.capability.count({
       where: whereClause,
     });
 
-    const capabilities = await this.prismaService.capability.findMany({
-      where: whereClause,
-      skip: (request.page - 1) * request.size,
-      take: request.size,
-    });
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalCapability / size);
 
-    const capabilitiesWithFilteredAttributes = capabilities.map(
-      this.mapCapabilityWithDurations,
-    );
+    // Hybrid sorting: whitelist field DB dan computed
+    const allowedSortFields = [
+      'ratingCode',
+      'trainingCode',
+      'trainingName',
+      'id',
+      'durasiMateriRegulasiGSE',
+      'durasiMateriKompetensi',
+      'totalDuration',
+    ];
+    const naturalSortFields = ['ratingCode', 'trainingCode', 'trainingName'];
+    const computedFields = ['durasiMateriRegulasiGSE', 'durasiMateriKompetensi', 'totalDuration'];
+    const dbSortFields = [
+      'ratingCode',
+      'trainingCode',
+      'trainingName',
+      'id',
+      'totalDuration',
+      'totalTheoryDurationRegGse',
+      'totalPracticeDurationRegGse',
+      'totalTheoryDurationCompetency',
+      'totalPracticeDurationCompetency',
+    ];
+    
+    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'ratingCode';
+    let sortOrder: "asc" | "desc" = request.sortOrder === 'desc' ? 'desc' : 'asc';
 
-    const totalPage = Math.ceil(totalCapability / request.size);
+    let capabilities: any[];
+    
+    // Optimasi: Strategi berbeda berdasarkan field type
+    if (naturalSortFields.includes(sortBy)) {
+      // Untuk field yang perlu natural sort, ambil semua data dulu
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+      });
+      capabilities.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
+      // Pagination manual setelah sorting
+      capabilities = capabilities.slice((page - 1) * size, page * size);
+    } else if (sortBy === 'durasiMateriRegulasiGSE') {
+      // Sorting & paging kolom computed di DB
+      const offset = (page - 1) * size;
+      const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      capabilities = await this.prismaService.$queryRawUnsafe(
+        `SELECT *, (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0)) AS "totalMaterialDurationRegGse" FROM "capabilities" ORDER BY (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0)) ${order} OFFSET ${offset} LIMIT ${size}`
+      );
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: item.totalMaterialDurationRegGse ?? 0,
+        totalMaterialDurationCompetency: (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+        totalDuration: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0) + (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+      }));
+    } else if (sortBy === 'durasiMateriKompetensi') {
+      // Sorting & paging kolom computed di DB
+      const offset = (page - 1) * size;
+      const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      capabilities = await this.prismaService.$queryRawUnsafe(
+        `SELECT *, (COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) AS "totalMaterialDurationCompetency" FROM "capabilities" ORDER BY (COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) ${order} OFFSET ${offset} LIMIT ${size}`
+      );
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0),
+        totalMaterialDurationCompetency: item.totalMaterialDurationCompetency ?? 0,
+        totalDuration: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0) + (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+      }));
+    } else if (sortBy === 'totalDuration') {
+      // Sorting & paging kolom totalDuration sebagai computed field di DB
+      const offset = (page - 1) * size;
+      const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      capabilities = await this.prismaService.$queryRawUnsafe(
+        `SELECT *, (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0) + COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) AS "totalDuration" FROM "capabilities" ORDER BY (COALESCE("totalTheoryDurationRegGse",0) + COALESCE("totalPracticeDurationRegGse",0) + COALESCE("totalTheoryDurationCompetency",0) + COALESCE("totalPracticeDurationCompetency",0)) ${order} OFFSET ${offset} LIMIT ${size}`
+      );
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0),
+        totalMaterialDurationCompetency: (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+        totalDuration: item.totalDuration ?? 0,
+      }));
+    } else if (dbSortFields.includes(sortBy)) {
+      // Untuk field angka dan field DB, sorting dan pagination di DB
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
+      });
+      // Mapping fallback 0 jika perlu
+      capabilities = capabilities.map(item => ({
+        ...item,
+        totalMaterialDurationRegGse: (item.totalTheoryDurationRegGse ?? 0) + (item.totalPracticeDurationRegGse ?? 0),
+        totalMaterialDurationCompetency: (item.totalTheoryDurationCompetency ?? 0) + (item.totalPracticeDurationCompetency ?? 0),
+        totalDuration: item.totalDuration ?? 0,
+      }));
+    } else {
+      // Fallback: ambil semua data, sort manual, slice
+      capabilities = await this.prismaService.capability.findMany({
+        where: whereClause,
+      });
+      capabilities = capabilities.map(this.mapCapabilityWithDurations);
+      capabilities.sort((a, b) => (a[sortBy] || 0) - (b[sortBy] || 0));
+      capabilities = capabilities.slice((page - 1) * size, page * size);
+    }
+
+    // Mapping ke computed field untuk response
+    const capabilitiesWithFilteredAttributes = capabilities.map(this.mapCapabilityWithDurations);
 
     const userRole = user.role.name.toLowerCase();
     const actions = this.validateActions(userRole);
@@ -236,9 +341,9 @@ export class CapabilityService {
       data: capabilitiesWithFilteredAttributes,
       actions: actions,
       paging: {
-        currentPage: request.page,
+        currentPage: page,
         totalPage: totalPage,
-        size: request.size,
+        size: size,
       },
     };
   }
@@ -263,16 +368,15 @@ export class CapabilityService {
       ...rest
     } = capability;
 
-    const totalMaterialDurationRegGse =
-      (totalTheoryDurationRegGse || 0) + (totalPracticeDurationRegGse || 0);
-    const totalMaterialDurationCompetency =
-      (totalTheoryDurationCompetency || 0) +
-      (totalPracticeDurationCompetency || 0);
+    const totalMaterialDurationRegGse = (Number(totalTheoryDurationRegGse) || 0) + (Number(totalPracticeDurationRegGse) || 0);
+    const totalMaterialDurationCompetency = (Number(totalTheoryDurationCompetency) || 0) + (Number(totalPracticeDurationCompetency) || 0);
+    const totalDuration = totalMaterialDurationRegGse + totalMaterialDurationCompetency;
 
     return {
       ...rest,
       totalMaterialDurationRegGse,
       totalMaterialDurationCompetency,
+      totalDuration,
     };
   }
 }

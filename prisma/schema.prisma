@@ -83,6 +83,7 @@ model Participant {
 
   participantsCots              ParticipantsCOT[]
   user                          User?
+  certificates                  Certificate[] 
 
   @@map("participants")
 }
@@ -180,13 +181,16 @@ enum SignatureType {
 model Certificate {
   id                  String            @id @default(uuid())
   cotId               String
+  participantId       String
   signatureId         String
   certificateNumber   String            @db.VarChar(50)
-  attendance          Boolean
+  attendance          Float
   theoryScore         Float
   practiceScore       Float
+  certificatePath     String?         @db.VarChar(255)
 
   cot                 COT               @relation(fields: [cotId], references: [id])
+  participant         Participant       @relation(fields: [participantId], references: [id])
   signature           Signature         @relation(fields: [signatureId], references: [id])
 
   @@map("certificates")

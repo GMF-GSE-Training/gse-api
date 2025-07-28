@@ -93,11 +93,15 @@ export class UserController {
       }),
     )
     size?: number,
+    @Query('sort_by') sortBy?: string,
+    @Query('sort_order') sortOrder?: string,
   ): Promise<WebResponse<UserResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
       page: page || 1,
       size: size || 10,
+      sortBy: sortBy || 'idNumber',
+      sortOrder: sortOrder === 'desc' ? 'desc' : 'asc',
     };
     const result = await this.userService.listUsers(query, user);
     return buildResponse(

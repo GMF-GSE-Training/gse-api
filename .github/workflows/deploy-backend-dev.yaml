@@ -35,11 +35,38 @@ jobs:
         run: |
           docker push gcr.io/gmf-training/dev-backend-web-server:latest
 
-      - name: Deploy to Cloud Run
+      - name: Generate env YAML for Cloud Run
+        run: |
+          echo "NODE_ENV: \"production\"" > .env.deploy.yaml
+          echo "PROTOCOL: \"${{ secrets.PROTOCOL_DEV }}\"" >> .env.deploy.yaml
+          echo "HOST: \"${{ secrets.HOST_DEV }}\"" >> .env.deploy.yaml
+          echo "FRONTEND_URL: \"${{ secrets.FRONTEND_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "CORS_ORIGIN: \"${{ secrets.CORS_ORIGIN_DEV }}\"" >> .env.deploy.yaml
+          echo "BACKEND_URL: \"${{ secrets.BACKEND_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "DATABASE_URL: \"${{ secrets.DATABASE_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "DIRECT_URL: \"${{ secrets.DIRECT_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "QR_CODE_LINK: \"${{ secrets.QR_CODE_LINK_DEV }}\"" >> .env.deploy.yaml
+          echo "ACCESS_TOKEN: \"${{ secrets.ACCESS_TOKEN_DEV }}\"" >> .env.deploy.yaml
+          echo "REFRESH_TOKEN: \"${{ secrets.REFRESH_TOKEN_DEV }}\"" >> .env.deploy.yaml
+          echo "VERIFICATION_TOKEN: \"${{ secrets.VERIFICATION_TOKEN_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_HOST: \"${{ secrets.MAIL_HOST_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_PORT: \"${{ secrets.MAIL_PORT_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_USER: \"${{ secrets.MAIL_USER_DEV }}\"" >> .env.deploy.yaml
+          echo "MAIL_PASS: \"${{ secrets.MAIL_PASS_DEV }}\"" >> .env.deploy.yaml
+          echo "APP_NAME: \"${{ secrets.APP_NAME_DEV }}\"" >> .env.deploy.yaml
+          echo "STORAGE_TYPE: \"${{ secrets.STORAGE_TYPE_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_URL: \"${{ secrets.SUPABASE_URL_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_SERVICE_KEY: \"${{ secrets.SUPABASE_SERVICE_KEY_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_BUCKET: \"${{ secrets.SUPABASE_BUCKET_DEV }}\"" >> .env.deploy.yaml
+          echo "SUPABASE_PUBLIC_BUCKET: \"${{ secrets.SUPABASE_PUBLIC_BUCKET }}\"" >> .env.deploy.yaml
+          echo "LOGO_PATH: \"${{ secrets.LOGO_PATH }}\"" >> .env.deploy.yaml
+          echo "HCAPTCHA_SECRET: \"${{ secrets.HCAPTCHA_SECRET }}\"" >> .env.deploy.yaml
+
+      - name: Deploy To Cloud Run
         run: |-
           gcloud run deploy dev-backend-service \
             --image gcr.io/gmf-training/dev-backend-web-server:latest \
             --platform managed \
             --region asia-southeast1 \
             --allow-unauthenticated \
-            --set-env-vars "NODE_ENV=production,PROTOCOL=${{ secrets.PROTOCOL_DEV }},HOST=${{ secrets.HOST_DEV }},FRONTEND_URL=${{ secrets.FRONTEND_URL_DEV }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN_DEV }},BACKEND_URL=${{ secrets.BACKEND_URL_DEV }},DATABASE_URL=${{ secrets.DATABASE_URL_DEV }},DIRECT_URL=${{ secrets.DIRECT_URL_DEV }},QR_CODE_LINK=${{ secrets.QR_CODE_LINK_DEV }},ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN_DEV }},REFRESH_TOKEN=${{ secrets.REFRESH_TOKEN_DEV }},VERIFICATION_TOKEN=${{ secrets.VERIFICATION_TOKEN_DEV }},MAIL_HOST=${{ secrets.MAIL_HOST_DEV }},MAIL_PORT=${{ secrets.MAIL_PORT_DEV }},MAIL_USER=${{ secrets.MAIL_USER_DEV }},MAIL_PASS=${{ secrets.MAIL_PASS_DEV }},APP_NAME=${{ secrets.APP_NAME_DEV }},STORAGE_TYPE=${{ secrets.STORAGE_TYPE_DEV }},SUPABASE_URL=${{ secrets.SUPABASE_URL_DEV }},SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY_DEV }},SUPABASE_BUCKET=${{ secrets.SUPABASE_BUCKET_DEV }},SUPABASE_PUBLIC_BUCKET=${{ secrets.SUPABASE_PUBLIC_BUCKET }},LOGO_PATH=${{ secrets.LOGO_PATH }},HCAPTCHA_SECRET=${{ secrets.HCAPTCHA_SECRET }}"
+            --env-vars-file .env.deploy.yaml

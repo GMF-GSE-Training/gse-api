@@ -50,6 +50,7 @@ lerna-debug.log*
 .env.production
 .env.production.local
 .env.local
+.env.windows
 
 # temp directory
 .temp

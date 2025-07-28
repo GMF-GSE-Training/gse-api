@@ -233,7 +233,7 @@ async function retry<T>(
   throw lastError!;
 }
 
-// Enhanced error classification
+// Enhanced error classification with Windows-specific patterns
 function isRetryableError(error: Error): boolean {
   const retryablePatterns = [
     /ECONNRESET/,
@@ -243,10 +243,25 @@ function isRetryableError(error: Error): boolean {
     /network/i,
     /timeout/i,
     /temporary/i,
-    /rate limit/i
+    /rate limit/i,
+    // Windows-specific network errors
+    /ECONNREFUSED/,
+    /ENOTFOUND/,
+    /EHOSTDOWN/,
+    /EHOSTUNREACH/,
+    // Supabase-specific errors that might be retryable
+    /connection/i,
+    /fetch/i,
+    /request/i
   ];
   
-  return retryablePatterns.some(pattern => pattern.test(error.message));
+  // Check for HTML error responses (usually means network issues)
+  const isHtmlError = error.message.includes('<!doctype') || 
+                     error.message.includes('<html') ||
+                     error.message.includes('Invalid St') || // Common truncated HTML error
+                     error.message.includes('is not valid JSON');
+  
+  return retryablePatterns.some(pattern => pattern.test(error.message)) || isHtmlError;
 }
 
 // Enhanced file upload with buffer support and detailed logging
@@ -264,6 +279,14 @@ async function uploadToStorage(localPath: string, destName: string): Promise<str
   return retry(async () => {
     if (storageConfig.type === 'supabase') {
       const fileBuffer = await fs.readFile(localPath);
+      
+      // Add more detailed error logging for debugging
+      Logger.debug(`Attempting Supabase upload: ${destName}`, {
+        fileSize: fileBuffer.length,
+        contentType: getContentType(path.extname(localPath)),
+        bucket: storageConfig.bucket
+      });
+      
       const { data, error } = await (storageConfig.client as StorageClient)
         .from(storageConfig.bucket)
         .upload(destName, fileBuffer, {
@@ -271,7 +294,15 @@ async function uploadToStorage(localPath: string, destName: string): Promise<str
           upsert: true,
         });
       
-      if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+      if (error) {
+        // Enhanced error logging for better debugging
+        Logger.error(`Supabase upload failed for ${destName}`, {
+          error: error.message,
+          statusCode: (error as any).statusCode || 'unknown',
+          details: error
+        });
+        throw new Error(`Supabase upload failed: ${error.message}`);
+      }
       
       const duration = (Date.now() - startTime) / 1000;
       Logger.debug(`Uploaded ${destName} to Supabase in ${duration}s`);
@@ -285,7 +316,7 @@ async function uploadToStorage(localPath: string, destName: string): Promise<str
       
       const duration = (Date.now() - startTime) / 1000;
       Logger.debug(`Uploaded ${destName} to MinIO in ${duration}s`);
-  return destName;
+      return destName;
     }
   }, MAX_RETRIES, `upload-${destName}`);
 }
@@ -541,17 +572,43 @@ async function seedCapabilities() {
     });
     Logger.info(`Menggunakan data dari capabilities.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, (_, i) => ({
-      id: faker.string.uuid(),
-      ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
-      trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
-      trainingName: faker.lorem.words({ min: 2, max: 5 }),
-      totalTheoryDurationRegGse: faker.number.int({ min: 10, max: 100 }),
-      totalPracticeDurationRegGse: faker.number.int({ min: 10, max: 100 }),
-      totalTheoryDurationCompetency: faker.number.int({ min: 10, max: 100 }),
-      totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
-      totalDuration: faker.number.int({ min: 50, max: 500 }),
-    }));
+    data = Array.from({ length: count }, (_, i) => {
+      // Generate training name yang sesuai dengan schema length constraint (max 50 chars)
+      const trainingOptions = [
+        'Forklift Training',
+        'GSE Basic Training', 
+        'Aircraft Ground Handling',
+        'Baggage Tractor',
+        'Pushback Training',
+        'Catering Truck',
+        'Air Conditioning Unit',
+        'Ground Power Unit',
+        'Cargo Loader',
+        'Belt Loader',
+        'Conveyor Belt',
+        'Lavatory Service',
+        'Water Service',
+        'Fuel Truck',
+        'De-icing Equipment'
+      ];
+      
+      const selectedTraining = faker.helpers.arrayElement(trainingOptions);
+      const trainingName = selectedTraining.length > 45 
+        ? selectedTraining.substring(0, 45) + '...' 
+        : selectedTraining;
+      
+      return {
+        id: faker.string.uuid(),
+        ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
+        trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
+        trainingName: trainingName,
+        totalTheoryDurationRegGse: faker.number.int({ min: 10, max: 100 }),
+        totalPracticeDurationRegGse: faker.number.int({ min: 10, max: 100 }),
+        totalTheoryDurationCompetency: faker.number.int({ min: 10, max: 100 }),
+        totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
+        totalDuration: faker.number.int({ min: 50, max: 500 }),
+      };
+    });
     Logger.info(`File capabilities.json kosong, generate data dummy (${count} item)`);
   }
   if (data.length > 0) {
@@ -837,17 +894,30 @@ async function seedCots() {
     });
     Logger.info(`Menggunakan data dari cots.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, () => ({
+    data = Array.from({ length: count }, () => {
+      // Generate names yang sesuai dengan schema length constraint (max 50 chars)
+      const locations = [
+        'Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Semarang',
+        'Makassar', 'Palembang', 'Tangerang', 'Depok', 'Bekasi'
+      ];
+      
+      const generateInstructorName = () => {
+        const name = faker.person.fullName();
+        return name.length > 45 ? name.substring(0, 45) + '...' : name;
+      };
+      
+      return {
         id: faker.string.uuid(),
         startDate: faker.date.recent({ days: 30 }),
-      endDate: faker.date.future({ years: 1 }),
-        trainingLocation: faker.location.city(),
-        theoryInstructorRegGse: faker.person.fullName(),
-        theoryInstructorCompetency: faker.person.fullName(),
-        practicalInstructor1: faker.person.fullName(),
-        practicalInstructor2: faker.person.fullName(),
+        endDate: faker.date.future({ years: 1 }),
+        trainingLocation: faker.helpers.arrayElement(locations),
+        theoryInstructorRegGse: generateInstructorName(),
+        theoryInstructorCompetency: generateInstructorName(),
+        practicalInstructor1: generateInstructorName(),
+        practicalInstructor2: generateInstructorName(),
         status: faker.helpers.arrayElement(['Menunggu', 'Berlangsung', 'Selesai']),
-    }));
+      };
+    });
     Logger.info(`File cots.json kosong, generate data dummy (${count} item)`);
   }
   if (data.length > 0) {
@@ -908,16 +978,35 @@ async function seedSignatures() {
   await backupTableIfRequested('signatures');
   const count = parseInt(process.env.DUMMY_SIGNATURE_COUNT || '2', 10);
   const data = await loadOrGenerate('signatures.json', () => {
-    return Array.from({ length: count }, (_, i) => ({
-      id: randomUUID(),
-      idNumber: `SIGNER${(i + 1).toString().padStart(3, '0')}`,
-      role: faker.person.jobTitle(),
-      name: faker.person.fullName(),
-      eSignFileName: `e-sign${i + 1}.png`,
-      eSignPath: `/esign/${faker.string.uuid()}.png`,
-      signatureType: i % 2 === 0 ? SignatureType.SIGNATURE1 : SignatureType.SIGNATURE2,
-      status: true,
-    }));
+    return Array.from({ length: count }, (_, i) => {
+      // Generate role and name yang sesuai dengan schema length constraint (max 50 chars)
+      const roles = [
+        'Manager', 'Supervisor', 'Director', 'Coordinator',
+        'Head of Department', 'Senior Manager', 'Assistant Manager',
+        'Team Leader', 'Administrator', 'Executive'
+      ];
+      
+      const generateName = () => {
+        const name = faker.person.fullName();
+        return name.length > 45 ? name.substring(0, 45) + '...' : name;
+      };
+      
+      const generateRole = () => {
+        const role = faker.helpers.arrayElement(roles);
+        return role.length > 45 ? role.substring(0, 45) + '...' : role;
+      };
+      
+      return {
+        id: randomUUID(),
+        idNumber: `SIGNER${(i + 1).toString().padStart(3, '0')}`,
+        role: generateRole(),
+        name: generateName(),
+        eSignFileName: `e-sign${i + 1}.png`,
+        eSignPath: `/esign/${faker.string.uuid()}.png`,
+        signatureType: i % 2 === 0 ? SignatureType.SIGNATURE1 : SignatureType.SIGNATURE2,
+        status: true,
+      };
+    });
   }, 'DUMMY_SIGNATURE_COUNT', count);
 
   // --- PATCH: filter hanya field valid ---
@@ -966,53 +1055,53 @@ async function seedSignatures() {
 }
 
 // Refactor seedCertificates
-async function seedCertificates() {
-  Logger.info('Starting certificates seeding');
-  await backupTableIfRequested('certificates');
-  const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '5', 10);
-  const numFields = ['theoryScore', 'practiceScore'];
-  const raw = await loadJson<any>('certificates.json');
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  let data = raw.filter(c => {
-      const sig = c.signatureId ?? c[6];
-      const cot = c.cotId ?? c[5];
-      return uuid.test(sig) && uuid.test(cot);
-  }).map(c => {
-    const item: any = { ...c };
-    numFields.forEach(f => {
-      item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
-    });
-    return item;
-  });
-  if (data.length === 0) {
-    Logger.warn('No valid certificate entries found, generating dummy data');
-    const [cots, signatures] = await Promise.all([
-      prisma.cOT.findMany(),
-      prisma.signature.findMany(),
-    ]);
-    data = Array.from({ length: count }, () => {
-      const cot = faker.helpers.arrayElement(cots);
-      const sig = faker.helpers.arrayElement(signatures);
-      return {
-      id: randomUUID(),
-        cotId: cot.id,
-        signatureId: sig.id,
-        certificateNumber: `CERT-${cot.id.substring(0, 6).toUpperCase()}`,
-      attendance: true,
-        theoryScore: faker.number.int({ min: 60, max: 100 }),
-        practiceScore: faker.number.int({ min: 60, max: 100 }),
-      };
-    });
-  }
-  if (data.length > 0) {
-    await processBatch(data, async (certificate) => {
-      await prisma.certificate.create({ data: certificate });
-    }, BATCH_SIZE, 'seed-certificates');
-    Logger.info(`Seeded ${data.length} certificates`);
-  } else {
-    Logger.info('No certificates to seed');
-  }
-}
+// async function seedCertificates() {
+//   Logger.info('Starting certificates seeding');
+//   await backupTableIfRequested('certificates');
+//   const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '5', 10);
+//   const numFields = ['theoryScore', 'practiceScore'];
+//   const raw = await loadJson<any>('certificates.json');
+//   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+//   let data = raw.filter(c => {
+//       const sig = c.signatureId ?? c[6];
+//       const cot = c.cotId ?? c[5];
+//       return uuid.test(sig) && uuid.test(cot);
+//   }).map(c => {
+//     const item: any = { ...c };
+//     numFields.forEach(f => {
+//       item[f] = item[f] !== undefined && item[f] !== null ? Number(item[f]) : null;
+//     });
+//     return item;
+//   });
+//   if (data.length === 0) {
+//     Logger.warn('No valid certificate entries found, generating dummy data');
+//     const [cots, signatures] = await Promise.all([
+//       prisma.cOT.findMany(),
+//       prisma.signature.findMany(),
+//     ]);
+//     data = Array.from({ length: count }, () => {
+//       const cot = faker.helpers.arrayElement(cots);
+//       const sig = faker.helpers.arrayElement(signatures);
+//       return {
+//       id: randomUUID(),
+//         cotId: cot.id,
+//         signatureId: sig.id,
+//         certificateNumber: `CERT-${cot.id.substring(0, 6).toUpperCase()}`,
+//       attendance: true,
+//         theoryScore: faker.number.int({ min: 60, max: 100 }),
+//         practiceScore: faker.number.int({ min: 60, max: 100 }),
+//       };
+//     });
+//   }
+//   if (data.length > 0) {
+//     await processBatch(data, async (certificate) => {
+//       await prisma.certificate.create({ data: certificate });
+//     }, BATCH_SIZE, 'seed-certificates');
+//     Logger.info(`Seeded ${data.length} certificates`);
+//   } else {
+//     Logger.info('No certificates to seed');
+//   }
+// }
 
 // Refactor seedParticipantsCot
 async function seedParticipantsCot() {
@@ -1078,14 +1167,35 @@ async function seedCurriculumSyllabus() {
     });
     Logger.info(`Menggunakan data dari curriculumsyllabus.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, () => ({
-      id: faker.string.uuid(),
-      capabilityId: faker.helpers.arrayElement(capabilities).id,
-      theoryDuration: faker.number.int({ min: 10, max: 100 }),
-      practiceDuration: faker.number.int({ min: 10, max: 100 }),
-      name: faker.lorem.words({ min: 2, max: 4 }),
-      type: faker.helpers.arrayElement(['Kompetensi', 'Reguler', 'Lainnya']),
-    }));
+    data = Array.from({ length: count }, () => {
+      // Generate curriculum name yang sesuai dengan schema length constraint (max 50 chars)
+      const curriculumOptions = [
+        'Basic Theory',
+        'Advanced Practice', 
+        'Safety Protocol',
+        'Equipment Operation',
+        'Maintenance Procedure',
+        'Emergency Response',
+        'Quality Control',
+        'Technical Skills',
+        'Ground Operations',
+        'Aircraft Handling'
+      ];
+      
+      const selectedName = faker.helpers.arrayElement(curriculumOptions);
+      const name = selectedName.length > 45 
+        ? selectedName.substring(0, 45) + '...' 
+        : selectedName;
+      
+      return {
+        id: faker.string.uuid(),
+        capabilityId: faker.helpers.arrayElement(capabilities).id,
+        theoryDuration: faker.number.int({ min: 10, max: 100 }),
+        practiceDuration: faker.number.int({ min: 10, max: 100 }),
+        name: name,
+        type: faker.helpers.arrayElement(['Kompetensi', 'Reguler', 'Lainnya']),
+      };
+    });
     Logger.info(`File curriculumsyllabus.json kosong, generate data dummy (${count} item)`);
   }
   if (data.length > 0) {
@@ -1130,7 +1240,7 @@ async function main() {
     await seedCots();
     await seedCapabilityCots();
     await seedSignatures();
-    await seedCertificates();
+    // await seedCertificates();
     await seedParticipantsAndUsers();
     await seedParticipantsCot();
     await seedCurriculumSyllabus();

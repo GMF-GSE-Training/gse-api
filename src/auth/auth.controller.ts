@@ -107,7 +107,7 @@ export class AuthController {
     @Post('/token')
     @Public()
     @HttpCode(200)
-    async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto, @Res({ passthrough: true }) res: Response): Promise<WebResponse<string>> {
+    async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto, @Res({ passthrough: true }) res: Response): Promise<WebResponse<AuthResponse>> {
         const result = await this.authService.refreshTokens(refreshTokenDto.refreshToken);
         const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
         res.cookie('access_token', result.accessToken, {
@@ -118,7 +118,7 @@ export class AuthController {
             path: '/',
             maxAge: 1000 * 60 * 60 * 24,
         });
-        return buildResponse(HttpStatus.OK, "Access token berhasil diperbarui");
+        return buildResponse(HttpStatus.OK, result);
     }
 
     @Get('/current')    

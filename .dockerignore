@@ -12,7 +12,11 @@ prisma/migrations/
 *.temp
 *.lock
 
+<<<<<<< HEAD
+# dotenv environment variable files
+=======
 # Dotenv environment variable files
+>>>>>>> dev
 .env
 .env.local
 # !*.env

@@ -34,9 +34,12 @@ import { CurrentUserRequest } from 'src/model/auth.model';
 import { User } from 'src/shared/decorator/user.decorator';
 import { Response } from 'express';
 import { CoreHelper } from 'src/common/helpers/core.helper';
+import { Logger } from '@nestjs/common';
 
 @Controller('/participants')
 export class ParticipantController {
+  private readonly logger = new Logger(ParticipantController.name);
+
   constructor(
     private readonly participantService: ParticipantService,
     private readonly coreHelper: CoreHelper,
@@ -195,17 +198,30 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'simA',
-      user,
-    );
-    if (fileBuffer) {
-      const mediaType = this.coreHelper.getMediaType(fileBuffer);
-      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('SIM A not found');
+    try {
+      this.logger?.log?.(`Request download SIM A untuk participant: ${participantId}`);
+      const fileBuffer = await this.participantService.streamFile(
+        participantId,
+        'simA',
+        user,
+      );
+      if (fileBuffer) {
+        const mediaType = this.coreHelper.getMediaType(fileBuffer);
+        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+        res.send(fileBuffer);
+        this.logger?.log?.(`Berhasil mengirim SIM A participant: ${participantId}`);
+      } else {
+        res.status(404).send('SIM A not found');
+        this.logger?.warn?.(`SIM A tidak ditemukan untuk participant: ${participantId}`);
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'SIM A not found');
+        this.logger?.warn?.(`SIM A tidak ditemukan (404) untuk participant: ${participantId}`);
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+        this.logger?.error?.(`Gagal mengirim SIM A participant: ${participantId} | ${error.message}`);
+      }
     }
   }
 
@@ -218,17 +234,30 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'simB',
-      user,
-    );
-    if (fileBuffer) {
-      const mediaType = this.coreHelper.getMediaType(fileBuffer);
-      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('SIM B not found');
+    try {
+      this.logger?.log?.(`Request download SIM B untuk participant: ${participantId}`);
+      const fileBuffer = await this.participantService.streamFile(
+        participantId,
+        'simB',
+        user,
+      );
+      if (fileBuffer) {
+        const mediaType = this.coreHelper.getMediaType(fileBuffer);
+        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+        res.send(fileBuffer);
+        this.logger?.log?.(`Berhasil mengirim SIM B participant: ${participantId}`);
+      } else {
+        res.status(404).send('SIM B not found');
+        this.logger?.warn?.(`SIM B tidak ditemukan untuk participant: ${participantId}`);
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'SIM B not found');
+        this.logger?.warn?.(`SIM B tidak ditemukan (404) untuk participant: ${participantId}`);
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+        this.logger?.error?.(`Gagal mengirim SIM B participant: ${participantId} | ${error.message}`);
+      }
     }
   }
 
@@ -241,17 +270,30 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'foto',
-      user,
-    );
-    if (fileBuffer) {
-      const mediaType = this.coreHelper.getMediaType(fileBuffer);
-      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('Foto not found');
+    try {
+      this.logger?.log?.(`Request download foto untuk participant: ${participantId}`);
+      const fileBuffer = await this.participantService.streamFile(
+        participantId,
+        'foto',
+        user,
+      );
+      if (fileBuffer) {
+        const mediaType = this.coreHelper.getMediaType(fileBuffer);
+        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+        res.send(fileBuffer);
+        this.logger?.log?.(`Berhasil mengirim foto participant: ${participantId}`);
+      } else {
+        res.status(404).send('Foto not found');
+        this.logger?.warn?.(`Foto tidak ditemukan untuk participant: ${participantId}`);
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'Foto not found');
+        this.logger?.warn?.(`Foto tidak ditemukan (404) untuk participant: ${participantId}`);
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+        this.logger?.error?.(`Gagal mengirim foto participant: ${participantId} | ${error.message}`);
+      }
     }
   }
 
@@ -264,17 +306,30 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'ktp',
-      user,
-    );
-    if (fileBuffer) {
-      const mediaType = this.coreHelper.getMediaType(fileBuffer);
-      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('KTP not found');
+    try {
+      this.logger?.log?.(`Request download KTP untuk participant: ${participantId}`);
+      const fileBuffer = await this.participantService.streamFile(
+        participantId,
+        'ktp',
+        user,
+      );
+      if (fileBuffer) {
+        const mediaType = this.coreHelper.getMediaType(fileBuffer);
+        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+        res.send(fileBuffer);
+        this.logger?.log?.(`Berhasil mengirim KTP participant: ${participantId}`);
+      } else {
+        res.status(404).send('KTP not found');
+        this.logger?.warn?.(`KTP tidak ditemukan untuk participant: ${participantId}`);
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'KTP not found');
+        this.logger?.warn?.(`KTP tidak ditemukan (404) untuk participant: ${participantId}`);
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+        this.logger?.error?.(`Gagal mengirim KTP participant: ${participantId} | ${error.message}`);
+      }
     }
   }
 
@@ -287,17 +342,30 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'suratSehatButaWarna',
-      user,
-    );
-    if (fileBuffer) {
-      const mediaType = this.coreHelper.getMediaType(fileBuffer);
-      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('Surat Sehat Buta Warna not found');
+    try {
+      this.logger?.log?.(`Request download Surat Sehat Buta Warna untuk participant: ${participantId}`);
+      const fileBuffer = await this.participantService.streamFile(
+        participantId,
+        'suratSehatButaWarna',
+        user,
+      );
+      if (fileBuffer) {
+        const mediaType = this.coreHelper.getMediaType(fileBuffer);
+        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+        res.send(fileBuffer);
+        this.logger?.log?.(`Berhasil mengirim Surat Sehat Buta Warna participant: ${participantId}`);
+      } else {
+        res.status(404).send('Surat Sehat Buta Warna not found');
+        this.logger?.warn?.(`Surat Sehat Buta Warna tidak ditemukan untuk participant: ${participantId}`);
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'Surat Sehat Buta Warna not found');
+        this.logger?.warn?.(`Surat Sehat Buta Warna tidak ditemukan (404) untuk participant: ${participantId}`);
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+        this.logger?.error?.(`Gagal mengirim Surat Sehat Buta Warna participant: ${participantId} | ${error.message}`);
+      }
     }
   }
 
@@ -310,17 +378,30 @@ export class ParticipantController {
     @User() user: CurrentUserRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const fileBuffer = await this.participantService.streamFile(
-      participantId,
-      'suratBebasNarkoba',
-      user,
-    );
-    if (fileBuffer) {
-      const mediaType = this.coreHelper.getMediaType(fileBuffer);
-      res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-      res.send(fileBuffer);
-    } else {
-      res.status(404).send('Surat Bebas Narkoba not found');
+    try {
+      this.logger?.log?.(`Request download Surat Bebas Narkoba untuk participant: ${participantId}`);
+      const fileBuffer = await this.participantService.streamFile(
+        participantId,
+        'suratBebasNarkoba',
+        user,
+      );
+      if (fileBuffer) {
+        const mediaType = this.coreHelper.getMediaType(fileBuffer);
+        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
+        res.send(fileBuffer);
+        this.logger?.log?.(`Berhasil mengirim Surat Bebas Narkoba participant: ${participantId}`);
+      } else {
+        res.status(404).send('Surat Bebas Narkoba not found');
+        this.logger?.warn?.(`Surat Bebas Narkoba tidak ditemukan untuk participant: ${participantId}`);
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        res.status(404).send(error.message || 'Surat Bebas Narkoba not found');
+        this.logger?.warn?.(`Surat Bebas Narkoba tidak ditemukan (404) untuk participant: ${participantId}`);
+      } else {
+        res.status(500).send(error.message || 'Internal Server Error');
+        this.logger?.error?.(`Gagal mengirim Surat Bebas Narkoba participant: ${participantId} | ${error.message}`);
+      }
     }
   }
 
@@ -404,6 +485,7 @@ export class ParticipantController {
     @Res() res: Response,
   ): Promise<void> {
     try {
+      this.logger?.log?.(`Request download ID Card untuk participant: ${participantId}`);
       const { pdfBuffer, participantName } = await this.participantService.downloadIdCard(participantId);
       const sanitizedName = participantName
         .trim()
@@ -425,6 +507,7 @@ export class ParticipantController {
       console.log(`Sending X-Participant-Name: ${sanitizedName}`);
       // Kirim buffer langsung ke client
       res.send(pdfBuffer);
+      this.logger?.log?.(`Berhasil mengirim ID Card participant: ${participantId}`);
     } catch (error) {
       throw new HttpException(error.message, error.status || 500);
     }
@@ -438,6 +521,7 @@ export class ParticipantController {
     @Param('participantId', ParseUUIDPipe) participantId: string,
   ): Promise<StreamableFile> {
     try {
+      this.logger?.log?.(`Request download Document untuk participant: ${participantId}`);
       const { pdfBuffer, participantName } = await this.participantService.downloadDocument(participantId);
       const sanitizedName = participantName
         .trim()
@@ -462,7 +546,13 @@ export class ParticipantController {
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @Res() res: Response,
   ): Promise<void> {
-    return this.participantService.downloadAllFilesAsZip(participantId, res);
+    try {
+      this.logger?.log?.(`Request download all files untuk participant: ${participantId}`);
+      return this.participantService.downloadAllFilesAsZip(participantId, res);
+    } catch (error: any) {
+      this.logger?.error?.(`Gagal mengirim all files participant: ${participantId} | ${error.message}`);
+      throw new HttpException(error.message || 'Internal Server Error', error.status || 500);
+    }
   }
 
   @Delete('/:participantId')
@@ -473,11 +563,17 @@ export class ParticipantController {
     @Param('participantId', ParseUUIDPipe) participantId: string,
     @User() user: CurrentUserRequest,
   ): Promise<WebResponse<string>> {
-    const result = await this.participantService.deleteParticipant(
-      participantId,
-      user,
-    );
-    return buildResponse(HttpStatus.OK, result);
+    try {
+      this.logger?.log?.(`Request delete participant: ${participantId}`);
+      const result = await this.participantService.deleteParticipant(
+        participantId,
+        user,
+      );
+      return buildResponse(HttpStatus.OK, result);
+    } catch (error: any) {
+      this.logger?.error?.(`Gagal delete participant: ${participantId} | ${error.message}`);
+      throw new HttpException(error.message || 'Internal Server Error', error.status || 500);
+    }
   }
 
   @Get('/list/result')
@@ -486,29 +582,17 @@ export class ParticipantController {
   async list(
     @User() user: CurrentUserRequest,
     @Query('q') q?: string,
-    @Query(
-      'page',
-      new ParseIntPipe({
-        optional: true,
-        exceptionFactory: () =>
-          new HttpException('Page must be a positive number', 400),
-      }),
-    )
-    page?: number,
-    @Query(
-      'size',
-      new ParseIntPipe({
-        optional: true,
-        exceptionFactory: () =>
-          new HttpException('Size must be a positive number', 400),
-      }),
-    )
-    size?: number,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('size', new ParseIntPipe({ optional: true })) size?: number,
+    @Query('sort_by') sortBy?: string,
+    @Query('sort_order') sortOrder?: 'asc' | 'desc',
   ): Promise<WebResponse<ParticipantResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
       page: page || 1,
       size: size || 10,
+      sortBy: sortBy || 'idNumber',
+      sortOrder: sortOrder || 'asc',
     };
     const result = await this.participantService.listParticipants(query, user);
     return buildResponse(

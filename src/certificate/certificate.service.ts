@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/service/prisma.service';
 import { ValidationService } from 'src/common/service/validation.service';
 import { CreateCertificate } from 'src/model/certificate.model';
@@ -11,6 +11,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Injectable()
 export class CertificateService {
+  private readonly logger = new Logger(CertificateService.name);
   constructor(
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
@@ -21,7 +22,7 @@ export class CertificateService {
     cotId: string,
     participantId: string,
     request: CreateCertificate,
-  ): Promise<any> {
+  ): Promise<string> {
     const createCertificateRequest = this.validationService.validate(
       CertificateValidation.CREATE,
       request,
@@ -68,6 +69,23 @@ export class CertificateService {
             },
           },
         },
+        // Tambahkan untuk mengecek sertifikat yang sudah ada
+        certificate: {
+          where: {
+              // Cek berdasarkan participant melalui participantsCots
+              cot: {
+                  participantsCots: {
+                      some: {
+                          participantId: participantId,
+                      },
+                  },
+              },
+          },
+          select: {
+              id: true,
+              certificateNumber: true,
+          },
+        },
       },
     });
 
@@ -78,11 +96,39 @@ export class CertificateService {
       );
     }
 
+    // Validasi 1: Cek apakah COT sudah selesai (endDate sudah terlewat)
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0); // Reset time untuk perbandingan tanggal saja
+    
+    const endDate = new Date(cot.endDate);
+    endDate.setHours(0, 0, 0, 0); // Reset time untuk perbandingan tanggal saja
+    
+    if (currentDate <= endDate) {
+        throw new HttpException('Gagal membuat sertifikat. COT belum selesai', 400);
+    }
+    // Validasi 2: Cek apakah sertifikat untuk participant di COT ini sudah ada
+    const existingCertificate = await this.prismaService.certificate.findFirst({
+      where: {
+          cotId: cotId,
+          participantId: participantId,
+      },
+  });
+
+    if (existingCertificate) {
+        throw new HttpException('Gagal membuat sertifikat. Sertifikat untuk participant sudah ada di COT ini', 409);
+    }
+
+    // Validasi 3: Cek apakah participant terdaftar di COT ini
+    if (!cot.participantsCots || cot.participantsCots.length === 0) {
+        throw new HttpException('Gagal membuat sertifikat. Participant tidak terdaftar di COT ini', 404);
+    }
+
     const eSign = await this.prismaService.signature.findMany({
       where: {
         status: true,
       },
       select: {
+        id: true,
         name: true,
         role: true,
         eSignPath: true,
@@ -90,7 +136,7 @@ export class CertificateService {
       },
     });
 
-    if (!eSign) {
+    if (!eSign || eSign.length === 0) {
       throw new HttpException(
         'Gagal membuat sertifikat. Tidak ada Esign yang aktif',
         404,
@@ -107,13 +153,12 @@ export class CertificateService {
       (item) => item.type === 'Kompetensi',
     );
 
-    const storageType = process.env.STORAGE_TYPE || 'minio';
     let photoBuffer: Buffer;
-    if (storageType === 'supabase') {
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(participant.fotoPath);
       photoBuffer = buffer;
-    } else {
-      photoBuffer = await getFileBufferFromMinio(participant.fotoPath);
+    } catch (err: any) {
+      throw new Error('Gagal mengambil foto peserta: ' + (err.message || err));
     }
     const photoBase64 = photoBuffer.toString('base64');
     const photoType = this.getMediaType(photoBuffer);
@@ -122,11 +167,11 @@ export class CertificateService {
       (item) => item.signatureType === 'SIGNATURE1',
     );
     let signature1Buffer: Buffer;
-    if (storageType === 'supabase') {
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(signature1.eSignPath);
       signature1Buffer = buffer;
-    } else {
-      signature1Buffer = await getFileBufferFromMinio(signature1.eSignPath);
+    } catch (err: any) {
+      throw new Error('Gagal mengambil signature1: ' + (err.message || err));
     }
     const signature1Base64 = signature1Buffer.toString('base64');
     const signature1Type = this.getMediaType(signature1Buffer);
@@ -135,11 +180,11 @@ export class CertificateService {
       (item) => item.signatureType === 'SIGNATURE2',
     );
     let signature2Buffer: Buffer;
-    if (storageType === 'supabase') {
+    try {
       const { buffer } = await this.fileUploadService.downloadFile(signature2.eSignPath);
       signature2Buffer = buffer;
-    } else {
-      signature2Buffer = await getFileBufferFromMinio(signature2.eSignPath);
+    } catch (err: any) {
+      throw new Error('Gagal mengambil signature2: ' + (err.message || err));
     }
     const signature2Base64 = signature2Buffer.toString('base64');
     const signature2Type = this.getMediaType(signature2Buffer);
@@ -150,6 +195,9 @@ export class CertificateService {
       new Date(participant.dateOfBirth),
     );
 
+    // Generate certificate number
+    const certificateNumber = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const backgroundImage = `${process.env.BACKEND_URL}/assets/images/background_sertifikat.png`;
     const templatePath = join(
       __dirname,
       '..',
@@ -158,6 +206,7 @@ export class CertificateService {
       'certificate.ejs',
     );
     const certificate = await ejs.renderFile(templatePath, {
+      backgroundImage: backgroundImage,
       photoType: photoType,
       photoBase64: photoBase64,
       name: participant.name,
@@ -165,7 +214,7 @@ export class CertificateService {
       nationality: participant.nationality,
       competencies: capability.trainingName,
       date: this.formatDate(new Date()),
-      certificateNumber: '12345',
+      certificateNumber: certificateNumber,
       duration: capability.totalDuration,
       coursePeriode: `${formattedStartDate} - ${formattedEndDate}`,
       nameSignature1: signature1.name,
@@ -183,19 +232,288 @@ export class CertificateService {
       practiceScore: createCertificateRequest.practiceScore,
     });
 
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
-    await page.setContent(certificate, { waitUntil: 'load' });
+    // Enhanced Puppeteer configuration with cross-platform support
+    const puppeteerOptions: any = {
+      headless: 'new', // Use new headless mode
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
+      ]
+    };
 
-    const certificateBuffer = await page.pdf({
-      format: 'A4',
-      landscape: true,
-      printBackground: true, // Pastikan background termasuk dalam PDF
+    // Try to find Chrome executable for different platforms
+    const possiblePaths = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser', 
+      '/usr/bin/chromium',
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+    ];
+
+    // Check if Chrome exists in system PATH or use bundled Chromium
+    for (const chromePath of possiblePaths) {
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(chromePath)) {
+          puppeteerOptions.executablePath = chromePath;
+          break;
+        }
+      } catch (error) {
+        // Continue checking other paths
+      }
+    }
+
+    let browser;
+    try {
+      this.logger.log('Launching Puppeteer with options:', puppeteerOptions);
+      browser = await puppeteer.launch(puppeteerOptions);
+    } catch (error) {
+      this.logger.error('Failed to launch Puppeteer:', error.message);
+      throw new HttpException(
+        `Gagal menjalankan PDF generator: ${error.message}. Pastikan Chrome ter-install di sistem.`,
+        500
+      );
+    }
+
+    let certificateBuffer: Buffer;
+    try {
+      const page = await browser.newPage();
+      
+      // Set viewport for consistent rendering
+      await page.setViewport({ width: 1200, height: 800 });
+      
+      // Set content with enhanced options
+      await page.setContent(certificate, { 
+        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+        timeout: 30000 // 30 second timeout
+      });
+
+      // Generate PDF with enhanced options
+      const pdfResult = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: {
+          top: '0mm',
+          right: '0mm', 
+          bottom: '0mm',
+          left: '0mm'
+        }
+      });
+      
+      // Convert Uint8Array to Buffer if necessary (Puppeteer returns Uint8Array)
+      certificateBuffer = Buffer.isBuffer(pdfResult) ? pdfResult : Buffer.from(pdfResult);
+      
+      this.logger.log('PDF generated successfully', {
+        originalType: pdfResult.constructor.name,
+        convertedType: certificateBuffer.constructor.name,
+        size: certificateBuffer.length
+      });
+
+      await browser.close();
+      
+    } catch (error) {
+      if (browser) {
+        await browser.close();
+      }
+      this.logger.error('Failed to generate PDF:', error.message);
+      throw new HttpException(
+        `Gagal generate PDF certificate: ${error.message}`,
+        500
+      );
+    }
+
+    // Validate PDF buffer before upload
+    if (!certificateBuffer || !Buffer.isBuffer(certificateBuffer)) {
+      this.logger.error('Invalid certificate buffer generated');
+      throw new HttpException(
+        'Gagal generate PDF certificate: Invalid buffer generated',
+        500
+      );
+    }
+    
+    if (certificateBuffer.length === 0) {
+      this.logger.error('Empty certificate buffer generated');
+      throw new HttpException(
+        'Gagal generate PDF certificate: Empty buffer generated',
+        500
+      );
+    }
+    
+    // Verify PDF signature (Puppeteer returns bytes, need proper conversion)
+    const pdfSignatureBytes = certificateBuffer.subarray(0, 5);
+    const pdfSignature = String.fromCharCode(...pdfSignatureBytes);
+    
+    this.logger.debug('PDF signature validation', {
+      signatureBytes: Array.from(pdfSignatureBytes),
+      signatureString: pdfSignature,
+      bufferStart: certificateBuffer.subarray(0, 20).toString('hex'),
+      isValidPDF: pdfSignature.startsWith('%PDF')
+    });
+    
+    if (!pdfSignature.startsWith('%PDF')) {
+      this.logger.error('Invalid PDF buffer generated', {
+        signature: pdfSignature,
+        signatureBytes: Array.from(pdfSignatureBytes),
+        bufferStart: certificateBuffer.subarray(0, 20).toString('hex')
+      });
+      throw new HttpException(
+        'Gagal generate PDF certificate: Invalid PDF format generated',
+        500
+      );
+    }
+    
+    // Upload PDF file with enhanced validation and cross-platform support
+    let certificatePath: string;
+    try {
+      this.logger.log(`Uploading certificate PDF file...`, {
+        bufferSize: certificateBuffer.length,
+        platform: process.platform,
+        pdfValid: pdfSignature.includes('%PDF')
+      });
+      
+      // Create proper Express.Multer.File object with Windows compatibility
+      const fileObj: Express.Multer.File = {
+        fieldname: 'certificate',
+        originalname: `certificate_${certificateNumber}.pdf`,
+        encoding: '7bit',
+        mimetype: 'application/pdf',
+        buffer: certificateBuffer,
+        size: certificateBuffer.length,
+        // Required fields for full compatibility
+        destination: '',
+        filename: `certificate_${certificateNumber}.pdf`,
+        path: '',
+        stream: undefined
+      };
+      
+      // Normalize path for cross-platform compatibility
+      const uploadPath = `certificates/certificate_${certificateNumber}.pdf`
+        .replace(/\\/g, '/')  // Convert Windows backslashes
+        .replace(/\/+/g, '/') // Remove duplicate slashes
+        .replace(/^\//, '');  // Remove leading slash
+      
+      // Perform upload with enhanced error context
+      certificatePath = await this.fileUploadService.uploadFile(fileObj, uploadPath);
+      
+      this.logger.log(`Certificate PDF file uploaded successfully`, {
+        path: certificatePath,
+        size: certificateBuffer.length,
+        platform: process.platform
+      });
+      
+    } catch (err: any) {
+      this.logger.error(`Certificate PDF upload failed:`, {
+        error: err.message,
+        stack: err.stack?.split('\n').slice(0, 5),
+        bufferSize: certificateBuffer?.length,
+        bufferValid: Buffer.isBuffer(certificateBuffer),
+        platform: process.platform,
+        storageType: process.env.STORAGE_TYPE,
+        nodeVersion: process.version
+      });
+      
+      // Enhanced error message for better debugging
+      let errorMessage = `Gagal upload certificate PDF file: ${err.message}`;
+      
+      if (err.message.includes('stream.Readable')) {
+        errorMessage += ' - Buffer format issue detected. Please check storage configuration.';
+      }
+      
+      if (err.message.includes('third argument')) {
+        errorMessage += ' - Storage provider compatibility issue. Try switching to MinIO for development.';
+      }
+      
+      throw new HttpException(errorMessage, 500);
+    }
+
+    // Simpan data sertifikat ke database
+    const activeSignature = eSign[0];
+    
+    await this.prismaService.certificate.create({
+      data: {
+        cotId: cotId,
+        participantId: participantId,
+        signatureId: activeSignature.id,
+        certificateNumber: certificateNumber,
+        attendance: createCertificateRequest.attendance,
+        theoryScore: createCertificateRequest.theoryScore,
+        practiceScore: createCertificateRequest.practiceScore,
+        certificatePath: certificatePath,
+      },
     });
 
-    await browser.close();
+    return 'Sertifikat berhasil dibuat';
+  }
 
-    return Buffer.from(certificateBuffer);
+  async getCertificate(certificateId: string): Promise<any> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      }
+    });
+
+    if (!certificate) {
+      throw new HttpException('Sertifikat tidak ditemukan', 404);
+    }
+
+    return certificate;
+  }
+
+  async streamFile(certificateId: string): Promise<Buffer> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      },
+    });
+
+    if (!certificate || !certificate.certificatePath) {
+      throw new HttpException('File Sertifikat tidak ditemukan', 404);
+    }
+
+    // Ambil file dari storage dinamis (satu jalur)
+    try {
+      const { buffer } = await this.fileUploadService.downloadFile(certificate.certificatePath);
+      return buffer;
+    } catch (err: any) {
+      if (err.status === 404) {
+        throw new HttpException('File Sertifikat tidak ditemukan', 404);
+      }
+      throw new HttpException('Gagal mengambil file Sertifikat: ' + (err.message || err), 500);
+    }
+  }
+
+  async deleteCertificate(certificateId: string): Promise<string> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      },
+    });
+
+    if (!certificate) {
+      throw new HttpException('Sertifikat tidak ditemukan', 404);
+    }
+
+    this.fileUploadService.deleteFile(certificate.certificatePath);
+
+    await this.prismaService.certificate.delete({
+      where: {
+        id: certificate.id,
+      },
+    });
+
+    
+
+    return 'Sertifikat berhadil dihapus';
   }
 
   private getMediaType(buffer: Buffer): string {

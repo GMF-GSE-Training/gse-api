@@ -44,6 +44,7 @@ export class CertificateService {
               select: {
                 name: true,
                 fotoPath: true,
+                qrCodePath: true,
                 placeOfBirth: true,
                 dateOfBirth: true,
                 nationality: true,
@@ -162,6 +163,17 @@ export class CertificateService {
     }
     const photoBase64 = photoBuffer.toString('base64');
     const photoType = this.getMediaType(photoBuffer);
+    
+    let qrCodeBuffer: Buffer;
+    try {
+      this.logger.debug('participant.qrCodePath: ' + participant.qrCodePath);
+      const { buffer } = await this.fileUploadService.downloadFile(participant.qrCodePath);
+      qrCodeBuffer = buffer;
+    } catch (err: any) {
+      throw new Error('Gagal mengambil QR Code peserta: ' + (err.message || err));
+    }
+    const qrCodeBase64 = qrCodeBuffer.toString('base64');
+    const qrCodeType = this.getMediaType(qrCodeBuffer);
 
     const signature1 = eSign.find(
       (item) => item.signatureType === 'SIGNATURE1',
@@ -209,6 +221,8 @@ export class CertificateService {
       backgroundImage: backgroundImage,
       photoType: photoType,
       photoBase64: photoBase64,
+      qrCodeType: qrCodeType,
+      qrCodeBase64: qrCodeBase64,
       name: participant.name,
       placeOrDateOfBirth: `${participant.placeOfBirth}/${formattedDateOfBirth}`,
       nationality: participant.nationality,

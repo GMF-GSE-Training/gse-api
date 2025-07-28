@@ -103,7 +103,8 @@ export class SortingHelper {
         sortOrder,
         strategy,
         searchActive: true,
-        fallbackReason: hasActiveSearch ? `Sorting '${sortBy}' on search results (${strategy} strategy)` : undefined
+        // Remove technical strategy messages - users don't need to know
+        fallbackReason: undefined
       };
     }
     

@@ -1,7 +1,7 @@
 import { HttpException, Injectable } from "@nestjs/common";
 import { PrismaService } from "src/common/service/prisma.service";
 import { ValidationService } from "src/common/service/validation.service";
-import { CotResponse, CreateCot, UpdateCot } from "src/model/cot.model";
+import { CotResponse, CreateCot, UpdateCot, DashboardStatsResponse, MonthlyStats } from "src/model/cot.model";
 import { CotValidation } from "./cot.validation";
 import { ActionAccessRights, ListRequest, Paging } from "src/model/web.model";
 import { CurrentUserRequest } from "src/model/auth.model";
@@ -469,6 +469,157 @@ export class CotService {
                     trainingName: cot.capabilityCots[0].capability.trainingName
                 }
                 : null // Jika tidak ada capability, set null
+        };
+    }
+
+    async getDashboardStats(year: number, user: CurrentUserRequest): Promise<DashboardStatsResponse> {
+        const userRole = user.role.name.toLowerCase();
+        
+        // Date range for the target year
+        const startOfYear = new Date(year, 0, 1);
+        const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+        
+        // Base where clause considering user role
+        const baseWhereClause = userRole === 'user' ? {
+            participantsCots: {
+                some: {
+                    participant: {
+                        id: user.participantId,
+                    },
+                },
+            },
+        } : userRole === 'lcu' ? {
+            participantsCots: {
+                some: {
+                    participant: {
+                        dinas: user.dinas,
+                    },
+                },
+            },
+        } : {};
+        
+        // Get all COTs for the year with status updates
+        const allCots = await this.prismaService.cOT.findMany({
+            where: {
+                ...baseWhereClause,
+                OR: [
+                    {
+                        startDate: {
+                            gte: startOfYear,
+                            lte: endOfYear,
+                        },
+                    },
+                    {
+                        endDate: {
+                            gte: startOfYear,
+                            lte: endOfYear,
+                        },
+                    },
+                ],
+            },
+            select: {
+                id: true,
+                startDate: true,
+                endDate: true,
+                status: true,
+            },
+        });
+        
+        // Update status for all COTs based on current date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const updatedCots = await Promise.all(
+            allCots.map(async (cot) => {
+                let newStatus = cot.status;
+                
+                if (cot.startDate > today) {
+                    newStatus = 'Akan datang';
+                } else if (cot.startDate <= today && cot.endDate > today) {
+                    newStatus = 'Sedang berjalan';
+                } else if (cot.endDate < today) {
+                    newStatus = 'Selesai';
+                }
+                
+                // Update status if changed
+                if (newStatus !== cot.status) {
+                    await this.prismaService.cOT.update({
+                        where: { id: cot.id },
+                        data: { status: newStatus },
+                    });
+                }
+                
+                return {
+                    ...cot,
+                    status: newStatus,
+                };
+            })
+        );
+        
+        // Initialize monthly stats
+        const monthlyStats: MonthlyStats[] = Array.from({ length: 12 }, (_, i) => ({
+            month: i + 1,
+            akanDatang: 0,
+            sedangBerjalan: 0,
+            selesai: 0,
+            total: 0,
+        }));
+        
+        // Process each COT and count by month
+        updatedCots.forEach((cot) => {
+            const startMonth = cot.startDate.getMonth(); // 0-11
+            const endMonth = cot.endDate.getMonth(); // 0-11
+            
+            // Count based on start month primarily
+            const targetMonth = startMonth;
+            
+            if (monthlyStats[targetMonth]) {
+                monthlyStats[targetMonth].total++;
+                
+                switch (cot.status) {
+                    case 'Akan datang':
+                        monthlyStats[targetMonth].akanDatang++;
+                        break;
+                    case 'Sedang berjalan':
+                        monthlyStats[targetMonth].sedangBerjalan++;
+                        break;
+                    case 'Selesai':
+                        monthlyStats[targetMonth].selesai++;
+                        break;
+                }
+            }
+        });
+        
+        // Calculate total stats
+        const totalStats = {
+            akanDatang: monthlyStats.reduce((sum, month) => sum + month.akanDatang, 0),
+            sedangBerjalan: monthlyStats.reduce((sum, month) => sum + month.sedangBerjalan, 0),
+            selesai: monthlyStats.reduce((sum, month) => sum + month.selesai, 0),
+            total: monthlyStats.reduce((sum, month) => sum + month.total, 0),
+        };
+        
+        // Get available years from database
+        const availableYearsQuery = await this.prismaService.cOT.findMany({
+            where: baseWhereClause,
+            select: {
+                startDate: true,
+            },
+            orderBy: {
+                startDate: 'asc',
+            },
+        });
+        
+        const availableYears = Array.from(
+            new Set(
+                availableYearsQuery.map((cot) => cot.startDate.getFullYear())
+            )
+        ).sort((a, b) => b - a); // Sort descending (newest first)
+        
+        return {
+            year,
+            monthlyStats,
+            totalStats,
+            availableYears,
         };
     }
 

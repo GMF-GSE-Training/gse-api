@@ -35,3 +35,23 @@ export interface CotResponse {
   status?: string;
   capability?: Object;
 }
+
+export interface MonthlyStats {
+  month: number;
+  akanDatang: number;
+  sedangBerjalan: number;
+  selesai: number;
+  total: number;
+}
+
+export interface DashboardStatsResponse {
+  year: number;
+  monthlyStats: MonthlyStats[];
+  totalStats: {
+    akanDatang: number;
+    sedangBerjalan: number;
+    selesai: number;
+    total: number;
+  };
+  availableYears: number[];
+}

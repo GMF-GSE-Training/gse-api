@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { CotResponse, CreateCot, UpdateCot } from "src/model/cot.model";
+import { CotResponse, CreateCot, UpdateCot, DashboardStatsResponse } from "src/model/cot.model";
 import { buildResponse, ListRequest, WebResponse } from "src/model/web.model";
 import { CotService } from "./cot.service";
 import { Roles } from "src/shared/decorator/role.decorator";
@@ -18,6 +18,19 @@ export class CotController {
     @UseGuards(AuthGuard, RoleGuard)
     async create(@Body() request: CreateCot): Promise<WebResponse<string>> {
         const result = await this.cotService.createCot(request);
+        return buildResponse(HttpStatus.OK, result);
+    }
+
+    @Get('/dashboard-stats')
+    @HttpCode(200)
+    @Roles('super admin', 'supervisor', 'lcu', 'user')
+    @UseGuards(AuthGuard, RoleGuard)
+    async getDashboardStats(
+        @User() user: CurrentUserRequest,
+        @Query('year', new ParseIntPipe({ optional: true, exceptionFactory: () => new HttpException('Year must be a valid number', 400) })) year?: number,
+    ): Promise<WebResponse<DashboardStatsResponse>> {
+        const targetYear = year || new Date().getFullYear();
+        const result = await this.cotService.getDashboardStats(targetYear, user);
         return buildResponse(HttpStatus.OK, result);
     }
 

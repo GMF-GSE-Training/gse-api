@@ -14,6 +14,8 @@ import { CoreHelper } from 'src/common/helpers/core.helper';
 import { RoleResponse } from 'src/model/role.model';
 import { Logger } from '@nestjs/common';
 import { naturalSort } from '../common/helpers/natural-sort';
+import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
+import { EnhancedSearchHelper, EnhancedSearchConfig } from '../common/helpers/enhanced-search.helper';
 
 @Injectable()
 export class UserService {
@@ -297,20 +299,34 @@ export class UserService {
     paging: Paging;
   }> {
     const userSelectFields = this.userSelectFields();
-    const whereCondition: any = {};
+    let whereCondition: any = {};
 
+    // Enhanced search implementation
     const searchQuery = request.searchQuery;
     if (searchQuery) {
-      whereCondition.OR = [
-        { idNumber: { contains: searchQuery, mode: 'insensitive' } },
-        { email: { contains: searchQuery, mode: 'insensitive' } },
-        { name: { contains: searchQuery, mode: 'insensitive' } },
-        { role: { name: { contains: searchQuery, mode: 'insensitive' } } },
-        { dinas: { contains: searchQuery, mode: 'insensitive' } },
-      ];
+      const searchConfig: EnhancedSearchConfig = {
+        textFields: ['idNumber', 'email', 'name', 'dinas'],
+        dateFields: [],
+      };
+
+      const searchClause = EnhancedSearchHelper.buildEnhancedSearchClause(searchQuery, searchConfig);
+      if (Object.keys(searchClause).length > 0) {
+        whereCondition = searchClause;
+      } else {
+        // Fallback to simple search
+        whereCondition = {
+          OR: [
+            { idNumber: { contains: searchQuery, mode: 'insensitive' } },
+            { email: { contains: searchQuery, mode: 'insensitive' } },
+            { name: { contains: searchQuery, mode: 'insensitive' } },
+            { dinas: { contains: searchQuery, mode: 'insensitive' } },
+            { role: { name: { contains: searchQuery, mode: 'insensitive' } } },
+          ],
+        };
+      }
     }
 
-    // Hitung total untuk pagination
+    // Count total for pagination
     const totalUsers = await this.prismaService.user.count({ where: whereCondition });
 
     // Pagination parameters
@@ -318,67 +334,73 @@ export class UserService {
     const size = request.size || 10;
     const totalPage = Math.ceil(totalUsers / size);
 
-    // Sorting universal
-    const allowedSortFields = ['idNumber', 'email', 'name', 'dinas', 'id', 'roleName'];
-    const naturalSortFields = ['idNumber', 'email', 'name', 'dinas'];
-    const relationFields = ['roleName']; // Special handling for relations
-    const dbSortFields = ['id'];
-    
-    let sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) ? request.sortBy : 'idNumber';
-    let sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+    // Sorting configuration using available API
+    const sortingConfig = SortingConfigBuilder
+      .create()
+      .allowFields(['idNumber', 'email', 'name', 'dinas', 'id', 'roleName'])
+      .naturalSort(['idNumber', 'email', 'name', 'dinas'])
+      .databaseSort(['id'])
+      .relationSort(['roleName'])
+      .defaultSort('idNumber')
+      .build();
+
+    const sortResult = SortingHelper.validateAndNormalizeSorting(
+      request.sortBy,
+      request.sortOrder,
+      sortingConfig,
+      searchQuery
+    );
+
     let users: any[];
 
-    if (relationFields.includes(sortBy)) {
-      // Special handling for relation fields
-      if (sortBy === 'roleName') {
-        users = await this.prismaService.user.findMany({
-          where: whereCondition,
-          select: {
-            ...userSelectFields,
-            role: { select: { name: true } },
-          },
-          orderBy: { role: { name: sortOrder } },
-          skip: (page - 1) * size,
-          take: size,
-        });
-      }
-    } else if (naturalSortFields.includes(sortBy)) {
-      // Natural sort global: ambil seluruh data, sort, lalu pagination manual
+    // Handle sorting based on strategy
+    if (sortResult.strategy === 'natural' || sortResult.strategy === 'fallback') {
+      // For natural sorting, get all data then sort and paginate
       const allUsers = await this.prismaService.user.findMany({
         where: whereCondition,
-        select: userSelectFields,
+        select: {
+          ...userSelectFields,
+          role: { select: { name: true } },
+        },
       });
-      allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
-      users = allUsers.slice((page - 1) * size, page * size);
-    } else if (dbSortFields.includes(sortBy)) {
-      // Database sorting
-      const orderBy: any = {};
-      orderBy[sortBy] = sortOrder;
+      
+      const sortedUsers = SortingHelper.sortArrayNaturally(allUsers, sortResult.sortBy, sortResult.sortOrder);
+      users = sortedUsers.slice((page - 1) * size, page * size);
+    } else if (sortResult.sortBy === 'roleName') {
+      // Handle role relation sorting
       users = await this.prismaService.user.findMany({
         where: whereCondition,
-        select: userSelectFields,
-        orderBy,
+        select: {
+          ...userSelectFields,
+          role: { select: { name: true } },
+        },
+        orderBy: { role: { name: sortResult.sortOrder } },
         skip: (page - 1) * size,
         take: size,
       });
     } else {
-      // Fallback: natural sort
-      const allUsers = await this.prismaService.user.findMany({
+      // Database sorting
+      const orderBy = SortingHelper.createPrismaOrderBy(sortResult.sortBy, sortResult.sortOrder);
+      users = await this.prismaService.user.findMany({
         where: whereCondition,
-        select: userSelectFields,
+        select: {
+          ...userSelectFields,
+          role: { select: { name: true } },
+        },
+        orderBy,
+        skip: (page - 1) * size,
+        take: size,
       });
-      allUsers.sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
-      users = allUsers.slice((page - 1) * size, page * size);
     }
 
-    // Dapatkan actions berdasarkan role user
+    // Get actions based on user role
     const userRole = user.role.name.toLowerCase();
     const actions = this.validateActions(userRole);
 
-    // Format data user
+    // Format user data
     const formattedUsers = users.map(({ nik, ...rest }) => {
-      // roleName untuk konsistensi FE
-      const roleName = users[0]?.role?.name || rest.role?.name || '';
+      // Add roleName for frontend consistency
+      const roleName = rest.role?.name || '';
       return { ...this.toUserResponse(rest), roleName };
     });
 

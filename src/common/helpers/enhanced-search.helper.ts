@@ -16,6 +16,14 @@ export interface EnhancedSearchConfig {
   dateFields: string[];
   // Fields numeric yang bisa dicari
   numericFields?: string[];
+  // Optional: Context untuk search yang lebih cerdas
+  searchContext?: {
+    // Data range yang ada di database untuk membuat search lebih spesifik
+    availableDateRange?: {
+      minYear: number;
+      maxYear: number;
+    };
+  };
 }
 
 export class EnhancedSearchHelper {
@@ -56,44 +64,52 @@ export class EnhancedSearchHelper {
     };
     
     for (const term of terms) {
-      // Check if term is a year (4 digits)
+      // Check if term is a year (4 digits) - but also treat as text search
       if (/^\d{4}$/.test(term)) {
         const year = parseInt(term);
         if (year >= 1900 && year <= 2100) {
           isDateSearch = true;
           dateComponents.year = year;
-          continue;
+          // Don't continue - also add as text search term
         }
       }
 
-      // Check if term is a day (1-2 digits)
+      // Check if term is a day (1-2 digits) - Enhanced logic for standalone dates
       if (/^\d{1,2}$/.test(term)) {
         const day = parseInt(term);
         if (day >= 1 && day <= 31) {
-          isDateSearch = true;
-          dateComponents.day = day;
-          continue;
+          // Check if there's a month name in the query to make it more likely a date
+          const hasMonthInQuery = terms.some(t => this.INDONESIAN_MONTHS[t]);
+          if (hasMonthInQuery) {
+            dateComponents.day = day;
+            isDateSearch = true;
+          } else if (terms.length === 1) {
+            // If it's a single term and it's a valid day, treat as date search
+            dateComponents.day = day;
+            isDateSearch = true;
+          }
+          // Always continue to add as search term too for comprehensive search
         }
       }
 
-      // Check if term is an Indonesian month
+      // Check if term is an Indonesian month - but also treat as text search
       if (this.INDONESIAN_MONTHS[term]) {
         isDateSearch = true;
         dateComponents.month = this.INDONESIAN_MONTHS[term];
-        continue;
+        // Don't continue - also add as text search term
       }
 
-      // Check date patterns like "28-07", "28/07", "2025-07-28"
+      // Check date patterns like "28-07", "28/07", "2025-07-28" - but also treat as text search
       if (this.isDatePattern(term)) {
         isDateSearch = true;
         const parsed = this.parseDatePattern(term);
         if (parsed) {
           dateQueries.push(parsed);
-          continue;
+          // Don't continue - also add as text search term
         }
       }
 
-      // If not a date component, treat as regular search term
+      // Always add as search term for comprehensive search
       searchTerms.push(term);
     }
 
@@ -143,6 +159,17 @@ export class EnhancedSearchHelper {
         }
       }
     }
+
+    // Debug logging
+    console.log('🔍 Enhanced Search Parse Debug:', {
+      originalQuery: searchQuery,
+      parsedResult: {
+        isDateSearch,
+        searchTerms,
+        dateQueries,
+        dateComponents
+      }
+    });
 
     return {
       isDateSearch,
@@ -204,39 +231,107 @@ export class EnhancedSearchHelper {
   }
 
   /**
-   * Build enhanced search where clause
+   * Build enhanced search where clause - 2025 Best Practice Implementation
    */
   static buildEnhancedSearchClause(
     searchQuery: string, 
     config: EnhancedSearchConfig
   ): any {
-    const parsed = this.parseSearchQuery(searchQuery);
+    if (!searchQuery || searchQuery.trim().length === 0) {
+      return {};
+    }
+
+    const trimmedQuery = searchQuery.trim();
+    console.log('🔍 Building search for query:', trimmedQuery);
+    
+    // Strategy 1: Progressive Enhancement Search
+    // Start with simple, then add complexity
     const whereClauses: any[] = [];
-
-    // Handle regular text search
-    if (parsed.searchTerms.length > 0) {
-      const textQuery = parsed.searchTerms.join(' ');
-      const textClauses = config.textFields.map(field => ({
-        [field]: { contains: textQuery, mode: 'insensitive' }
-      }));
-      whereClauses.push(...textClauses);
-    }
-
-    // Handle date search
-    if (parsed.isDateSearch && parsed.dateQueries.length > 0) {
-      const dateClauses = this.buildDateSearchClauses(parsed.dateQueries, config.dateFields);
+    
+    // 1. Check for clear date patterns first (most specific)
+    const datePattern = this.detectDatePattern(trimmedQuery);
+    if (datePattern) {
+      console.log('🔍 Date pattern detected:', datePattern);
+      const dateClauses = this.buildSimpleDateClauses(datePattern, config.dateFields);
       whereClauses.push(...dateClauses);
+      console.log('🔍 Date clauses added:', dateClauses.length);
+      
+      // For date patterns, also search as text in case it's part of descriptions
+      for (const field of config.textFields) {
+        if (field === 'ratingCode' || field === 'trainingName') {
+          whereClauses.push({
+            capabilityCots: {
+              some: {
+                capability: {
+                  [field]: { contains: trimmedQuery, mode: 'insensitive' }
+                }
+              }
+            }
+          });
+        } else {
+          whereClauses.push({
+            [field]: { contains: trimmedQuery, mode: 'insensitive' }
+          });
+        }
+      }
+    } else {
+      // 2. Regular text search for non-date patterns
+      const words = trimmedQuery.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+      console.log('🔍 Search words:', words);
+      
+      // Individual word search (most permissive)
+      for (const word of words) {
+        for (const field of config.textFields) {
+          if (field === 'ratingCode' || field === 'trainingName') {
+            whereClauses.push({
+              capabilityCots: {
+                some: {
+                  capability: {
+                    [field]: { contains: word, mode: 'insensitive' }
+                  }
+                }
+              }
+            });
+          } else {
+            whereClauses.push({
+              [field]: { contains: word, mode: 'insensitive' }
+            });
+          }
+        }
+      }
+      
+      // Exact phrase search for multi-word queries (more specific)
+      if (words.length > 1) {
+        for (const field of config.textFields) {
+          if (field === 'ratingCode' || field === 'trainingName') {
+            whereClauses.push({
+              capabilityCots: {
+                some: {
+                  capability: {
+                    [field]: { contains: trimmedQuery, mode: 'insensitive' }
+                  }
+                }
+              }
+            });
+          } else {
+            whereClauses.push({
+              [field]: { contains: trimmedQuery, mode: 'insensitive' }
+            });
+          }
+        }
+      }
     }
-
-    // If no specific clauses, fall back to general text search across all fields
-    if (whereClauses.length === 0) {
-      const allFields = [...config.textFields, ...(config.numericFields || [])];
-      whereClauses.push(...allFields.map(field => ({
-        [field]: { contains: searchQuery, mode: 'insensitive' }
-      })));
+    
+    console.log('🔍 Total search clauses:', whereClauses.length);
+    
+    // Return OR clause to find matches in any field or condition
+    if (whereClauses.length > 0) {
+      const finalClause = { OR: whereClauses };
+      console.log('🔍 Final search clause structure:', JSON.stringify(finalClause, null, 2));
+      return finalClause;
     }
-
-    return whereClauses.length > 0 ? { OR: whereClauses } : {};
+    
+    return {};
   }
 
   /**
@@ -257,35 +352,24 @@ export class EnhancedSearchHelper {
             });
             break;
 
-          case 'month':
-            // For month search, we need to check across all possible years
-            // This is more complex but provides better UX
+          case 'month': {
+            // Simplified month search - current year only
             const currentYear = new Date().getFullYear();
-            for (let year = currentYear - 5; year <= currentYear + 5; year++) {
-              clauses.push({
-                [field]: {
-                  gte: new Date(year, dateQuery.month - 1, 1),
-                  lt: new Date(year, dateQuery.month, 1)
-                }
-              });
-            }
-            break;
-
-          case 'day':
-            // For day search, check across recent months
-            const today = new Date();
-            for (let monthOffset = -6; monthOffset <= 6; monthOffset++) {
-              const checkDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, dateQuery.day);
-              if (checkDate.getDate() === dateQuery.day) { // Valid date
-                clauses.push({
-                  [field]: {
-                    gte: new Date(checkDate.getFullYear(), checkDate.getMonth(), dateQuery.day),
-                    lt: new Date(checkDate.getFullYear(), checkDate.getMonth(), dateQuery.day + 1)
-                  }
-                });
+            clauses.push({
+              [field]: {
+                gte: new Date(currentYear, dateQuery.month - 1, 1),
+                lt: new Date(currentYear, dateQuery.month, 1)
               }
-            }
+            });
             break;
+          }
+
+          case 'day': {
+            // Very limited day search - only search if it's a clear date context
+            // Skip individual day search to avoid too broad results
+            console.log('⚠️ Skipping individual day search for better precision');
+            break;
+          }
 
           case 'full-date':
             if (dateQuery.year && dateQuery.month && dateQuery.day) {
@@ -299,7 +383,7 @@ export class EnhancedSearchHelper {
             }
             break;
 
-          case 'partial-date':
+          case 'partial-date': {
             if (dateQuery.month && dateQuery.day) {
               // Search across multiple years for this month/day combination
               const currentYear = new Date().getFullYear();
@@ -316,6 +400,7 @@ export class EnhancedSearchHelper {
               }
             }
             break;
+          }
 
           case 'combined-full-date':
             // Exact date match: 22 juli 2025
@@ -330,12 +415,12 @@ export class EnhancedSearchHelper {
             }
             break;
 
-          case 'combined-day-month':
-            // Specific day and month across multiple years: 22 juli
+          case 'combined-day-month': {
+            // ✅ More precise day-month search: 22 juli
             if (dateQuery.month && dateQuery.day) {
               const currentYear = new Date().getFullYear();
-              // Search across reasonable year range for this specific day/month
-              for (let year = currentYear - 3; year <= currentYear + 3; year++) {
+              // Search only current year and next year for better precision
+              for (let year = currentYear; year <= currentYear + 1; year++) {
                 const targetDate = new Date(year, dateQuery.month - 1, dateQuery.day);
                 if (targetDate.getMonth() === dateQuery.month - 1 && targetDate.getDate() === dateQuery.day) {
                   clauses.push({
@@ -348,6 +433,7 @@ export class EnhancedSearchHelper {
               }
             }
             break;
+          }
 
           case 'combined-month-year':
             // Specific month and year: juli 2025
@@ -364,6 +450,124 @@ export class EnhancedSearchHelper {
       }
     }
 
+    return clauses;
+  }
+
+  /**
+   * Detect simple date patterns - 2025 Best Practice
+   */
+  private static detectDatePattern(query: string): any {
+    const trimmedQuery = query.toLowerCase().trim();
+    
+    // Pattern 1: "13 april" or "22 juli"
+    const dayMonthPattern = /^(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|agu|sep|okt|nov|des)$/;
+    const dayMonthMatch = trimmedQuery.match(dayMonthPattern);
+    if (dayMonthMatch) {
+      const day = parseInt(dayMonthMatch[1]);
+      const monthName = dayMonthMatch[2];
+      const month = this.INDONESIAN_MONTHS[monthName];
+      if (day >= 1 && day <= 31 && month) {
+        return {
+          type: 'day-month',
+          day,
+          month,
+          query: `${day} ${monthName}`
+        };
+      }
+    }
+    
+    // Pattern 2: "april 2025" or "juli 2024"
+    const monthYearPattern = /^(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|agu|sep|okt|nov|des)\s+(\d{4})$/;
+    const monthYearMatch = trimmedQuery.match(monthYearPattern);
+    if (monthYearMatch) {
+      const monthName = monthYearMatch[1];
+      const year = parseInt(monthYearMatch[2]);
+      const month = this.INDONESIAN_MONTHS[monthName];
+      if (month && year >= 1900 && year <= 2100) {
+        return {
+          type: 'month-year',
+          month,
+          year,
+          query: `${monthName} ${year}`
+        };
+      }
+    }
+    
+    // Pattern 3: "22 juli 2025"
+    const fullDatePattern = /^(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|agu|sep|okt|nov|des)\s+(\d{4})$/;
+    const fullDateMatch = trimmedQuery.match(fullDatePattern);
+    if (fullDateMatch) {
+      const day = parseInt(fullDateMatch[1]);
+      const monthName = fullDateMatch[2];
+      const year = parseInt(fullDateMatch[3]);
+      const month = this.INDONESIAN_MONTHS[monthName];
+      if (day >= 1 && day <= 31 && month && year >= 1900 && year <= 2100) {
+        return {
+          type: 'full-date',
+          day,
+          month,
+          year,
+          query: `${day} ${monthName} ${year}`
+        };
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Build simple date clauses - 2025 Best Practice
+   */
+  private static buildSimpleDateClauses(datePattern: any, dateFields: string[]): any[] {
+    const clauses: any[] = [];
+    const currentYear = new Date().getFullYear();
+    
+    for (const field of dateFields) {
+      switch (datePattern.type) {
+        case 'day-month': {
+          // Search in current year and next year
+          for (let year = currentYear; year <= currentYear + 1; year++) {
+            const startDate = new Date(year, datePattern.month - 1, datePattern.day);
+            const endDate = new Date(year, datePattern.month - 1, datePattern.day + 1);
+            
+            if (startDate.getMonth() === datePattern.month - 1 && startDate.getDate() === datePattern.day) {
+              clauses.push({
+                [field]: {
+                  gte: startDate,
+                  lt: endDate
+                }
+              });
+            }
+          }
+          break;
+        }
+        
+        case 'month-year': {
+          const startDate = new Date(datePattern.year, datePattern.month - 1, 1);
+          const endDate = new Date(datePattern.year, datePattern.month, 1);
+          clauses.push({
+            [field]: {
+              gte: startDate,
+              lt: endDate
+            }
+          });
+          break;
+        }
+        
+        case 'full-date': {
+          const startDate = new Date(datePattern.year, datePattern.month - 1, datePattern.day);
+          const endDate = new Date(datePattern.year, datePattern.month - 1, datePattern.day + 1);
+          clauses.push({
+            [field]: {
+              gte: startDate,
+              lt: endDate
+            }
+          });
+          break;
+        }
+      }
+    }
+    
     return clauses;
   }
 

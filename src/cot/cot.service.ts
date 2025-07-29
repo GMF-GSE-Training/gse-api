@@ -229,98 +229,249 @@ export class CotService {
         const userRole = user.role.name.toLowerCase();
         const dateFilter: any = {};
     
+        // ✅ Fixed date filter logic - use OR for date range to be more inclusive
         if (request.startDate && request.endDate) {
-            // Range
-            dateFilter.AND = [
+            // Range: COTs that overlap with the specified range
+            dateFilter.OR = [
                 {
-                    startDate: {
-                        gte: request.startDate,
-                    },
+                    // COTs that start within the range
+                    AND: [
+                        { startDate: { gte: request.startDate } },
+                        { startDate: { lte: request.endDate } }
+                    ]
                 },
                 {
-                    endDate: {
-                        lte: request.endDate,
-                    },
+                    // COTs that end within the range
+                    AND: [
+                        { endDate: { gte: request.startDate } },
+                        { endDate: { lte: request.endDate } }
+                    ]
                 },
+                {
+                    // COTs that span across the entire range
+                    AND: [
+                        { startDate: { lte: request.startDate } },
+                        { endDate: { gte: request.endDate } }
+                    ]
+                }
             ];
         } else if (request.startDate) {
-            dateFilter.startDate = {
-                equals: request.startDate
-            };
+            dateFilter.OR = [
+                { startDate: { equals: request.startDate } },
+                { endDate: { equals: request.startDate } }
+            ];
         } else if (request.endDate) {
-            dateFilter.endDate = {
-                equals: request.endDate
-            };
+            dateFilter.OR = [
+                { startDate: { equals: request.endDate } },
+                { endDate: { equals: request.endDate } }
+            ];
         }
     
-        // ✅ Enhanced search with date support
+        // ✅ Simplified and working search logic
         let searchClause: any = {};
         if(request.searchQuery) {
-            const searchConfig: EnhancedSearchConfig = {
-                textFields: ['ratingCode', 'trainingName', 'trainingLocation', 'status'],
-                dateFields: ['startDate', 'endDate'],
-                numericFields: []
-            };
+            const searchQuery = request.searchQuery.trim();
+            console.log('🔍 Search Query:', searchQuery);
             
-            // Build enhanced search clause that includes date search
-            const enhancedSearch = EnhancedSearchHelper.buildEnhancedSearchClause(
-                request.searchQuery, 
-                searchConfig
-            );
-            
-            // For capability fields, we still need to nest them properly
-            const capabilityFields = ['ratingCode', 'trainingName'];
-            const cotFields = ['trainingLocation', 'status'];
-            const dateFields = ['startDate', 'endDate'];
-            
+            // Build search clauses for different fields
             const searchClauses: any[] = [];
             
-            if (enhancedSearch.OR) {
-                for (const clause of enhancedSearch.OR) {
-                    const fieldName = Object.keys(clause)[0];
+            // 1. Search in trainingLocation (direct field)
+            searchClauses.push({
+                trainingLocation: {
+                    contains: searchQuery,
+                    mode: 'insensitive'
+                }
+            });
+            
+            // 2. Search in status (direct field)
+            searchClauses.push({
+                status: {
+                    contains: searchQuery,
+                    mode: 'insensitive'
+                }
+            });
+            
+            // 3. Search in capability ratingCode (nested field)
+            searchClauses.push({
+                capabilityCots: {
+                    some: {
+                        capability: {
+                            ratingCode: {
+                                contains: searchQuery,
+                                mode: 'insensitive'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // 4. Search in capability trainingName (nested field)
+            searchClauses.push({
+                capabilityCots: {
+                    some: {
+                        capability: {
+                            trainingName: {
+                                contains: searchQuery,
+                                mode: 'insensitive'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // 5. Check for date patterns (enhanced)
+            const datePattern = EnhancedSearchHelper.parseSearchQuery(searchQuery);
+            if (datePattern.isDateSearch && datePattern.dateQueries.length > 0) {
+                console.log('🔍 Date search detected:', datePattern.dateQueries);
+                
+                // Add date search clauses
+                for (const dateQuery of datePattern.dateQueries) {
+                    const currentYear = new Date().getFullYear();
                     
-                    if (capabilityFields.includes(fieldName)) {
-                        // Nest capability fields properly
+                    if (dateQuery.type === 'combined-day-month') {
+                        // Search for specific day and month in current year
+                        const targetDate = new Date(currentYear, dateQuery.month - 1, dateQuery.day);
+                        const nextDay = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
+                        
                         searchClauses.push({
-                            capabilityCots: {
-                                some: {
-                                    capability: clause
+                            OR: [
+                                {
+                                    startDate: {
+                                        gte: targetDate,
+                                        lt: nextDay
+                                    }
+                                },
+                                {
+                                    endDate: {
+                                        gte: targetDate,
+                                        lt: nextDay
+                                    }
+                                }
+                            ]
+                        });
+                    } else if (dateQuery.type === 'year') {
+                        // Search for specific year
+                        const startOfYear = new Date(dateQuery.year, 0, 1);
+                        const endOfYear = new Date(dateQuery.year + 1, 0, 1);
+                        
+                        searchClauses.push({
+                            OR: [
+                                {
+                                    startDate: {
+                                        gte: startOfYear,
+                                        lt: endOfYear
+                                    }
+                                },
+                                {
+                                    endDate: {
+                                        gte: startOfYear,
+                                        lt: endOfYear
+                                    }
+                                }
+                            ]
+                        });
+                    } else if (dateQuery.type === 'month') {
+                        // Search for specific month in current year and next year
+                        for (let year = currentYear; year <= currentYear + 1; year++) {
+                            const startOfMonth = new Date(year, dateQuery.month - 1, 1);
+                            const endOfMonth = new Date(year, dateQuery.month, 1);
+                            
+                            searchClauses.push({
+                                OR: [
+                                    {
+                                        startDate: {
+                                            gte: startOfMonth,
+                                            lt: endOfMonth
+                                        }
+                                    },
+                                    {
+                                        endDate: {
+                                            gte: startOfMonth,
+                                            lt: endOfMonth
+                                        }
+                                    }
+                                ]
+                            });
+                        }
+                    } else if (dateQuery.type === 'day') {
+                        // Enhanced day search - search for specific day in both startDate and endDate
+                        const currentYear = new Date().getFullYear();
+                        
+                        // Search in all months of current year and next 2 years for comprehensive coverage
+                        for (let year = currentYear; year <= currentYear + 2; year++) {
+                            for (let month = 0; month < 12; month++) {
+                                // Check if the day exists in this month
+                                const targetDate = new Date(year, month, dateQuery.day);
+                                if (targetDate.getDate() === dateQuery.day && targetDate.getMonth() === month) {
+                                    const nextDay = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
+                                    
+                                    searchClauses.push({
+                                        OR: [
+                                            {
+                                                startDate: {
+                                                    gte: targetDate,
+                                                    lt: nextDay
+                                                }
+                                            },
+                                            {
+                                                endDate: {
+                                                    gte: targetDate,
+                                                    lt: nextDay
+                                                }
+                                            }
+                                        ]
+                                    });
                                 }
                             }
-                        });
-                    } else if (cotFields.includes(fieldName) || dateFields.includes(fieldName)) {
-                        // Direct COT fields
-                        searchClauses.push(clause);
+                        }
                     }
                 }
             }
             
+            // Combine all search clauses with OR
             if (searchClauses.length > 0) {
                 searchClause = { OR: searchClauses };
             }
             
-            // Log search info for debugging
-            console.log('🔍 Enhanced Search Debug:', {
-                originalQuery: request.searchQuery,
-                searchInfo: EnhancedSearchHelper.getSearchInfo(request.searchQuery),
-                generatedClauses: searchClauses.length
-            });
+            console.log('🔍 Generated Search Clause:', JSON.stringify(searchClause, null, 2));
         }
     
-        const whereCondition = userRole === 'user' ? {
-            participantsCots: {
+        // ✅ Build whereCondition properly - handle multiple OR clauses
+        let whereCondition: any = {};
+        const conditions: any[] = [];
+        
+        // Base condition for user role
+        if (userRole === 'user') {
+            whereCondition.participantsCots = {
                 some: {
                     participant: {
                         id: user.participantId,
                     },
-                    ...dateFilter,
                 },
-            },
-            ...searchClause,
-        } : {
-            ...dateFilter,
-            ...searchClause,
-        };
+            };
+        }
+        
+        // Combine date filter and search clause intelligently
+        const hasDateFilter = Object.keys(dateFilter).length > 0;
+        const hasSearchClause = Object.keys(searchClause).length > 0;
+        
+        if (hasDateFilter && hasSearchClause) {
+            // Both date filter and search exist - combine with AND logic
+            whereCondition.AND = [
+                dateFilter,
+                searchClause
+            ];
+        } else if (hasDateFilter) {
+            // Only date filter
+            whereCondition = { ...whereCondition, ...dateFilter };
+        } else if (hasSearchClause) {
+            // Only search clause
+            whereCondition = { ...whereCondition, ...searchClause };
+        }
+        
+        // ✅ Debug logging untuk whereCondition
+        console.log('🔍 Final Where Condition:', JSON.stringify(whereCondition, null, 2));
 
         // Hitung total data untuk pagination
         const totalCot = await this.prismaService.cOT.count({
@@ -476,7 +627,9 @@ export class CotService {
             console.log('🔍 Backend OrderBy Debug:', {
                 sortBy,
                 sortOrder,
-                orderBy,
+orderBy,
+              skip: (page - 1) * size,
+              take: size,
                 isDatabaseSort: !['trainingName', 'ratingCode', 'numberOfParticipants'].includes(sortBy)
             });
             

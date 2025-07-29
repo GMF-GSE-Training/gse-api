@@ -19,6 +19,8 @@ import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import * as archiver from 'archiver';
 import { naturalSort } from '../common/helpers/natural-sort';
+import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
+import { EnhancedSearchHelper, EnhancedSearchConfig } from '../common/helpers/enhanced-search.helper';
 
 @Injectable()
 export class ParticipantService {
@@ -670,26 +672,71 @@ export class ParticipantService {
             };
         }
         
+        // ✅ Enhanced search logic - consistent with COT and Capability implementation
+        let searchClause: any = {};
         if (request.searchQuery) {
-            const searchQuery = request.searchQuery;
+            const searchQuery = request.searchQuery.trim();
+            console.log('🔍 Participant Search Query:', searchQuery);
+            
+            // Build search clauses for different fields based on user role
+            const searchClauses: any[] = [];
+            
+            // Common search fields for all roles
+            searchClauses.push(
+                { idNumber: { contains: searchQuery, mode: 'insensitive' } },
+                { name: { contains: searchQuery, mode: 'insensitive' } },
+                { email: { contains: searchQuery, mode: 'insensitive' } },
+                { bidang: { contains: searchQuery, mode: 'insensitive' } }
+            );
+                
+            // Additional search fields for super admin and supervisor
             if (userRole === 'super admin' || userRole === 'supervisor') {
-                whereClause.OR = [
-                    { idNumber: { contains: searchQuery, mode: 'insensitive' } },
-                    { name: { contains: searchQuery, mode: 'insensitive' } },
-                    { email: { contains: searchQuery, mode: 'insensitive' } },
+                searchClauses.push(
                     { dinas: { contains: searchQuery, mode: 'insensitive' } },
-                    { bidang: { contains: searchQuery, mode: 'insensitive' } },
                     { company: { contains: searchQuery, mode: 'insensitive' } },
-                ];
-            } else {
-                whereClause.OR = [
-                    { idNumber: { contains: searchQuery, mode: 'insensitive' } },
-                    { name: { contains: searchQuery, mode: 'insensitive' } },
-                    { email: { contains: searchQuery, mode: 'insensitive' } },
-                    { bidang: { contains: searchQuery, mode: 'insensitive' } },
-                ];
+                    { nik: { contains: searchQuery, mode: 'insensitive' } },
+                    { phoneNumber: { contains: searchQuery, mode: 'insensitive' } },
+                    { nationality: { contains: searchQuery, mode: 'insensitive' } },
+                    { placeOfBirth: { contains: searchQuery, mode: 'insensitive' } }
+                );
             }
+            
+            // Combine all search clauses with OR
+            if (searchClauses.length > 0) {
+                searchClause = { OR: searchClauses };
+            }
+            
+            console.log('🔍 Generated Participant Search Clause:', JSON.stringify(searchClause, null, 2));
         }
+        
+        // ✅ Build whereCondition properly - handle role-based filtering and search
+        let finalWhereClause: any = {};
+        const conditions: any[] = [];
+        
+        // Base condition for LCU role
+        if (userRole === 'lcu') {
+            conditions.push({
+                dinas: {
+                    equals: user.dinas,
+                    mode: "insensitive",
+                }
+            });
+        }
+        
+        // Add search condition if exists
+        if (Object.keys(searchClause).length > 0) {
+            conditions.push(searchClause);
+        }
+        
+        // Combine conditions with AND logic
+        if (conditions.length > 1) {
+            finalWhereClause.AND = conditions;
+        } else if (conditions.length === 1) {
+            finalWhereClause = conditions[0];
+        }
+        
+        // Use finalWhereClause instead of whereClause
+        whereClause = finalWhereClause;
     
         // Hitung total untuk pagination
         const totalUsers = await this.prismaService.participant.count({

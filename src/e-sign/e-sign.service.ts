@@ -15,6 +15,7 @@ import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import { naturalSort } from '../common/helpers/natural-sort';
 import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
+import { EnhancedSearchHelper, EnhancedSearchConfig } from '../common/helpers/enhanced-search.helper';
 
 @Injectable()
 export class ESignService {
@@ -258,20 +259,35 @@ export class ESignService {
     actions: ActionAccessRights;
     paging: Paging;
   }> {
-    const whereClause: any = {};
-    if (request.searchQuery) {
-      const searchQuery = request.searchQuery;
-      whereClause.OR = [
-        { idNumber: { contains: searchQuery, mode: 'insensitive' } },
-        { role: { contains: searchQuery, mode: 'insensitive' } },
-        { name: { contains: searchQuery, mode: 'insensitive' } },
-      ];
-      console.log(searchQuery);
+    let whereCondition: any = {};
+
+    // Enhanced search implementation
+    const searchQuery = request.searchQuery;
+    if (searchQuery) {
+      const searchConfig: EnhancedSearchConfig = {
+        textFields: ['idNumber', 'role', 'name', 'signatureType'],
+        dateFields: [],
+      };
+
+      const searchClause = EnhancedSearchHelper.buildEnhancedSearchClause(searchQuery, searchConfig);
+      if (Object.keys(searchClause).length > 0) {
+        whereCondition = searchClause;
+      } else {
+        // Fallback to simple search
+        whereCondition = {
+          OR: [
+            { idNumber: { contains: searchQuery, mode: 'insensitive' } },
+            { role: { contains: searchQuery, mode: 'insensitive' } },
+            { name: { contains: searchQuery, mode: 'insensitive' } },
+            { signatureType: { contains: searchQuery, mode: 'insensitive' } },
+          ],
+        };
+      }
     }
 
-    // Hitung total untuk pagination
+    // Count total for pagination
     const totalESign = await this.prismaService.signature.count({
-      where: whereClause,
+      where: whereCondition,
     });
 
     // Pagination parameters
@@ -279,25 +295,22 @@ export class ESignService {
     const size = request.size || 10;
     const totalPage = Math.ceil(totalESign / size);
 
-    // Configurasi sorting yang sesuai dengan kolom yang ada di tabel signatures
+    // Sorting configuration using available API
     const sortingConfig = SortingConfigBuilder
       .create()
       .allowFields(['idNumber', 'role', 'name', 'signatureType', 'status', 'id'])
-      .naturalSort(['idNumber', 'role', 'name']) // String fields for natural sorting
-      .databaseSort(['signatureType', 'status', 'id']) // Fields that can be sorted in DB
+      .naturalSort(['idNumber', 'role', 'name'])
+      .databaseSort(['signatureType', 'status', 'id'])
       .defaultSort('idNumber')
       .build();
-    
-    // Validasi dan normalisasi sorting parameters
-    const { sortBy, sortOrder, strategy } = SortingHelper.validateAndNormalizeSorting(
+
+    const sortResult = SortingHelper.validateAndNormalizeSorting(
       request.sortBy,
       request.sortOrder,
-      sortingConfig
+      sortingConfig,
+      searchQuery
     );
-    
-    // Optimasi: Strategi berbeda berdasarkan field type
-    let eSign: any[];
-    
+
     const selectFields = {
       id: true,
       idNumber: true,
@@ -306,33 +319,29 @@ export class ESignService {
       signatureType: true,
       status: true,
     };
-    
-    if (strategy === 'natural' || strategy === 'fallback') {
-      // Natural sort global: ambil seluruh data, sort, lalu pagination manual
+
+    let eSign: any[];
+
+    // Handle sorting based on strategy
+    if (sortResult.strategy === 'natural' || sortResult.strategy === 'fallback') {
+      // For natural sorting, get all data then sort and paginate
       const allESign = await this.prismaService.signature.findMany({
-        where: whereClause,
+        where: whereCondition,
         select: selectFields,
       });
-      eSign = SortingHelper.sortArrayNaturally(allESign, sortBy, sortOrder)
-        .slice((page - 1) * size, page * size);
-    } else if (strategy === 'database') {
+      
+      const sortedESign = SortingHelper.sortArrayNaturally(allESign, sortResult.sortBy, sortResult.sortOrder);
+      eSign = sortedESign.slice((page - 1) * size, page * size);
+    } else {
       // Database sorting
-      const orderBy = SortingHelper.createPrismaOrderBy(sortBy, sortOrder);
+      const orderBy = SortingHelper.createPrismaOrderBy(sortResult.sortBy, sortResult.sortOrder);
       eSign = await this.prismaService.signature.findMany({
-        where: whereClause,
+        where: whereCondition,
         select: selectFields,
         orderBy,
         skip: (page - 1) * size,
         take: size,
       });
-    } else {
-      // Fallback: natural sort
-      const allESign = await this.prismaService.signature.findMany({
-        where: whereClause,
-        select: selectFields,
-      });
-      eSign = SortingHelper.sortArrayNaturally(allESign, sortBy, sortOrder)
-        .slice((page - 1) * size, page * size);
     }
 
     const mappedESign = eSign.map((item) => ({

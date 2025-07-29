@@ -11,6 +11,8 @@ import { ActionAccessRights, ListRequest, Paging } from 'src/model/web.model';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { naturalSort } from '../common/helpers/natural-sort';
+import { SortingHelper, SortingConfigBuilder } from '../common/helpers/sorting.helper';
+import { EnhancedSearchHelper, EnhancedSearchConfig } from '../common/helpers/enhanced-search.helper';
 
 @Injectable()
 export class CapabilityService {
@@ -205,16 +207,51 @@ export class CapabilityService {
     data: CapabilityResponse[];
     actions: ActionAccessRights;
     paging: Paging;
+    info?: string;
   }> {
-    const whereClause: any = {};
+    // ✅ Enhanced search logic - consistent with COT implementation
+    let searchClause: any = {};
     if (request.searchQuery) {
-      const searchQuery = request.searchQuery;
-      whereClause.OR = [
-        { ratingCode: { contains: searchQuery, mode: 'insensitive' } },
-        { trainingCode: { contains: searchQuery, mode: 'insensitive' } },
-        { trainingName: { contains: searchQuery, mode: 'insensitive' } },
-      ];
+      const searchQuery = request.searchQuery.trim();
+      console.log('🔍 Capability Search Query:', searchQuery);
+      
+      // Build search clauses for different fields
+      const searchClauses: any[] = [];
+      
+      // 1. Search in ratingCode (direct field)
+      searchClauses.push({
+        ratingCode: {
+          contains: searchQuery,
+          mode: 'insensitive'
+        }
+      });
+      
+      // 2. Search in trainingCode (direct field)
+      searchClauses.push({
+        trainingCode: {
+          contains: searchQuery,
+          mode: 'insensitive'
+        }
+      });
+      
+      // 3. Search in trainingName (direct field)
+      searchClauses.push({
+        trainingName: {
+          contains: searchQuery,
+          mode: 'insensitive'
+        }
+      });
+      
+      // Combine all search clauses with OR
+      if (searchClauses.length > 0) {
+        searchClause = { OR: searchClauses };
+      }
+      
+      console.log('🔍 Generated Capability Search Clause:', JSON.stringify(searchClause, null, 2));
     }
+    
+    // Use searchClause as whereClause
+    const whereClause = searchClause;
 
     // Hitung total untuk pagination
     const totalCapability = await this.prismaService.capability.count({

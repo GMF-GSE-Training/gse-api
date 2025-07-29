@@ -107,7 +107,7 @@ export class CapabilityController {
   @UseGuards(AuthGuard, RoleGuard)
   async list(
     @User() user: CurrentUserRequest,
-    @Query('q') q: string,
+    @Query('q') q?: string,
     @Query(
       'page',
       new ParseIntPipe({
@@ -127,14 +127,14 @@ export class CapabilityController {
     )
     size?: number,
     @Query('sort_by') sortBy?: string,
-    @Query('sort_order') sortOrder?: string,
+    @Query('sort_order') sortOrder?: 'asc' | 'desc',
   ): Promise<WebResponse<CapabilityResponse[]>> {
     const query: ListRequest = {
       searchQuery: q,
       page: page || 1,
       size: size || 10,
       sortBy: sortBy || 'ratingCode',
-      sortOrder: sortOrder === 'desc' ? 'desc' : 'asc',
+      sortOrder: sortOrder || 'asc',
     };
     const result = await this.capabilityService.listCapability(user, query);
     return buildResponse(
@@ -143,6 +143,8 @@ export class CapabilityController {
       null,
       result.actions,
       result.paging,
+      undefined,
+      result.info
     );
   }
 }

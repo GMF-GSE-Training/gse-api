@@ -853,13 +853,8 @@ orderBy,
         });
         const allRatingCodes = allCapabilities.map(c => c.ratingCode);
 
-        const allParticipants = await this.prismaService.participant.findMany({
-            select: { dinas: true },
-            distinct: ['dinas'],
-            where: { dinas: { not: null } },
-            orderBy: { dinas: 'asc' },
-        });
-        const allDinas = allParticipants.map(p => p.dinas);
+        // Definisi kanonis dari semua dinas untuk memastikan konsistensi
+        const allDinas = [ 'TA', 'TB', 'TC', 'TF', 'TJ', 'TL', 'TM', 'TR', 'TU', 'TV', 'TZ' ];
 
         // 2. Terapkan filter berdasarkan role
         let whereClause: any = {

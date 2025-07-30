@@ -553,8 +553,9 @@ export class UserService {
 
   private validateActions(userRole: string): ActionAccessRights {
     const accessMap = {
-      'super admin': { canEdit: true, canDelete: true },
-      supervisor: { canEdit: false, canDelete: false },
+      'super admin': { canEdit: true, canDelete: true, canView: true },
+      supervisor: { canEdit: false, canDelete: false, canView: true },
+      lcu: { canEdit: false, canDelete: false, canView: true },
     };
 
     return this.coreHelper.validateActions(userRole, accessMap);

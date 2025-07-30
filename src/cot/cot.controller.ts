@@ -34,6 +34,19 @@ export class CotController {
         return buildResponse(HttpStatus.OK, result);
     }
 
+    @Get('/kompetensi-gse-operator')
+    @HttpCode(200)
+    @Roles('super admin', 'supervisor', 'lcu', 'user')
+    @UseGuards(AuthGuard, RoleGuard)
+    async getKompetensiGseOperatorData(
+        @User() user: CurrentUserRequest,
+        @Query('year', new ParseIntPipe({ optional: true, exceptionFactory: () => new HttpException('Year must be a valid number', 400) })) year?: number,
+    ): Promise<WebResponse<any>> {
+        const targetYear = year || new Date().getFullYear();
+        const result = await this.cotService.getKompetensiGseOperatorData(targetYear, user);
+        return buildResponse(HttpStatus.OK, result);
+    }
+
     @Get('/list')
     @HttpCode(200)
     @Roles('super admin', 'supervisor', 'lcu', 'user')

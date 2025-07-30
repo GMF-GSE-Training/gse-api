@@ -700,24 +700,9 @@ orderBy,
         const startOfYear = new Date(year, 0, 1);
         const endOfYear = new Date(year, 11, 31, 23, 59, 59);
         
-        // Base where clause considering user role
-        const baseWhereClause = userRole === 'user' ? {
-            participantsCots: {
-                some: {
-                    participant: {
-                        id: user.participantId,
-                    },
-                },
-            },
-        } : userRole === 'lcu' ? {
-            participantsCots: {
-                some: {
-                    participant: {
-                        dinas: user.dinas,
-                    },
-                },
-            },
-        } : {};
+        // Dashboard chart should show all COT data for all roles
+        // No filtering based on user role for dashboard statistics
+        const baseWhereClause = {};
         
         // Get all COTs for the year with status updates
         const allCots = await this.prismaService.cOT.findMany({
@@ -819,9 +804,8 @@ orderBy,
             total: monthlyStats.reduce((sum, month) => sum + month.total, 0),
         };
         
-        // Get available years from database
+        // Get available years from database - show all years for all roles
         const availableYearsQuery = await this.prismaService.cOT.findMany({
-            where: baseWhereClause,
             select: {
                 startDate: true,
             },
@@ -853,5 +837,93 @@ orderBy,
         }
     
         return this.coreHelper.validateActions(userRole, accessMap);
+    }
+
+    async getKompetensiGseOperatorData(year: number, user: CurrentUserRequest): Promise<any> {
+        const userRole = user.role.name.toLowerCase();
+
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31);
+
+        // 1. Ambil semua kode rating dan dinas sebagai dasar
+        const allCapabilities = await this.prismaService.capability.findMany({
+            select: { ratingCode: true },
+            distinct: ['ratingCode'],
+            orderBy: { ratingCode: 'asc' },
+        });
+        const allRatingCodes = allCapabilities.map(c => c.ratingCode);
+
+        const allParticipants = await this.prismaService.participant.findMany({
+            select: { dinas: true },
+            distinct: ['dinas'],
+            where: { dinas: { not: null } },
+            orderBy: { dinas: 'asc' },
+        });
+        const allDinas = allParticipants.map(p => p.dinas);
+
+        // 2. Terapkan filter berdasarkan role
+        let whereClause: any = {
+            cot: {
+                endDate: {
+                    gte: startDate,
+                    lte: endDate,
+                },
+            },
+        };
+
+        if (userRole === 'lcu') {
+            whereClause.participant = { dinas: user.dinas };
+        }
+
+        // 3. Ambil data sertifikat yang relevan
+        const certificates = await this.prismaService.certificate.findMany({
+            where: whereClause,
+            select: {
+                participant: {
+                    select: { dinas: true },
+                },
+                cot: {
+                    select: {
+                        capabilityCots: {
+                            select: {
+                                capability: {
+                                    select: { ratingCode: true },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        // 4. Proses dan kelompokkan data
+        const dataByDinasAndRating: { [dinas: string]: { [rating: string]: number } } = {};
+
+        for (const dinas of allDinas) {
+            dataByDinasAndRating[dinas] = {};
+            for (const rating of allRatingCodes) {
+                dataByDinasAndRating[dinas][rating] = 0;
+            }
+        }
+
+        for (const certificate of certificates) {
+            const dinas = certificate.participant.dinas;
+            const ratingCode = certificate.cot.capabilityCots[0]?.capability.ratingCode;
+
+            if (dinas && ratingCode && dataByDinasAndRating[dinas]) {
+                dataByDinasAndRating[dinas][ratingCode]++;
+            }
+        }
+
+        // 5. Strukturkan data untuk respons
+        const datasets = allDinas.map(dinas => ({
+            label: dinas,
+            data: allRatingCodes.map(rating => dataByDinasAndRating[dinas][rating] || 0),
+        }));
+
+        return {
+            labels: allRatingCodes,
+            datasets,
+        };
     }
 }

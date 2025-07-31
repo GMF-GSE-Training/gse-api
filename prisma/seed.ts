@@ -876,14 +876,14 @@ async function seedParticipantsAndUsers() {
   Logger.info(`Seeded ${participants.length} participants & ${participantUsers.length + importantUsers.length + usersFromJson.length} users (multi-role batch, ENV configurable)`);
 }
 
-// Refactor seedCots
+// Enhanced seedCots dengan data yang mencakup berbagai bulan dan tahun
 async function seedCots() {
-  Logger.info('Starting COTs seeding');
+  Logger.info('Starting COTs seeding with enhanced date range');
   await backupTableIfRequested('cots');
-  const count = parseInt(process.env.DUMMY_COT_COUNT || '3', 10);
-  const numFields = [];
+  const count = parseInt(process.env.DUMMY_COT_COUNT || '20', 10); // Increased default count
   const raw = await loadJson<any>('cots.json');
   let data: any[] = [];
+  
   if (raw.length > 0) {
     data = raw.map(c => {
       const item: any = { ...c };
@@ -894,37 +894,74 @@ async function seedCots() {
     });
     Logger.info(`Menggunakan data dari cots.json (${data.length} item)`);
   } else {
-    data = Array.from({ length: count }, () => {
-      // Generate names yang sesuai dengan schema length constraint (max 50 chars)
-      const locations = [
-        'Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Semarang',
-        'Makassar', 'Palembang', 'Tangerang', 'Depok', 'Bekasi'
+    // Generate data COT yang mencakup periode dari Januari 2024 hingga Desember 2026
+    const locations = [
+      'Jakarta Training Center', 'Surabaya Facility', 'Bandung Workshop', 'Medan Station',
+      'Semarang Hub', 'Makassar Center', 'Palembang Base', 'Tangerang Complex',
+      'Depok Training Ground', 'Bekasi Workshop', 'Denpasar Center', 'Balikpapan Hub'
+    ];
+    
+    const generateInstructorName = () => {
+      const instructors = [
+        'Ahmad Sutanto', 'Budi Setiawan', 'Citra Dewi', 'Dedi Kurniawan',
+        'Eko Prasetyo', 'Fitri Rahayu', 'Gunawan Alim', 'Hendra Wijaya',
+        'Indira Sari', 'Joko Susilo', 'Kartika Wulan', 'Lukman Hakim',
+        'Maya Anggraini', 'Nur Hidayat', 'Oscar Pratama', 'Prima Utama'
       ];
+      return faker.helpers.arrayElement(instructors);
+    };
+    
+    // Generate COT data dengan distribusi yang merata dari 2024-2026
+    data = Array.from({ length: count }, (_, i) => {
+      // Spread data across multiple years and months
+      const baseYear = 2024;
+      const yearOffset = Math.floor(i / (count / 3)); // Distribute across 3 years
+      const targetYear = baseYear + yearOffset;
       
-      const generateInstructorName = () => {
-        const name = faker.person.fullName();
-        return name.length > 45 ? name.substring(0, 45) + '...' : name;
-      };
+      // Generate start date dalam rentang yang luas
+      const startOfYear = new Date(targetYear, 0, 1);
+      const endOfYear = new Date(targetYear, 11, 31);
+      const startDate = faker.date.between({ from: startOfYear, to: endOfYear });
+      
+      // Generate end date (1-6 bulan setelah start date)
+      const minEndDate = new Date(startDate);
+      minEndDate.setMonth(minEndDate.getMonth() + 1); // At least 1 month duration
+      const maxEndDate = new Date(startDate);
+      maxEndDate.setMonth(maxEndDate.getMonth() + 6); // Max 6 months duration
+      const endDate = faker.date.between({ from: minEndDate, to: maxEndDate });
+      
+      // Determine status based on current date
+      const now = new Date();
+      let status: string;
+      if (startDate > now) {
+        status = 'Akan datang';
+      } else if (startDate <= now && endDate > now) {
+        status = 'Sedang berjalan';
+      } else {
+        status = 'Selesai';
+      }
       
       return {
         id: faker.string.uuid(),
-        startDate: faker.date.recent({ days: 30 }),
-        endDate: faker.date.future({ years: 1 }),
+        startDate,
+        endDate,
         trainingLocation: faker.helpers.arrayElement(locations),
         theoryInstructorRegGse: generateInstructorName(),
         theoryInstructorCompetency: generateInstructorName(),
         practicalInstructor1: generateInstructorName(),
-        practicalInstructor2: generateInstructorName(),
-        status: faker.helpers.arrayElement(['Menunggu', 'Berlangsung', 'Selesai']),
+        practicalInstructor2: faker.helpers.arrayElement([generateInstructorName(), '-']),
+        status,
       };
     });
-    Logger.info(`File cots.json kosong, generate data dummy (${count} item)`);
+    
+    Logger.info(`Generated ${count} COTs with enhanced date distribution (2024-2026)`);
   }
+  
   if (data.length > 0) {
     await processBatch(data, async (cot) => {
       await prisma.cOT.create({ data: cot });
     }, BATCH_SIZE, 'seed-cots');
-    Logger.info(`Seeded ${data.length} COTs`);
+    Logger.info(`Seeded ${data.length} COTs with comprehensive date coverage`);
   } else {
     Logger.info('No COTs to seed');
   }

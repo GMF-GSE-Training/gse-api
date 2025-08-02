@@ -68,6 +68,20 @@ export class CertificateController {
     return buildResponse(HttpStatus.OK, result);
   }
 
+  @Get('/:certificateId/pdf')
+  @HttpCode(200)
+  @Roles('super admin')
+  @UseGuards(AuthGuard, RoleGuard)
+  async getCertificatePdf(
+    @Param('certificateId', ParseUUIDPipe) certificateId: string,
+  ): Promise<StreamableFile> {
+    const fileBuffer = await this.certificateService.streamFile(certificateId);
+    return new StreamableFile(fileBuffer, {
+      type: 'application/pdf',
+      disposition: `inline; filename="certificate-${certificateId}.pdf"`,
+    });
+  }
+
   @Delete('/:certificateId')
   @HttpCode(200)
   @Roles('super admin')

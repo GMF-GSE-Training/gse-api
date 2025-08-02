@@ -453,7 +453,7 @@ export class CertificateService {
     // Simpan data sertifikat ke database
     const activeSignature = eSign[0];
     
-    await this.prismaService.certificate.create({
+    const newCertificate = await this.prismaService.certificate.create({
       data: {
         cotId: cotId,
         participantId: participantId,
@@ -466,7 +466,8 @@ export class CertificateService {
       },
     });
 
-    return 'Sertifikat berhasil dibuat';
+    // Return the certificate ID instead of a success message
+    return newCertificate.id;
   }
 
   async getCertificate(certificateId: string): Promise<any> {

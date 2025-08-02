@@ -484,6 +484,17 @@ export class CertificateService {
     return certificate;
   }
 
+  async checkCertificateByParticipant(cotId: string, participantId: string): Promise<any> {
+    const certificate = await this.prismaService.certificate.findFirst({
+      where: {
+        cotId: cotId,
+        participantId: participantId,
+      }
+    });
+
+    return certificate; // Return null if not found, or the certificate if found
+  }
+
   async streamFile(certificateId: string): Promise<Buffer> {
     const certificate = await this.prismaService.certificate.findUnique({
       where: {

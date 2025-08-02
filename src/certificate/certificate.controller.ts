@@ -46,6 +46,18 @@ export class CertificateController {
     }
   }
 
+  @Get('/check/:cotId/:participantId')
+  @HttpCode(200)
+  @Roles('super admin')
+  @UseGuards(AuthGuard, RoleGuard)
+  async checkCertificateByParticipant(
+    @Param('cotId', ParseUUIDPipe) cotId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+  ): Promise<WebResponse<any>> {
+    const result = await this.certificateService.checkCertificateByParticipant(cotId, participantId);
+    return buildResponse(HttpStatus.OK, result);
+  }
+
   @Get('/:certificateId')
   @HttpCode(200)
   @Roles('super admin')

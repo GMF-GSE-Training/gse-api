@@ -474,6 +474,15 @@ export class CertificateService {
     const certificate = await this.prismaService.certificate.findUnique({
       where: {
         id: certificateId,
+      },
+      include: {
+        participant: {
+          select: {
+            id: true,
+            name: true,
+            idNumber: true,
+          }
+        }
       }
     });
 

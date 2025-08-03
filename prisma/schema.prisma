@@ -187,7 +187,9 @@ model Certificate {
   attendance          Float
   theoryScore         Float
   practiceScore       Float
-  certificatePath     String?         @db.VarChar(255)
+  certificatePath     String?           @db.VarChar(255)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   cot                 COT               @relation(fields: [cotId], references: [id])
   participant         Participant       @relation(fields: [participantId], references: [id])

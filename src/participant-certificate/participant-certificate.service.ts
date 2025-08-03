@@ -43,17 +43,18 @@ export class ParticipantCertificateService {
       throw new Error('LCU can only access participants from the same dinas');
     }
 
-    // Ambil data sertifikat dari participantsCOT yang sudah selesai
+    // Ambil data sertifikat actual dari tabel Certificate
+    // Hanya tampilkan sertifikat dari COT yang sudah selesai
     let whereClause: any = {
       participantId: participantId,
       cot: {
-        status: 'Selesai', // Hanya COT yang sudah selesai yang dianggap sebagai sertifikat
+        status: 'Selesai', // Hanya COT yang sudah selesai
       },
     };
 
     if (request.searchQuery) {
       whereClause.cot = {
-        ...whereClause.cot,
+        ...whereClause.cot, // Preserve existing COT filters (like status)
         capabilityCots: {
           some: {
             capability: {
@@ -68,7 +69,7 @@ export class ParticipantCertificateService {
     }
 
     // Hitung total untuk pagination
-    const totalCertificates = await this.prismaService.participantsCOT.count({
+    const totalCertificates = await this.prismaService.certificate.count({
       where: whereClause,
     });
 
@@ -88,7 +89,7 @@ export class ParticipantCertificateService {
 
     if (naturalSortFields.includes(sortBy)) {
       // Natural sort global: ambil seluruh data, sort, lalu pagination manual
-      const allCertificates = await this.prismaService.participantsCOT.findMany({
+      const allCertificates = await this.prismaService.certificate.findMany({
         where: whereClause,
         include: {
           cot: {
@@ -105,14 +106,14 @@ export class ParticipantCertificateService {
 
       // Transform dan sort manual
       certificates = allCertificates
-        .map(pc => this.transformToCertificateResponse(pc))
+        .map(cert => this.transformToCertificateResponse(cert))
         .sort((a, b) => naturalSort(a[sortBy] || '', b[sortBy] || '', sortOrder));
 
       // Pagination manual
       certificates = certificates.slice((page - 1) * size, page * size);
     } else if (dateFields.includes(sortBy)) {
       // Date sort global: ambil seluruh data, sort berdasarkan tanggal, lalu pagination manual
-      const allCertificates = await this.prismaService.participantsCOT.findMany({
+      const allCertificates = await this.prismaService.certificate.findMany({
         where: whereClause,
         include: {
           cot: {
@@ -129,7 +130,7 @@ export class ParticipantCertificateService {
 
       // Transform dan sort berdasarkan tanggal
       certificates = allCertificates
-        .map(pc => this.transformToCertificateResponse(pc))
+        .map(cert => this.transformToCertificateResponse(cert))
         .sort((a, b) => {
           const aDate = new Date(a.expiryDate);
           const bDate = new Date(b.expiryDate);
@@ -141,7 +142,7 @@ export class ParticipantCertificateService {
       certificates = certificates.slice((page - 1) * size, page * size);
     } else {
       // Untuk field lainnya, gunakan fallback ke natural sort
-      const allCertificates = await this.prismaService.participantsCOT.findMany({
+      const allCertificates = await this.prismaService.certificate.findMany({
         where: whereClause,
         include: {
           cot: {
@@ -158,7 +159,7 @@ export class ParticipantCertificateService {
         take: size,
       });
 
-      certificates = allCertificates.map(pc => this.transformToCertificateResponse(pc));
+      certificates = allCertificates.map(cert => this.transformToCertificateResponse(cert));
     }
 
     return {
@@ -171,20 +172,30 @@ export class ParticipantCertificateService {
     };
   }
 
-  private transformToCertificateResponse(participantCot: any): CertificateResponse {
-    const capability = participantCot.cot.capabilityCots[0]?.capability;
-    const cotEndDate = new Date(participantCot.cot.endDate);
+  private transformToCertificateResponse(certificate: any): CertificateResponse {
+    const capability = certificate.cot.capabilityCots[0]?.capability;
+    const createdAt = new Date(certificate.createdAt);
+    const now = new Date();
     
-    // Sertifikat berlaku 2 tahun dari tanggal selesai COT
-    const expiryDate = new Date(cotEndDate);
-    expiryDate.setFullYear(expiryDate.getFullYear() + 2);
+    // Sertifikat berlaku 6 bulan dari tanggal pembuatan
+    const expiryDate = new Date(createdAt);
+    expiryDate.setMonth(expiryDate.getMonth() + 6);
+
+    // Tentukan status berdasarkan tanggal expiry
+    let status = 'Valid';
+    if (now > expiryDate) {
+      status = 'Expired';
+    } else if (now.getTime() > (expiryDate.getTime() - (30 * 24 * 60 * 60 * 1000))) {
+      // Jika kurang dari 30 hari sebelum expired
+      status = 'Expiring Soon';
+    }
 
     return {
-      id: participantCot.id,
+      id: certificate.id,
       trainingName: capability?.trainingName || 'Unknown Training',
       expiryDate: expiryDate,
-      certificateNumber: `CERT-${participantCot.id.substring(0, 8).toUpperCase()}`,
-      status: 'Valid',
+      certificateNumber: certificate.certificateNumber,
+      status: status,
     };
   }
 }

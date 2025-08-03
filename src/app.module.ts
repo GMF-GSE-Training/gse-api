@@ -22,6 +22,7 @@ import { FileUploadModule } from './file-upload/file-upload.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ParticipantCertificateModule } from './participant-certificate/participant-certificate.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     ParticipantCotModule,
     ESignModule,
     CertificateModule,
+    ParticipantCertificateModule,
     MulterModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -80,6 +82,6 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 })
 export class AppModule {
   constructor() {
-    console.log('Serving static files from:', join(__dirname, '..', 'public'));
+    // Static files served from public directory
   }
 }

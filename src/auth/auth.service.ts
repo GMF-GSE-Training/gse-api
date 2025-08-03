@@ -339,7 +339,7 @@ export class AuthService {
 
       return this.toAuthResponse(user, accessToken, refreshToken);
     } catch (error) {
-      console.log(error);
+      this.logger.error('Failed to generate token during login', error.stack);
       throw new HttpException('Failed to generate token', 500);
     }
   }
@@ -363,7 +363,7 @@ export class AuthService {
 
       return this.toAuthResponse(user, newAccessToken, refreshToken);
     } catch (error) {
-      console.log(error);
+      this.logger.error('Failed to refresh token', error.stack);
       throw new HttpException('Sesi Anda telah berakhir. Silakan login kembali.', 401);
     }
   }
@@ -888,7 +888,7 @@ export class AuthService {
 
       return 'Berhasil mengubah email';
     } catch (error) {
-      console.log(error);
+      this.logger.error('Failed to verify update email token', error.stack);
       throw new HttpException('Token tidak valid atau sudah kadaluarsa. Silakan minta ulang tautan verifikasi.', 400);
     }
   }

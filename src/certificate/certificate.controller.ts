@@ -16,6 +16,8 @@ import { CertificateService } from './certificate.service';
 import { Roles } from 'src/shared/decorator/role.decorator';
 import { AuthGuard } from 'src/shared/guard/auth.guard';
 import { RoleGuard } from 'src/shared/guard/role.guard';
+import { User } from 'src/shared/decorator/user.decorator';
+import { CurrentUserRequest } from 'src/model/auth.model';
 import { CreateCertificate } from 'src/model/certificate.model';
 import { buildResponse, WebResponse } from 'src/model/web.model';
 
@@ -60,34 +62,39 @@ export class CertificateController {
 
   @Get('/:certificateId')
   @HttpCode(200)
-  @Roles('super admin')
+  @Roles('super admin', 'supervisor', 'lcu', 'user')
   @UseGuards(AuthGuard, RoleGuard)
-  async get(@Param('certificateId', ParseUUIDPipe) certificateId: string): Promise<any> {
+  async get(
+    @Param('certificateId', ParseUUIDPipe) certificateId: string,
+    @User() user: CurrentUserRequest,
+  ): Promise<any> {
     console.log(certificateId);
-    const result = await this.certificateService.getCertificate(certificateId);
+    const result = await this.certificateService.getCertificate(certificateId, user);
     return buildResponse(HttpStatus.OK, result);
   }
 
   @Get('/:certificateId/view')
   @HttpCode(200)
-  @Roles('super admin')
+  @Roles('super admin', 'supervisor', 'lcu', 'user')
   @UseGuards(AuthGuard, RoleGuard)
   async getCertificateFile(
     @Param('certificateId', ParseUUIDPipe) certificateId: string,
+    @User() user: CurrentUserRequest,
   ): Promise<WebResponse<string>> {
-    const fileBuffer = await this.certificateService.streamFile(certificateId);
+    const fileBuffer = await this.certificateService.streamFile(certificateId, user);
     const result = fileBuffer.toString('base64');
     return buildResponse(HttpStatus.OK, result);
   }
 
   @Get('/:certificateId/pdf')
   @HttpCode(200)
-  @Roles('super admin')
+  @Roles('super admin', 'supervisor', 'lcu', 'user')
   @UseGuards(AuthGuard, RoleGuard)
   async getCertificatePdf(
     @Param('certificateId', ParseUUIDPipe) certificateId: string,
+    @User() user: CurrentUserRequest,
   ): Promise<StreamableFile> {
-    const fileBuffer = await this.certificateService.streamFile(certificateId);
+    const fileBuffer = await this.certificateService.streamFile(certificateId, user);
     return new StreamableFile(fileBuffer, {
       type: 'application/pdf',
       disposition: `inline; filename="certificate-${certificateId}.pdf"`,

@@ -20,7 +20,7 @@ import { UrlHelper } from './helpers/url.helper';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
-        const logLevel = nodeEnv === 'production' ? 'debug' : 'silly';
+        const logLevel = nodeEnv === 'production' ? 'warn' : 'debug';
         return {
       format: winston.format.json(),
           transports: [

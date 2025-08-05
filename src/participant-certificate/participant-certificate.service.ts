@@ -174,11 +174,11 @@ export class ParticipantCertificateService {
 
   private transformToCertificateResponse(certificate: any): CertificateResponse {
     const capability = certificate.cot.capabilityCots[0]?.capability;
-    const createdAt = new Date(certificate.createdAt);
+    const cotEndDate = new Date(certificate.cot.endDate);
     const now = new Date();
     
-    // Sertifikat berlaku 6 bulan dari tanggal pembuatan
-    const expiryDate = new Date(createdAt);
+    // Sertifikat berlaku 6 bulan dari tanggal selesai COT (endDate), bukan tanggal pembuatan
+    const expiryDate = new Date(cotEndDate);
     expiryDate.setMonth(expiryDate.getMonth() + 6);
 
     // Tentukan status berdasarkan tanggal expiry

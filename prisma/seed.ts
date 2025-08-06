@@ -572,41 +572,76 @@ async function seedCapabilities() {
     });
     Logger.info(`Menggunakan data dari capabilities.json (${data.length} item)`);
   } else {
+    // Generate comprehensive GSE training data with realistic parameters
+    const gseRatingCodes = [
+      { code: 'FLT', name: 'Forklift', complexity: 'medium' },
+      { code: 'GPS', name: 'Ground Power System', complexity: 'high' },
+      { code: 'WSS', name: 'Water Service System', complexity: 'medium' },
+      { code: 'WST', name: 'Waste Service Truck', complexity: 'medium' },
+      { code: 'AWT', name: 'Aircraft Water Truck', complexity: 'medium' },
+      { code: 'LSS', name: 'Lavatory Service System', complexity: 'low' },
+      { code: 'ATT', name: 'Aircraft Towing Tractor', complexity: 'high' },
+      { code: 'GSE', name: 'Ground Support Equipment General', complexity: 'high' },
+      { code: 'ACS', name: 'Air Conditioning System', complexity: 'medium' },
+      { code: 'BTT', name: 'Baggage Towing Tractor', complexity: 'medium' },
+      { code: 'RDS', name: 'Refueling Dispensing System', complexity: 'high' },
+      { code: 'ASS', name: 'Aircraft Start System', complexity: 'high' },
+      { code: 'TBL', name: 'Truck Bed Lift', complexity: 'low' },
+      { code: 'CTL', name: 'Catering Truck Lift', complexity: 'medium' },
+      { code: 'BLS', name: 'Belt Loader System', complexity: 'medium' },
+      { code: 'CLS', name: 'Cargo Loading System', complexity: 'high' },
+      { code: 'PTT', name: 'Pushback Towing Tractor', complexity: 'high' },
+      { code: 'DSU', name: 'De-icing Service Unit', complexity: 'high' },
+      { code: 'VCS', name: 'Vacuum Cleaning System', complexity: 'low' },
+      { code: 'MUV', name: 'Maintenance Unit Vehicle', complexity: 'medium' }
+    ];
+    
+    // Generate data berdasarkan jumlah yang diminta, cycling through GSE codes
     data = Array.from({ length: count }, (_, i) => {
-      // Generate training name yang sesuai dengan schema length constraint (max 50 chars)
-      const trainingOptions = [
-        'Forklift Training',
-        'GSE Basic Training', 
-        'Aircraft Ground Handling',
-        'Baggage Tractor',
-        'Pushback Training',
-        'Catering Truck',
-        'Air Conditioning Unit',
-        'Ground Power Unit',
-        'Cargo Loader',
-        'Belt Loader',
-        'Conveyor Belt',
-        'Lavatory Service',
-        'Water Service',
-        'Fuel Truck',
-        'De-icing Equipment'
-      ];
+      const gseItem = gseRatingCodes[i % gseRatingCodes.length];
+      const complexity = gseItem.complexity;
       
-      const selectedTraining = faker.helpers.arrayElement(trainingOptions);
-      const trainingName = selectedTraining.length > 45 
-        ? selectedTraining.substring(0, 45) + '...' 
-        : selectedTraining;
+      // Calculate durations based on complexity
+      let baseTheoryRegGse, basePracticeRegGse, baseTheoryComp, basePracticeComp;
+      
+      switch (complexity) {
+        case 'low':
+          baseTheoryRegGse = faker.number.int({ min: 2, max: 4 });
+          basePracticeRegGse = faker.number.int({ min: 1, max: 2 });
+          baseTheoryComp = faker.number.int({ min: 2, max: 3 });
+          basePracticeComp = faker.number.int({ min: 4, max: 8 });
+          break;
+        case 'medium':
+          baseTheoryRegGse = faker.number.int({ min: 3, max: 5 });
+          basePracticeRegGse = faker.number.int({ min: 2, max: 3 });
+          baseTheoryComp = faker.number.int({ min: 3, max: 4 });
+          basePracticeComp = faker.number.int({ min: 6, max: 12 });
+          break;
+        case 'high':
+          baseTheoryRegGse = faker.number.int({ min: 4, max: 6 });
+          basePracticeRegGse = faker.number.int({ min: 3, max: 5 });
+          baseTheoryComp = faker.number.int({ min: 4, max: 6 });
+          basePracticeComp = faker.number.int({ min: 10, max: 16 });
+          break;
+        default:
+          baseTheoryRegGse = 3;
+          basePracticeRegGse = 2;
+          baseTheoryComp = 3;
+          basePracticeComp = 8;
+      }
+      
+      const totalDuration = baseTheoryRegGse + basePracticeRegGse + baseTheoryComp + basePracticeComp;
       
       return {
         id: faker.string.uuid(),
-        ratingCode: `RC${(i + 1).toString().padStart(2, '0')}`,
-        trainingCode: `TC${(i + 1).toString().padStart(3, '0')}`,
-        trainingName: trainingName,
-        totalTheoryDurationRegGse: faker.number.int({ min: 10, max: 100 }),
-        totalPracticeDurationRegGse: faker.number.int({ min: 10, max: 100 }),
-        totalTheoryDurationCompetency: faker.number.int({ min: 10, max: 100 }),
-        totalPracticeDurationCompetency: faker.number.int({ min: 10, max: 100 }),
-        totalDuration: faker.number.int({ min: 50, max: 500 }),
+        ratingCode: gseItem.code,
+        trainingCode: `TCT-${(520 + i).toString().padStart(4, '0')}`,
+        trainingName: gseItem.name,
+        totalTheoryDurationRegGse: baseTheoryRegGse,
+        totalPracticeDurationRegGse: basePracticeRegGse,
+        totalTheoryDurationCompetency: baseTheoryComp,
+        totalPracticeDurationCompetency: basePracticeComp,
+        totalDuration: totalDuration,
       };
     });
     Logger.info(`File capabilities.json kosong, generate data dummy (${count} item)`);

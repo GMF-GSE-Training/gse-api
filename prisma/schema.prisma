@@ -97,7 +97,7 @@ model Capability {
   totalPracticeDurationRegGse       Int?
   totalTheoryDurationCompetency     Int?
   totalPracticeDurationCompetency   Int?
-  totalDuration                     Int?                
+  totalDuration                     Int?
 
   curriculumSyllabus                CurriculumSyllabus[]
   capabilityCots                    CapabilityCOT[]

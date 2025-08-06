@@ -1280,6 +1280,106 @@ async function seedCurriculumSyllabus() {
   }
 }
 
+// Refactor seedCertificates with proper linking to COTs and signatures
+async function seedCertificates() {
+  Logger.info('Starting certificates seeding');
+  await backupTableIfRequested('certificates');
+  const count = parseInt(process.env.DUMMY_CERTIFICATE_COUNT || '0', 10);
+  
+  if (count === 0) {
+    Logger.info('Certificate seeding skipped (DUMMY_CERTIFICATE_COUNT=0)');
+    return;
+  }
+  
+  const raw = await loadJson<any>('certificates.json');
+  let data: any[] = [];
+  
+  if (raw.length > 0) {
+    data = raw.map(r => ({
+      id: r.id || faker.string.uuid(),
+      cotId: r.cotId,
+      participantId: r.participantId,
+      signatureId: r.signatureId,
+      certificateNumber: r.number,
+      createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
+      updatedAt: r.updatedAt ? new Date(r.updatedAt) : new Date(),
+    }));
+    Logger.info(`Using data from certificates.json (${data.length} items)`);
+  } else {
+    Logger.info(`Generating ${count} dummy certificates`);
+    
+    // Get available COTs, participants, and signatures
+    const [cots, participants, signatures] = await Promise.all([
+      prisma.cOT.findMany({ where: { status: { in: ['Selesai', 'Sedang berjalan'] } } }),
+      prisma.participant.findMany(),
+      prisma.signature.findMany(),
+    ]);
+    
+    if (cots.length === 0 || participants.length === 0 || signatures.length === 0) {
+      Logger.warn('Cannot generate certificates: missing required data (COTs, participants, or signatures)');
+      return;
+    }
+    
+    // Track unique participant-COT combinations to avoid duplicates
+    const uniqueCombinations = new Set<string>();
+    
+    data = Array.from({ length: count }, (_, i) => {
+      let participant, cot;
+      let attempts = 0;
+      
+      // Try to find unique participant-COT combination
+      do {
+        participant = faker.helpers.arrayElement(participants);
+        cot = faker.helpers.arrayElement(cots);
+        attempts++;
+      } while (uniqueCombinations.has(`${participant.id}_${cot.id}`) && attempts < 50);
+      
+      uniqueCombinations.add(`${participant.id}_${cot.id}`);
+      
+      // Generate certificate number in format: CERT-YYYY-NNNN
+      const certYear = new Date().getFullYear();
+      const certNumber = `CERT-${certYear}-${(i + 1).toString().padStart(4, '0')}`;
+      
+      // Certificate creation date should be after COT end date for completed COTs
+      let createdDate;
+      if (cot.status === 'Selesai') {
+        // Certificate issued 1-30 days after COT completion
+        const minDate = new Date(cot.endDate);
+        minDate.setDate(minDate.getDate() + 1);
+        const maxDate = new Date(cot.endDate);
+        maxDate.setDate(maxDate.getDate() + 30);
+        createdDate = faker.date.between({ from: minDate, to: maxDate });
+      } else {
+        // For ongoing COTs, certificate date within COT period
+        createdDate = faker.date.between({ from: cot.startDate, to: cot.endDate });
+      }
+      
+      return {
+        id: faker.string.uuid(),
+        cotId: cot.id,
+        participantId: participant.id,
+        signatureId: faker.helpers.arrayElement(signatures).id,
+        certificateNumber: certNumber,
+        attendance: faker.number.float({ min: 80.0, max: 100.0, multipleOf: 0.1 }),
+        theoryScore: faker.number.float({ min: 70.0, max: 100.0, multipleOf: 0.1 }),
+        practiceScore: faker.number.float({ min: 70.0, max: 100.0, multipleOf: 0.1 }),
+        certificatePath: null, // Generated separately or set to null initially
+        createdAt: createdDate,
+        updatedAt: createdDate,
+      };
+    });
+  }
+  
+  if (data.length > 0) {
+    await processBatch(data, async (certificate) => {
+      await prisma.certificate.create({ data: certificate });
+    }, BATCH_SIZE, 'seed-certificates');
+    Logger.info(`Seeded ${data.length} certificates`);
+  } else {
+    Logger.info('No certificates to seed');
+  }
+}
+
 console.log('=== SEBELUM PANGGIL MAIN ===');
 main();
 console.log('=== SETELAH PANGGIL MAIN ===');
@@ -1312,9 +1412,9 @@ async function main() {
     await seedCots();
     await seedCapabilityCots();
     await seedSignatures();
-    // await seedCertificates();
     await seedParticipantsAndUsers();
     await seedParticipantsCot();
+    await seedCertificates(); // Move after participants are created
     await seedCurriculumSyllabus();
 
     await prisma.$executeRawUnsafe(

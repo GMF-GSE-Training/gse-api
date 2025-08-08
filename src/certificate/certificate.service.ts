@@ -43,9 +43,11 @@ export class CertificateService {
           select: {
             participant: {
               select: {
+                id: true,
                 name: true,
                 fotoPath: true,
                 qrCodePath: true,
+                qrCodeLink: true,
                 placeOfBirth: true,
                 dateOfBirth: true,
                 nationality: true,
@@ -106,7 +108,7 @@ export class CertificateService {
       throw new HttpException('Gagal membuat sertifikat. COT belum selesai', 400);
     }
 
-    // Validasi 2: Cek apakah sertifikat untuk participant di COT ini sudah ada
+    // Validasi 2: Cek apakah sertifikat untuk participant ini di COT ini sudah ada
     const existingCertificate = await this.prismaService.certificate.findFirst({
       where: {
         cotId: cotId,
@@ -115,7 +117,7 @@ export class CertificateService {
     });
 
     if (existingCertificate) {
-      throw new HttpException('Gagal membuat sertifikat. Sertifikat untuk participant sudah ada di COT ini', 409);
+      throw new HttpException('Gagal membuat sertifikat. Sertifikat untuk participant ini sudah ada di COT ini', 409);
     }
 
     // Validasi 3: Cek apakah participant terdaftar di COT ini
@@ -169,7 +171,42 @@ export class CertificateService {
       const { buffer } = await this.fileUploadService.downloadFile(participant.qrCodePath);
       qrCodeBuffer = buffer;
     } catch (err: any) {
-      throw new Error('Gagal mengambil QR Code peserta: ' + (err.message || err));
+      this.logger.warn('QR Code tidak ditemukan, mencoba generate QR Code baru', err.message);
+      try {
+        // Generate QR code as fallback if file not found
+        const QRCode = require('qrcode');
+        const qrCodeUrl = participant.qrCodeLink || `${process.env.FRONTEND_URL}/participant/detail/${participant.id}`;
+        qrCodeBuffer = await QRCode.toBuffer(qrCodeUrl, {
+          width: 200,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        });
+        
+        // Optional: Upload the generated QR code back to storage for future use
+        try {
+          const qrFileObj: Express.Multer.File = {
+            fieldname: 'qrcode',
+            originalname: `qrcode_${participant.id}.png`,
+            encoding: '7bit',
+            mimetype: 'image/png',
+            buffer: qrCodeBuffer,
+            size: qrCodeBuffer.length,
+            destination: '',
+            filename: `qrcode_${participant.id}.png`,
+            path: '',
+            stream: undefined
+          };
+          await this.fileUploadService.uploadFile(qrFileObj, participant.qrCodePath);
+          this.logger.log(`QR Code berhasil di-generate dan di-upload: ${participant.qrCodePath}`);
+        } catch (uploadErr) {
+          this.logger.warn('QR Code berhasil di-generate tapi gagal di-upload ke storage', uploadErr.message);
+        }
+      } catch (qrGenErr: any) {
+        throw new Error('Gagal mengambil atau generate QR Code peserta: ' + (qrGenErr.message || qrGenErr));
+      }
     }
     const qrCodeBase64 = qrCodeBuffer.toString('base64');
     const qrCodeType = this.getMediaType(qrCodeBuffer);
@@ -470,6 +507,7 @@ export class CertificateService {
       throw new HttpException('Sertifikat tidak ditemukan', 404);
     }
 
+    // Check authorization for user role
     if (user.role.name === 'user' && user.participantId !== certificate.participant.id) {
       throw new HttpException('Anda tidak punya izin untuk melihat sertifikat ini', 403);
     }
@@ -482,6 +520,10 @@ export class CertificateService {
       where: {
         cotId: cotId,
         participantId: participantId,
+      },
+      include: {
+        participant: true,
+        cot: true
       }
     });
 
@@ -493,7 +535,10 @@ export class CertificateService {
       where: {
         id: certificateId,
       },
-      include: {
+      select: {
+        id: true,
+        certificatePath: true,
+        certificateNumber: true,
         participant: {
           select: {
             id: true,
@@ -504,22 +549,39 @@ export class CertificateService {
       }
     });
 
-    if (!certificate || !certificate.certificatePath) {
+    if (!certificate) {
       throw new HttpException('File Sertifikat tidak ditemukan', 404);
     }
 
+    if (!certificate.certificatePath) {
+      throw new HttpException('Path file sertifikat tidak ditemukan', 404);
+    }
+
+    // Check authorization for user role
     if (user.role.name === 'user' && user.participantId !== certificate.participant.id) {
       throw new HttpException('Anda tidak punya izin untuk melihat file sertifikat ini', 403);
     }
 
+    // Download certificate file from storage
     try {
+      this.logger.debug(`Downloading certificate file: ${certificate.certificatePath}`);
       const { buffer } = await this.fileUploadService.downloadFile(certificate.certificatePath);
+      
+      this.logger.log(`Certificate file downloaded successfully`, {
+        certificateId: certificate.id,
+        certificateNumber: certificate.certificateNumber,
+        path: certificate.certificatePath,
+        size: buffer.length
+      });
+      
       return buffer;
     } catch (err: any) {
-      if (err.status === 404) {
-        throw new HttpException('File Sertifikat tidak ditemukan', 404);
-      }
-      throw new HttpException('Gagal mengambil file Sertifikat: ' + (err.message || err), 500);
+      this.logger.error(`Failed to download certificate file`, {
+        certificateId: certificate.id,
+        certificatePath: certificate.certificatePath,
+        error: err.message
+      });
+      throw new HttpException(`Gagal download file sertifikat: ${err.message}`, 500);
     }
   }
 
@@ -528,18 +590,41 @@ export class CertificateService {
       where: {
         id: certificateId,
       },
+      select: {
+        id: true,
+        certificatePath: true,
+        certificateNumber: true
+      }
     });
 
     if (!certificate) {
       throw new HttpException('Sertifikat tidak ditemukan', 404);
     }
 
-    this.fileUploadService.deleteFile(certificate.certificatePath);
+    // Delete certificate file from storage if exists
+    if (certificate.certificatePath) {
+      try {
+        await this.fileUploadService.deleteFile(certificate.certificatePath);
+        this.logger.log(`Certificate file deleted from storage: ${certificate.certificatePath}`);
+      } catch (err: any) {
+        this.logger.warn(`Failed to delete certificate file from storage`, {
+          certificatePath: certificate.certificatePath,
+          error: err.message
+        });
+        // Don't throw error here, continue with database deletion
+      }
+    }
 
+    // Delete certificate record from database
     await this.prismaService.certificate.delete({
       where: {
         id: certificate.id,
       },
+    });
+
+    this.logger.log(`Certificate deleted successfully`, {
+      certificateId: certificate.id,
+      certificateNumber: certificate.certificateNumber
     });
 
     return 'Sertifikat berhasil dihapus';

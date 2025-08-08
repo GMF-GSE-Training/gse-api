@@ -101,6 +101,66 @@ export class CertificateController {
     });
   }
 
+  @Get('/cot/:cotId/participant/:participantId')
+  @HttpCode(200)
+  @Roles('super admin', 'supervisor', 'lcu', 'user')
+  @UseGuards(AuthGuard, RoleGuard)
+  async getCertificateByCotAndParticipant(
+    @Param('cotId', ParseUUIDPipe) cotId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @User() user: CurrentUserRequest,
+  ): Promise<WebResponse<any>> {
+    const result = await this.certificateService.checkCertificateByParticipant(cotId, participantId);
+    if (!result) {
+      throw new HttpException('Sertifikat tidak ditemukan untuk participant ini di COT ini', 404);
+    }
+    return buildResponse(HttpStatus.OK, result);
+  }
+
+  @Get('/cot/:cotId/participant/:participantId/view')
+  @HttpCode(200)
+  @Roles('super admin', 'supervisor', 'lcu', 'user')
+  @UseGuards(AuthGuard, RoleGuard)
+  async getCertificateFileByCotAndParticipant(
+    @Param('cotId', ParseUUIDPipe) cotId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @User() user: CurrentUserRequest,
+  ): Promise<WebResponse<string>> {
+    // First get the certificate by COT and participant
+    const certificate = await this.certificateService.checkCertificateByParticipant(cotId, participantId);
+    if (!certificate) {
+      throw new HttpException('Sertifikat tidak ditemukan untuk participant ini di COT ini', 404);
+    }
+
+    // Then get the file using the certificate ID
+    const fileBuffer = await this.certificateService.streamFile(certificate.id, user);
+    const result = fileBuffer.toString('base64');
+    return buildResponse(HttpStatus.OK, result);
+  }
+
+  @Get('/cot/:cotId/participant/:participantId/pdf')
+  @HttpCode(200)
+  @Roles('super admin', 'supervisor', 'lcu', 'user')
+  @UseGuards(AuthGuard, RoleGuard)
+  async getCertificatePdfByCotAndParticipant(
+    @Param('cotId', ParseUUIDPipe) cotId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @User() user: CurrentUserRequest,
+  ): Promise<StreamableFile> {
+    // First get the certificate by COT and participant
+    const certificate = await this.certificateService.checkCertificateByParticipant(cotId, participantId);
+    if (!certificate) {
+      throw new HttpException('Sertifikat tidak ditemukan untuk participant ini di COT ini', 404);
+    }
+
+    // Then get the file using the certificate ID
+    const fileBuffer = await this.certificateService.streamFile(certificate.id, user);
+    return new StreamableFile(fileBuffer, {
+      type: 'application/pdf',
+      disposition: `inline; filename="certificate-${certificate.certificateNumber || certificate.id}.pdf"`,
+    });
+  }
+
   @Delete('/:certificateId')
   @HttpCode(200)
   @Roles('super admin')

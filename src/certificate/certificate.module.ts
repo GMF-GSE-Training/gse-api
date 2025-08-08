@@ -7,5 +7,6 @@ import { FileUploadModule } from '../file-upload/file-upload.module';
   imports: [FileUploadModule],
   providers: [CertificateService],
   controllers: [CertificateController],
+  exports: [CertificateService],
 })
 export class CertificateModule {}

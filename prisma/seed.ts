@@ -799,6 +799,21 @@ async function seedParticipantsAndUsers() {
       qrCodeLink: `https://dummy-frontend/participant/detail/${participantId}`,
       gmfNonGmf: faker.helpers.arrayElement(['GMF', 'Non-GMF'])
     };
+    // Generate QR Code untuk participant
+    const qrCodeUrl = participant.qrCodeLink;
+    const qrCodeBuffer = await QRCode.toBuffer(qrCodeUrl, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+    
+    // Upload QR Code ke storage
+    await uploadQRCodeBuffer(qrCodeBuffer, participant.qrCodePath);
+    Logger.debug(`Generated and uploaded QR Code for participant: ${participantId}`);
+    
     // Upload semua file dummy peserta ke storage
     const filesToUpload = [
       { src: 'foto.jpg', dest: `/foto/${participantId}.jpg` },
@@ -1301,6 +1316,7 @@ async function seedCertificates() {
       participantId: r.participantId,
       signatureId: r.signatureId,
       certificateNumber: r.number,
+      certificatePath: r.certificatePath,
       createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
       updatedAt: r.updatedAt ? new Date(r.updatedAt) : new Date(),
     }));
@@ -1340,6 +1356,9 @@ async function seedCertificates() {
       const certYear = new Date().getFullYear();
       const certNumber = `CERT-${certYear}-${(i + 1).toString().padStart(4, '0')}`;
       
+      // Generate a mock certificate path (simulating PDF storage path)
+      const certificatePath = `/certificates/seed_${certNumber.replace(/-/g, '_')}.pdf`;
+      
       // Certificate creation date should be after COT end date for completed COTs
       let createdDate;
       if (cot.status === 'Selesai') {
@@ -1360,25 +1379,47 @@ async function seedCertificates() {
         participantId: participant.id,
         signatureId: faker.helpers.arrayElement(signatures).id,
         certificateNumber: certNumber,
-        attendance: faker.number.float({ min: 80.0, max: 100.0, multipleOf: 0.1 }),
+        certificatePath: certificatePath, // Add mock certificate path
+        attendance: faker.number.float({ min: 80.0, max: 100.0, multipleOf: 0.1 }), // Attendance as percentage
         theoryScore: faker.number.float({ min: 70.0, max: 100.0, multipleOf: 0.1 }),
         practiceScore: faker.number.float({ min: 70.0, max: 100.0, multipleOf: 0.1 }),
-        certificatePath: null, // Generated separately or set to null initially
-        createdAt: createdDate,
-        updatedAt: createdDate,
       };
     });
   }
   
   if (data.length > 0) {
     await processBatch(data, async (certificate) => {
+      // Upload dummy PDF to storage for each certificate
+      try {
+        const dummyPdfPath = path.join(__dirname, '..', 'public', 'assets', 'dummy_certificate.pdf');
+        
+        // Check if dummy PDF exists
+        try {
+          await fs.access(dummyPdfPath);
+        } catch {
+          Logger.warn('dummy_certificate.pdf not found, creating certificate without PDF');
+          certificate.certificatePath = null;
+          await prisma.certificate.create({ data: certificate });
+          return;
+        }
+        
+        // Upload using the existing uploadToStorage function
+        await uploadToStorage(dummyPdfPath, certificate.certificatePath);
+        Logger.debug(`Uploaded dummy certificate PDF: ${certificate.certificatePath}`);
+        
+      } catch (uploadError) {
+        Logger.warn(`Failed to upload dummy certificate PDF, creating certificate without PDF: ${uploadError.message}`);
+        certificate.certificatePath = null;
+      }
+      
       await prisma.certificate.create({ data: certificate });
-    }, BATCH_SIZE, 'seed-certificates');
-    Logger.info(`Seeded ${data.length} certificates`);
+    }, 2, 'seed-certificates'); // Use smaller batch size for file uploads
+    Logger.info(`Seeded ${data.length} certificates with dummy PDF files`);
   } else {
     Logger.info('No certificates to seed');
   }
 }
+
 
 console.log('=== SEBELUM PANGGIL MAIN ===');
 main();

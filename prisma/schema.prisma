@@ -1,199 +1,183 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id                        String        @id @default(uuid())
-  participantId             String?       @unique
-  idNumber                  String?       @unique @db.VarChar(20)
-  email                     String        @unique @db.VarChar(255)
-  nik                       String?       @unique @db.VarChar(50)
-  name                      String        @db.VarChar(255)
-  password                  String        @db.VarChar(255)
-  refreshToken              String?       @db.Text
-  accountVerificationToken  String?       @db.VarChar(512)
-  lastVerificationEmailSentAt DateTime?   @map("last_verification_email_sent_at")
-  emailChangeToken          String?       @db.Text
-  passwordResetToken        String?       @db.Text
-  updateEmailToken          String?       @db.Text
-  roleId                    String
-  dinas                     String?       @db.VarChar(50)
-  verifiedAccount           Boolean       @default(false)
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
-
-  role                      Role          @relation(fields: [roleId], references: [id])
-  participant               Participant?  @relation(fields: [participantId], references: [id])
+  id                          String       @id @default(uuid())
+  email                       String       @unique @db.VarChar(255)
+  password                    String       @db.VarChar(255)
+  roleId                      String
+  nik                         String?      @unique @db.VarChar(50)
+  name                        String       @db.VarChar(255)
+  dinas                       String?      @db.VarChar(50)
+  participantId               String?      @unique
+  idNumber                    String?      @unique @db.VarChar(20)
+  refreshToken                String?
+  accountVerificationToken    String?      @db.VarChar(512)
+  emailChangeToken            String?
+  passwordResetToken          String?
+  verifiedAccount             Boolean      @default(false)
+  updateEmailToken            String?
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+  lastVerificationEmailSentAt DateTime?    @map("last_verification_email_sent_at")
+  participant                 Participant? @relation(fields: [participantId], references: [id])
+  role                        Role         @relation(fields: [roleId], references: [id])
 
   @@map("users")
 }
 
 model Role {
-  id    String  @id @default(uuid())
-  name  String  @unique @db.VarChar(50)
-
+  id    String @id @default(uuid())
+  name  String @unique @db.VarChar(50)
   users User[]
 
   @@map("roles")
 }
 
-
 model Participant {
-  id                            String              @id @default(uuid())
-  idNumber                      String?             @unique @db.VarChar(20)
-  name                          String              @db.VarChar(255)
-  nik                           String              @unique @db.VarChar(50)
-  dinas                         String?             @db.VarChar(50)
-  bidang                        String?             @db.VarChar(50)
-  company                       String?             @db.VarChar(255)
-  email                         String              @db.VarChar(255)
-  phoneNumber                   String?             @db.VarChar(50)
-  nationality                   String?             @db.VarChar(50)
-  placeOfBirth                  String?             @db.VarChar(50)
-  dateOfBirth                   DateTime?           @db.Date
-  simAFileName                  String?             @db.VarChar(255)
-  simAPath                      String?             @db.VarChar(255)
-  simBFileName                  String?             @db.VarChar(255)
-  simBPath                      String?             @db.VarChar(255)
-  ktpFileName                   String?             @db.VarChar(255)
-  ktpPath                       String?             @db.VarChar(255)
-  fotoFileName                  String?             @db.VarChar(255)
-  fotoPath                      String?             @db.VarChar(255)
-  suratSehatButaWarnaFileName   String?             @db.VarChar(255)
-  suratSehatButaWarnaPath       String?             @db.VarChar(255)
-  tglKeluarSuratSehatButaWarna  DateTime?           @db.Date
-  suratBebasNarkobaFileName     String?             @db.VarChar(255)
-  suratBebasNarkobaPath         String?             @db.VarChar(255)
-  tglKeluarSuratBebasNarkoba    DateTime?           @db.Date
-  qrCodePath                    String?             @db.Text
-  qrCodeLink                    String?             @db.Text
-  gmfNonGmf                     String?             @db.VarChar(20)
-
-  participantsCots              ParticipantsCOT[]
-  user                          User?
-  certificates                  Certificate[] 
+  id                           String            @id @default(uuid())
+  nik                          String            @unique @db.VarChar(50)
+  bidang                       String?           @db.VarChar(50)
+  email                        String            @db.VarChar(255)
+  dinas                        String?           @db.VarChar(50)
+  gmfNonGmf                    String?           @db.VarChar(20)
+  fotoFileName                 String?           @db.VarChar(255)
+  ktpFileName                  String?           @db.VarChar(255)
+  simAFileName                 String?           @db.VarChar(255)
+  simBFileName                 String?           @db.VarChar(255)
+  suratBebasNarkobaFileName    String?           @db.VarChar(255)
+  suratSehatButaWarnaFileName  String?           @db.VarChar(255)
+  tglKeluarSuratBebasNarkoba   DateTime?         @db.Date
+  tglKeluarSuratSehatButaWarna DateTime?         @db.Date
+  company                      String?           @db.VarChar(255)
+  dateOfBirth                  DateTime?         @db.Date
+  idNumber                     String?           @unique @db.VarChar(20)
+  name                         String            @db.VarChar(255)
+  nationality                  String?           @db.VarChar(50)
+  placeOfBirth                 String?           @db.VarChar(50)
+  phoneNumber                  String?           @db.VarChar(50)
+  fotoPath                     String?           @db.VarChar(255)
+  ktpPath                      String?           @db.VarChar(255)
+  qrCodePath                   String?
+  simAPath                     String?           @db.VarChar(255)
+  simBPath                     String?           @db.VarChar(255)
+  suratBebasNarkobaPath        String?           @db.VarChar(255)
+  suratSehatButaWarnaPath      String?           @db.VarChar(255)
+  qrCodeLink                   String?
+  participantsCots             ParticipantsCOT[]
+  certificates                 Certificate[]
+  user                         User?
 
   @@map("participants")
 }
 
 model Capability {
-  id                                String                  @id @default(uuid())
-  ratingCode                        String                  @db.VarChar(20)
-  trainingCode                      String                  @db.VarChar(50)
-  trainingName                      String                  @db.VarChar(50)
-  totalTheoryDurationRegGse         Int?
-  totalPracticeDurationRegGse       Int?
-  totalTheoryDurationCompetency     Int?
-  totalPracticeDurationCompetency   Int?
-  totalDuration                     Int?
-
-  curriculumSyllabus                CurriculumSyllabus[]
-  capabilityCots                    CapabilityCOT[]
+  id                              String               @id @default(uuid())
+  ratingCode                      String               @db.VarChar(20)
+  totalDuration                   Int?
+  totalPracticeDurationCompetency Int?
+  totalPracticeDurationRegGse     Int?
+  totalTheoryDurationCompetency   Int?
+  totalTheoryDurationRegGse       Int?
+  trainingCode                    String               @db.VarChar(50)
+  trainingName                    String               @db.VarChar(50)
+  capabilityCots                  CapabilityCOT[]
+  curriculumSyllabus              CurriculumSyllabus[]
 
   @@map("capabilities")
 }
 
 model CurriculumSyllabus {
-  id                String      @id @default(uuid())
-  capabilityId      String
-  name              String      @db.VarChar(50)
-  theoryDuration    Int
-  practiceDuration  Int
-  type              String      @db.VarChar(20)
-
-  capability        Capability    @relation(fields: [capabilityId], references: [id])
+  id               String     @id @default(uuid())
+  capabilityId     String
+  type             String     @db.VarChar(20)
+  name             String     @db.VarChar(50)
+  practiceDuration Int
+  theoryDuration   Int
+  capability       Capability @relation(fields: [capabilityId], references: [id])
 
   @@map("curriculumSyllabus")
 }
 
 model COT {
-  id                              String              @id @default(uuid())
-  startDate                       DateTime
-  endDate                         DateTime
-  trainingLocation                String              @db.VarChar(50)
-  theoryInstructorRegGse          String              @db.VarChar(50)
-  theoryInstructorCompetency      String              @db.VarChar(50)
-  practicalInstructor1            String              @db.VarChar(50)
-  practicalInstructor2            String              @db.VarChar(50)
-  status                          String              @db.VarChar(50)
-
-  capabilityCots                  CapabilityCOT[]
-  participantsCots                ParticipantsCOT[]
-  certificate                     Certificate[]
+  id                         String            @id @default(uuid())
+  status                     String            @db.VarChar(50)
+  endDate                    DateTime
+  practicalInstructor1       String            @db.VarChar(50)
+  practicalInstructor2       String            @db.VarChar(50)
+  startDate                  DateTime
+  theoryInstructorCompetency String            @db.VarChar(50)
+  theoryInstructorRegGse     String            @db.VarChar(50)
+  trainingLocation           String            @db.VarChar(50)
+  capabilityCots             CapabilityCOT[]
+  certificate                Certificate[]
+  participantsCots           ParticipantsCOT[]
 
   @@map("cots")
 }
 
 model CapabilityCOT {
-  capabilityId                    String
-  cotId                           String
+  capabilityId String
+  cotId        String
+  capability   Capability @relation(fields: [capabilityId], references: [id])
+  cot          COT        @relation(fields: [cotId], references: [id])
 
-  capability                      Capability           @relation(fields: [capabilityId], references: [id])
-  cot                             COT                  @relation(fields: [cotId], references: [id])
-
-  @@id([capabilityId, cotId])                            // Primary key untuk join table
+  @@id([capabilityId, cotId])
   @@map("capabilityCots")
 }
 
 model ParticipantsCOT {
-  id              String         @id @default(uuid())
-  participantId   String?
-  cotId           String
-
-  participant     Participant?   @relation(fields: [participantId], references: [id])
-  cot             COT            @relation(fields: [cotId], references: [id])
+  id            String       @id @default(uuid())
+  participantId String?
+  cotId         String
+  cot           COT          @relation(fields: [cotId], references: [id])
+  participant   Participant? @relation(fields: [participantId], references: [id])
 
   @@map("participantsCot")
 }
 
 model Signature {
-  id              String          @id @default(uuid())
-  idNumber        String          @db.VarChar(20)
-  role            String          @db.VarChar(50)
-  name            String          @db.VarChar(50)
-  eSignFileName   String?         @db.VarChar(255)
-  eSignPath       String?         @db.VarChar(255)
-  signatureType   SignatureType
-  status          Boolean         @default(false)
-
-  certificates    Certificate[]
+  id            String        @id @default(uuid())
+  role          String        @db.VarChar(50)
+  name          String        @db.VarChar(50)
+  status        Boolean       @default(false)
+  idNumber      String        @db.VarChar(20)
+  signatureType SignatureType
+  eSignFileName String?       @db.VarChar(255)
+  eSignPath     String?       @db.VarChar(255)
+  certificates  Certificate[]
 
   @@map("signatures")
+}
+
+model Certificate {
+  id                String       @id @default(uuid())
+  cotId             String
+  participantId     String
+  signatureId       String
+  certificateNumber String       @db.VarChar(50)
+  attendance        Float
+  theoryScore       Float
+  practiceScore     Float
+  certificatePath   String?      @db.VarChar(255)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  cot               COT          @relation(fields: [cotId], references: [id])
+  participant       Participant  @relation(fields: [participantId], references: [id])
+  signature         Signature    @relation(fields: [signatureId], references: [id])
+
+  @@map("certificates")
 }
 
 enum SignatureType {
   SIGNATURE1
   SIGNATURE2
-}
-
-model Certificate {
-  id                  String            @id @default(uuid())
-  cotId               String
-  participantId       String
-  signatureId         String
-  certificateNumber   String            @db.VarChar(50)
-  attendance          Float
-  theoryScore         Float
-  practiceScore       Float
-  certificatePath     String?           @db.VarChar(255)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-
-  cot                 COT               @relation(fields: [cotId], references: [id])
-  participant         Participant       @relation(fields: [participantId], references: [id])
-  signature           Signature         @relation(fields: [signatureId], references: [id])
-
-  @@map("certificates")
 }

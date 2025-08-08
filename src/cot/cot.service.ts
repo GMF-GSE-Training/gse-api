@@ -902,7 +902,8 @@ orderBy,
         }
 
         for (const certificate of certificates) {
-            const dinas = certificate.participant.dinas;
+            // Get dinas directly from the certificate's participant
+            const dinas = certificate.participant?.dinas;
             const ratingCode = certificate.cot.capabilityCots[0]?.capability.ratingCode;
 
             if (dinas && ratingCode && dataByDinasAndRating[dinas]) {

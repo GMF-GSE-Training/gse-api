@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Par
 import { CotResponse, CreateCot, UpdateCot, DashboardStatsResponse } from "src/model/cot.model";
 import { buildResponse, ListRequest, WebResponse } from "src/model/web.model";
 import { CotService } from "./cot.service";
+import { CertificateService } from "../certificate/certificate.service";
 import { Roles } from "src/shared/decorator/role.decorator";
 import { AuthGuard } from "src/shared/guard/auth.guard";
 import { RoleGuard } from "src/shared/guard/role.guard";
@@ -10,7 +11,10 @@ import { User } from "src/shared/decorator/user.decorator";
 
 @Controller('/cot')
 export class CotController {
-    constructor(private readonly cotService: CotService) { }
+    constructor(
+        private readonly cotService: CotService,
+        private readonly certificateService: CertificateService
+    ) { }
 
     @Post()
     @HttpCode(200)
@@ -109,6 +113,54 @@ export class CotController {
     @UseGuards(AuthGuard, RoleGuard)
     async delete(@Param('cotId', ParseUUIDPipe) cotId: string): Promise<WebResponse<string>> {
         const result = await this.cotService.deleteCot(cotId);
+        return buildResponse(HttpStatus.OK, result);
+    }
+
+    // Endpoint untuk certificate dengan URL format yang digunakan frontend
+    // Menggunakan query parameter untuk participantId
+    @Get('/certificate/:cotId/view')
+    @HttpCode(200)
+    @Roles('super admin', 'supervisor', 'lcu', 'user')
+    @UseGuards(AuthGuard, RoleGuard)
+    async getCertificateViewForCot(
+        @Param('cotId', ParseUUIDPipe) cotId: string,
+        @User() user: CurrentUserRequest,
+        @Query('participantId') participantId?: string,
+    ): Promise<WebResponse<string>> {
+        // Tentukan participantId yang akan digunakan
+        let targetParticipantId: string;
+        
+        if (user.role.name.toLowerCase() === 'user') {
+            // User biasa hanya bisa akses sertifikat mereka sendiri
+            if (!user.participantId) {
+                throw new HttpException('User tidak terkait dengan participant', 403);
+            }
+            targetParticipantId = user.participantId;
+            
+            // Jika user mencoba akses sertifikat participant lain, tolak
+            if (participantId && participantId !== user.participantId) {
+                throw new HttpException('Anda tidak bisa mengakses sertifikat participant lain', 403);
+            }
+        } else {
+            // Admin/supervisor/lcu perlu mengirim participantId
+            if (!participantId) {
+                throw new HttpException(
+                    'Untuk admin/supervisor/lcu, participantId harus disertakan sebagai query parameter: ?participantId=xxx',
+                    400
+                );
+            }
+            targetParticipantId = participantId;
+        }
+
+        // Cari certificate untuk participant ini di COT ini
+        const certificate = await this.certificateService.checkCertificateByParticipant(cotId, targetParticipantId);
+        if (!certificate) {
+            throw new HttpException('Sertifikat tidak ditemukan untuk participant ini di COT ini', 404);
+        }
+
+        // Ambil file certificate menggunakan certificate ID
+        const fileBuffer = await this.certificateService.streamFile(certificate.id, user);
+        const result = fileBuffer.toString('base64');
         return buildResponse(HttpStatus.OK, result);
     }
 }

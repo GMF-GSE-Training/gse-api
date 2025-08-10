@@ -818,13 +818,151 @@ orderBy,
             new Set(
                 availableYearsQuery.map((cot) => cot.startDate.getFullYear())
             )
-        ).sort((a, b) => b - a); // Sort descending (newest first)
+        ).sort((a, b) => b - a); // Latest year first
         
         return {
             year,
             monthlyStats,
             totalStats,
             availableYears,
+        };
+    }
+
+    /**
+     * Get certificate statistics for dashboard
+     */
+    async getCertificateStatistics(): Promise<{
+        activeCertificates: number;
+        expiredCertificates: number;
+        totalCertificates: number;
+        certificateHolders: number;
+        activeCertificatesByRatingCode: {
+            ratingCode: string;
+            trainingName: string;
+            count: number;
+        }[];
+    }> {
+        const currentDate = new Date();
+        // Set ke awal hari untuk membandingkan dengan tanggal end COT
+        currentDate.setHours(0, 0, 0, 0);
+        
+        console.log('🗓️ Current Date for active certificate check:', currentDate);
+
+        // Get all certificates with COT information
+        const certificates = await this.prismaService.certificate.findMany({
+            include: {
+                cot: {
+                    select: {
+                        endDate: true,
+                        capabilityCots: {
+                            select: {
+                                capability: {
+                                    select: {
+                                        ratingCode: true,
+                                        trainingName: true,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                participant: {
+                    select: {
+                        id: true,
+                    }
+                }
+            }
+        });
+
+        // Calculate statistics
+        let activeCertificates = 0;
+        let expiredCertificates = 0;
+        const ratingTypeCounts = new Map<string, { trainingName: string; count: number }>();
+        const uniqueParticipants = new Set<string>();
+
+        console.log('📋 Total certificates found:', certificates.length);
+        
+        certificates.forEach((certificate, index) => {
+            const cotEndDate = new Date(certificate.cot.endDate);
+            const isActive = cotEndDate >= currentDate;
+            const capability = certificate.cot.capabilityCots[0]?.capability;
+            
+            console.log(`📜 Certificate ${index + 1}:`, {
+                cotEndDate: cotEndDate.toISOString(),
+                currentDate: currentDate.toISOString(),
+                isActive,
+                ratingCode: capability?.ratingCode,
+                trainingName: capability?.trainingName
+            });
+            
+            if (isActive) {
+                activeCertificates++;
+                
+                // Count by rating code for active certificates only
+                if (capability) {
+                    const key = capability.ratingCode;
+                    if (ratingTypeCounts.has(key)) {
+                        ratingTypeCounts.get(key)!.count++;
+                    } else {
+                        ratingTypeCounts.set(key, {
+                            trainingName: capability.trainingName,
+                            count: 1
+                        });
+                    }
+                    console.log(`✅ Added active certificate for ${key}`);
+                }
+            } else {
+                expiredCertificates++;
+                console.log('⏰ Certificate expired');
+            }
+
+            // Count unique participants
+            uniqueParticipants.add(certificate.participant.id);
+        });
+        
+        console.log('📊 Final statistics:', {
+            activeCertificates,
+            expiredCertificates,
+            totalCertificates: certificates.length,
+            ratingTypeCounts: Array.from(ratingTypeCounts.entries())
+        });
+
+        // Convert rating type counts to array and sort by count descending
+        const activeCertificatesByRatingCode = Array.from(ratingTypeCounts.entries())
+            .map(([ratingCode, data]) => ({
+                ratingCode,
+                trainingName: data.trainingName,
+                count: data.count
+            }))
+            .sort((a, b) => b.count - a.count);
+
+        return {
+            activeCertificates,
+            expiredCertificates,
+            totalCertificates: certificates.length,
+            certificateHolders: uniqueParticipants.size,
+            activeCertificatesByRatingCode,
+        };
+    }
+
+    /**
+     * Get active certificates by rating code for chart
+     */
+    async getActiveCertificatesByTrainingType(): Promise<{
+        labels: string[];
+        data: number[];
+        totalActive: number;
+    }> {
+        const statistics = await this.getCertificateStatistics();
+        
+        const labels = statistics.activeCertificatesByRatingCode.map(item => item.ratingCode);
+        const data = statistics.activeCertificatesByRatingCode.map(item => item.count);
+        const totalActive = statistics.activeCertificates;
+
+        return {
+            labels,
+            data,
+            totalActive
         };
     }
 

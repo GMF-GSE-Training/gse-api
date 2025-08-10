@@ -51,6 +51,28 @@ export class CotController {
         return buildResponse(HttpStatus.OK, result);
     }
 
+    @Get('/certificate-statistics')
+    @HttpCode(200)
+    @Roles('super admin', 'supervisor', 'lcu', 'user')
+    @UseGuards(AuthGuard, RoleGuard)
+    async getCertificateStatistics(
+        @User() user: CurrentUserRequest,
+    ): Promise<WebResponse<any>> {
+        const result = await this.cotService.getCertificateStatistics();
+        return buildResponse(HttpStatus.OK, result);
+    }
+
+    @Get('/active-certificates-by-training-type')
+    @HttpCode(200)
+    @Roles('super admin', 'supervisor', 'lcu', 'user')
+    @UseGuards(AuthGuard, RoleGuard)
+    async getActiveCertificatesByTrainingType(
+        @User() user: CurrentUserRequest,
+    ): Promise<WebResponse<any>> {
+        const result = await this.cotService.getActiveCertificatesByTrainingType();
+        return buildResponse(HttpStatus.OK, result);
+    }
+
     @Get('/list')
     @HttpCode(200)
     @Roles('super admin', 'supervisor', 'lcu', 'user')

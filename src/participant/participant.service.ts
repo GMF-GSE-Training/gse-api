@@ -77,25 +77,29 @@ export class ParticipantService {
 
         // PATCH: Upload file jika buffer ada, assign path
         const fileFields = [
-            { key: 'simA', fileNameKey: 'simAFileName', pathKey: 'simAPath' },
-            { key: 'simB', fileNameKey: 'simBFileName', pathKey: 'simBPath' },
-            { key: 'ktp', fileNameKey: 'ktpFileName', pathKey: 'ktpPath' },
-            { key: 'foto', fileNameKey: 'fotoFileName', pathKey: 'fotoPath' },
-            { key: 'suratSehatButaWarna', fileNameKey: 'suratSehatButaWarnaFileName', pathKey: 'suratSehatButaWarnaPath' },
-            { key: 'suratBebasNarkoba', fileNameKey: 'suratBebasNarkobaFileName', pathKey: 'suratBebasNarkobaPath' },
+            { key: 'simA', fileNameKey: 'simAFileName', pathKey: 'simAPath', folder: 'simA' },
+            { key: 'simB', fileNameKey: 'simBFileName', pathKey: 'simBPath', folder: 'simB' },
+            { key: 'ktp', fileNameKey: 'ktpFileName', pathKey: 'ktpPath', folder: 'ktp' },
+            { key: 'foto', fileNameKey: 'fotoFileName', pathKey: 'fotoPath', folder: 'foto' },
+            { key: 'suratSehatButaWarna', fileNameKey: 'suratSehatButaWarnaFileName', pathKey: 'suratSehatButaWarnaPath', folder: 'suratSehat' },
+            { key: 'suratBebasNarkoba', fileNameKey: 'suratBebasNarkobaFileName', pathKey: 'suratBebasNarkobaPath', folder: 'suratNarkoba' },
         ];
         for (const field of fileFields) {
             if (createRequest[field.key]) {
                 try {
                     this.logger.log(`Uploading file ${field.key} for participant...`);
+
+                    const originalName = createRequest[field.fileNameKey] || `${field.key}.png`;
+                    const fullPath = `${field.folder}/${Date.now()}-${originalName}`;
+
                     const fileObj = {
                         buffer: createRequest[field.key],
-                        originalname: createRequest[field.fileNameKey] || `${field.key}.png`,
+                        originalname: originalName,
                         mimetype: 'application/octet-stream', // Default, bisa diimprove jika ada info
                         size: createRequest[field.key].length,
                     };
                     // Simulasi Express.Multer.File
-                    const path = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+                    const path = await this.fileUploadService.uploadFile(fileObj as any, fullPath);
                     createRequest[field.pathKey] = path;
                     this.logger.log(`File ${field.key} uploaded, path: ${path}`);
                 } catch (err) {
@@ -493,24 +497,29 @@ export class ParticipantService {
 
         // PATCH: Upload file jika buffer ada, assign path
         const fileFields = [
-            { key: 'simA', fileNameKey: 'simAFileName', pathKey: 'simAPath' },
-            { key: 'simB', fileNameKey: 'simBFileName', pathKey: 'simBPath' },
-            { key: 'ktp', fileNameKey: 'ktpFileName', pathKey: 'ktpPath' },
-            { key: 'foto', fileNameKey: 'fotoFileName', pathKey: 'fotoPath' },
-            { key: 'suratSehatButaWarna', fileNameKey: 'suratSehatButaWarnaFileName', pathKey: 'suratSehatButaWarnaPath' },
-            { key: 'suratBebasNarkoba', fileNameKey: 'suratBebasNarkobaFileName', pathKey: 'suratBebasNarkobaPath' },
+            { key: 'simA', fileNameKey: 'simAFileName', pathKey: 'simAPath', folder: 'simA' },
+            { key: 'simB', fileNameKey: 'simBFileName', pathKey: 'simBPath', folder: 'simB' },
+            { key: 'ktp', fileNameKey: 'ktpFileName', pathKey: 'ktpPath', folder: 'ktp' },
+            { key: 'foto', fileNameKey: 'fotoFileName', pathKey: 'fotoPath', folder: 'foto' },
+            { key: 'suratSehatButaWarna', fileNameKey: 'suratSehatButaWarnaFileName', pathKey: 'suratSehatButaWarnaPath', folder: 'suratSehat' },
+            { key: 'suratBebasNarkoba', fileNameKey: 'suratBebasNarkobaFileName', pathKey: 'suratBebasNarkobaPath', folder: 'suratNarkoba' },
         ];
         for (const field of fileFields) {
             if (updateRequest[field.key]) {
                 try {
                     this.logger.log(`Uploading file ${field.key} for participant (update)...`);
+
+                    const originalName = updateRequest[field.fileNameKey] || `${field.key}.png`;
+                    const fullPath = `${field.folder}/${Date.now()}-${originalName}`;
+
                     const fileObj = {
                         buffer: updateRequest[field.key],
-                        originalname: updateRequest[field.fileNameKey] || `${field.key}.png`,
+                        originalname: originalName,
                         mimetype: 'application/octet-stream',
                         size: updateRequest[field.key].length,
                     };
-                    const path = await this.fileUploadService.uploadFile(fileObj as any, fileObj.originalname);
+                    
+                    const path = await this.fileUploadService.uploadFile(fileObj as any, fullPath);
                     updateRequest[field.pathKey] = path;
                     this.logger.log(`File ${field.key} uploaded (update), path: ${path}`);
                 } catch (err) {

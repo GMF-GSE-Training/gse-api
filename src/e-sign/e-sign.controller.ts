@@ -73,9 +73,9 @@ export class ESignController {
     try {
       eSign = {
         ...request,
-        eSignFileName: request.eSignFileName
-          ? request.eSignFileName
-          : 'e-sign.png',
+        eSignFileName: request.eSignFileName && request.eSignFileName !== 'undefined'
+        ? request.eSignFileName 
+        : (files.eSign?.[0]?.originalname || 'e-sign.png'),
         eSign: files.eSign[0].buffer,
       };
     } catch (error) {
@@ -124,9 +124,9 @@ export class ESignController {
     let eSign: UpdateESign;
     eSign = {
       ...request,
-      eSignFileName: request.eSignFileName
-        ? request.eSignFileName
-        : 'e-sign.png',
+      eSignFileName: request.eSignFileName && request.eSignFileName !== 'undefined'
+      ? request.eSignFileName 
+      : (files?.eSign?.[0]?.originalname || undefined),
       eSign: files?.eSign?.[0]?.buffer || undefined,
     };
     const result = await this.eSignService.updateESign(eSignId, eSign);

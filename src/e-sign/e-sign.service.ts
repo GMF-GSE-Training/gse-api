@@ -27,10 +27,12 @@ export class ESignService {
   ) {}
 
   async createESign(request: CreateESign): Promise<string> {
+    console.log("REQUEST: ", request);
     const createRequest = this.validationService.validate(
       ESignValidation.CREATE,
       request,
     );
+    console.log("REQUEST VALIDATED: ", createRequest);
 
     if (!Object.values(SignatureType).includes(createRequest.signatureType)) {
       throw new HttpException('Tipe tanda tangan tidak valid', 400);
@@ -96,7 +98,7 @@ export class ESignService {
           signatureType: createRequest.signatureType,
           status: createRequest.status,
       },
-  });
+    });
 
     return 'E-Sign berhasil ditambahkan';
   }

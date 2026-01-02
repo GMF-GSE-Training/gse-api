@@ -7,7 +7,7 @@ export class ESignValidation {
     role: z.string().min(1).max(50),
     name: z.string().min(1).max(50),
     eSign: z.instanceof(Buffer).optional(),
-    signFileName: z.string().optional(),
+    eSignFileName: z.string().optional(),
     signatureType: z.enum([SignatureType.SIGNATURE1, SignatureType.SIGNATURE2]),
     status: z.boolean(),
   });

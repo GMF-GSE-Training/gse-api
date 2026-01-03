@@ -195,8 +195,6 @@ export class CertificateService {
       new Date(participant.dateOfBirth),
     );
 
-    // Generate certificate number
-    const certificateNumber = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const backgroundImage = `${process.env.BACKEND_URL}/assets/images/background_sertifikat.png`;
     const templatePath = join(
       __dirname,
@@ -214,7 +212,7 @@ export class CertificateService {
       nationality: participant.nationality,
       competencies: capability.trainingName,
       date: this.formatDate(new Date()),
-      certificateNumber: certificateNumber,
+      certificateNumber: createCertificateRequest.certificateNumber,
       duration: capability.totalDuration,
       coursePeriode: `${formattedStartDate} - ${formattedEndDate}`,
       nameSignature1: signature1.name,
@@ -381,26 +379,27 @@ export class CertificateService {
         pdfValid: pdfSignature.includes('%PDF')
       });
       
+      const safeCertificateNumber = createCertificateRequest.certificateNumber.replace(/\//g, '_');
+
       // Create proper Express.Multer.File object with Windows compatibility
       const fileObj: Express.Multer.File = {
         fieldname: 'certificate',
-        originalname: `certificate_${certificateNumber}.pdf`,
+        originalname: `${safeCertificateNumber}.pdf`,
         encoding: '7bit',
         mimetype: 'application/pdf',
         buffer: certificateBuffer,
         size: certificateBuffer.length,
         // Required fields for full compatibility
         destination: '',
-        filename: `certificate_${certificateNumber}.pdf`,
+        filename: `certificate_${createCertificateRequest.certificateNumber}.pdf`,
         path: '',
         stream: undefined
       };
       
-      // Normalize path for cross-platform compatibility
-      const uploadPath = `certificates/certificate_${certificateNumber}.pdf`
-        .replace(/\\/g, '/')  // Convert Windows backslashes
-        .replace(/\/+/g, '/') // Remove duplicate slashes
-        .replace(/^\//, '');  // Remove leading slash
+      const uploadPath = `certificates/${safeCertificateNumber}.pdf`
+        .replace(/\\/g, '/')  
+        .replace(/\/+/g, '/') 
+        .replace(/^\//, '');
       
       // Perform upload with enhanced error context
       certificatePath = await this.fileUploadService.uploadFile(fileObj, uploadPath);
@@ -444,8 +443,7 @@ export class CertificateService {
         cotId: cotId,
         participantId: participantId,
         signatureId: activeSignature.id,
-        certificateNumber: certificateNumber,
-        attendance: createCertificateRequest.attendance,
+        certificateNumber: createCertificateRequest.certificateNumber,
         theoryScore: createCertificateRequest.theoryScore,
         practiceScore: createCertificateRequest.practiceScore,
         certificatePath: certificatePath,

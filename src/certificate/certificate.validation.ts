@@ -14,5 +14,6 @@ export class CertificateValidation {
       .number()
       .positive()
       .max(100, { message: 'Kehadiran tidak boleh lebih dari 100' }),
+    certificateNumber: z.string().min(1).max(50),
   });
 }

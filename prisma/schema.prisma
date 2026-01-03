@@ -184,7 +184,6 @@ model Certificate {
   participantId       String
   signatureId         String
   certificateNumber   String            @db.VarChar(50)
-  attendance          Float
   theoryScore         Float
   practiceScore       Float
   certificatePath     String?         @db.VarChar(255)

@@ -1,5 +1,0 @@
--- AlterTable
-ALTER TABLE "participants" ALTER COLUMN "email" SET DATA TYPE VARCHAR(255);
-
--- AlterTable
-ALTER TABLE "users" ALTER COLUMN "email" SET DATA TYPE VARCHAR(255);

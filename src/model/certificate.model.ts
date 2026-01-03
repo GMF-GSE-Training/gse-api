@@ -14,6 +14,7 @@ export interface CertificateResponse {
 
 export interface CertificateListResponse {
   id: string;
+  cotId: string;
   capabilityName: string;
   expDate: Date;
 }

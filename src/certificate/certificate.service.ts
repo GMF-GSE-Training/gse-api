@@ -596,7 +596,8 @@ export class CertificateService {
         where: whereClause,
         include: {
           cot: {
-            include: {
+            select: {
+              id: true,
               capabilityCots: {
                 include: {
                   capability: {
@@ -616,6 +617,7 @@ export class CertificateService {
         const capability = cert.cot.capabilityCots[0]?.capability;
         return {
           id: cert.id,
+          cotId: cert.cot.id,
           capabilityName: capability?.trainingName || 'Unknown Capability',
           expDate: cert.expDate,
         };
@@ -634,7 +636,8 @@ export class CertificateService {
         where: whereClause,
         include: {
           cot: {
-            include: {
+            select: {
+              id: true,
               capabilityCots: {
                 include: {
                   capability: {
@@ -657,6 +660,7 @@ export class CertificateService {
         const capability = cert.cot.capabilityCots[0]?.capability;
         return {
           id: cert.id,
+          cotId: cert.cot.id,
           capabilityName: capability?.trainingName || 'Unknown Capability',
           expDate: cert.expDate,
         };

@@ -3,14 +3,7 @@ import { PrismaService } from 'src/common/service/prisma.service';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { ListRequest, Paging } from 'src/model/web.model';
 import { naturalSort } from '../common/helpers/natural-sort';
-
-export interface CertificateResponse {
-  id: string;
-  trainingName: string;
-  expiryDate: Date;
-  certificateNumber?: string;
-  status: string;
-}
+import { CertificateResponse } from 'src/model/certificate.model';
 
 @Injectable()
 export class ParticipantCertificateService {

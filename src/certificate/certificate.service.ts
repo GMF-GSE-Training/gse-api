@@ -1,13 +1,17 @@
 import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/service/prisma.service';
 import { ValidationService } from 'src/common/service/validation.service';
-import { CreateCertificate } from 'src/model/certificate.model';
+import { CertificateListResponse, CreateCertificate } from 'src/model/certificate.model';
 import { CertificateValidation } from './certificate.validation';
 import { join } from 'path';
 import * as ejs from 'ejs';
 import puppeteer from 'puppeteer';
 import { getFileBufferFromMinio } from '../common/helpers/minio.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { ListRequest, Paging, ActionAccessRights } from 'src/model/web.model';
+import { naturalSort } from 'src/common/helpers/natural-sort';
+import { CoreHelper } from 'src/common/helpers/core.helper';
+import { CurrentUserRequest } from 'src/model/auth.model';
 
 @Injectable()
 export class CertificateService {
@@ -16,6 +20,7 @@ export class CertificateService {
     private readonly prismaService: PrismaService,
     private readonly validationService: ValidationService,
     private readonly fileUploadService: FileUploadService,
+    private readonly coreHelper: CoreHelper,
   ) {}
 
   async createCertificate(
@@ -526,9 +531,161 @@ export class CertificateService {
       },
     });
 
-    
-
     return 'Sertifikat berhadil dihapus';
+  }
+
+  async listCertificates(
+    request: ListRequest,
+    user: CurrentUserRequest,
+  ): Promise<{
+    data: CertificateListResponse[];
+    actions: ActionAccessRights;
+    paging: Paging;
+  }> {
+    const whereClause: any = {};
+
+    // Search query untuk capability name atau certificate number
+    if (request.searchQuery) {
+      whereClause.OR = [
+        {
+          cot: {
+            capabilityCots: {
+              some: {
+                capability: {
+                  trainingName: {
+                    contains: request.searchQuery,
+                    mode: 'insensitive',
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          certificateNumber: {
+            contains: request.searchQuery,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    // Hitung total untuk pagination
+    const totalCertificates = await this.prismaService.certificate.count({
+      where: whereClause,
+    });
+
+    // Pagination parameters
+    const page = request.page || 1;
+    const size = request.size || 10;
+    const totalPage = Math.ceil(totalCertificates / size);
+
+    // Sorting
+    const allowedSortFields = ['capabilityName', 'expDate'];
+    const sortBy = request.sortBy && allowedSortFields.includes(request.sortBy) 
+      ? request.sortBy 
+      : 'expDate';
+    const sortOrder: 'asc' | 'desc' = request.sortOrder === 'desc' ? 'desc' : 'asc';
+
+    let certificates: any[];
+    let certificateList: CertificateListResponse[];
+
+    if (sortBy === 'capabilityName') {
+      // Untuk capabilityName, ambil semua data, transform, sort, lalu pagination manual
+      const allCertificates = await this.prismaService.certificate.findMany({
+        where: whereClause,
+        include: {
+          cot: {
+            include: {
+              capabilityCots: {
+                include: {
+                  capability: {
+                    select: {
+                      trainingName: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Transform data ke response format
+      certificateList = allCertificates.map((cert) => {
+        const capability = cert.cot.capabilityCots[0]?.capability;
+        return {
+          id: cert.id,
+          capabilityName: capability?.trainingName || 'Unknown Capability',
+          expDate: cert.expDate,
+        };
+      });
+
+      // Natural sort by capabilityName
+      certificateList.sort((a, b) =>
+        naturalSort(a.capabilityName || '', b.capabilityName || '', sortOrder),
+      );
+
+      // Pagination manual
+      certificateList = certificateList.slice((page - 1) * size, page * size);
+    } else {
+      // Untuk expDate, gunakan orderBy di database dengan pagination
+      certificates = await this.prismaService.certificate.findMany({
+        where: whereClause,
+        include: {
+          cot: {
+            include: {
+              capabilityCots: {
+                include: {
+                  capability: {
+                    select: {
+                      trainingName: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { expDate: sortOrder },
+        skip: (page - 1) * size,
+        take: size,
+      });
+
+      // Transform data ke response format
+      certificateList = certificates.map((cert) => {
+        const capability = cert.cot.capabilityCots[0]?.capability;
+        return {
+          id: cert.id,
+          capabilityName: capability?.trainingName || 'Unknown Capability',
+          expDate: cert.expDate,
+        };
+      });
+    }
+
+    const userRole = user.role.name.toLowerCase();
+    const actions = this.validateActions(userRole);
+
+    return {
+      data: certificateList,
+      actions: actions,
+      paging: {
+        currentPage: page,
+        totalPage: totalPage,
+        size: size,
+      },
+    };
+  }
+
+  private validateActions(userRole: string): ActionAccessRights {
+    const accessMap = {
+      'super admin': { canView: true },
+      supervisor: { canView: true },
+      lcu: { canView: true },
+      user: { canView: true },
+    };
+
+    return this.coreHelper.validateActions(userRole, accessMap);
   }
 
   private getMediaType(buffer: Buffer): string {

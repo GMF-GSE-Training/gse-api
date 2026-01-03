@@ -186,6 +186,7 @@ model Certificate {
   certificateNumber   String            @db.VarChar(50)
   theoryScore         Float
   practiceScore       Float
+  expDate             DateTime          @db.Date
   certificatePath     String?         @db.VarChar(255)
 
   cot                 COT               @relation(fields: [cotId], references: [id])

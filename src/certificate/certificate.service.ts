@@ -447,6 +447,10 @@ export class CertificateService {
       throw new HttpException(errorMessage, 500);
     }
 
+    // Hitung expDate 6 bulan setelah cot.endDate
+    const expirationDate = new Date(cot.endDate);
+    expirationDate.setMonth(expirationDate.getMonth() + 6);
+
     // Simpan data sertifikat ke database
     const activeSignature = eSign[0];
     
@@ -458,6 +462,7 @@ export class CertificateService {
         certificateNumber: createCertificateRequest.certificateNumber,
         theoryScore: createCertificateRequest.theoryScore,
         practiceScore: createCertificateRequest.practiceScore,
+        expDate: expirationDate,
         certificatePath: certificatePath,
       },
     });

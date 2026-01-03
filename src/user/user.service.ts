@@ -261,30 +261,17 @@ export class UserService {
     }
 
     try {
-      await this.prismaService.$transaction(async (prisma) => {
-        this.logger.debug(`Memulai transaksi penghapusan untuk user ${userId}.`);
-        // Hapus participant terkait jika ada
-        if (findUser.participantId) {
-          this.logger.debug(`User ${userId} memiliki participantId: ${findUser.participantId}. Menghapus participant terkait.`);
-          const deletedParticipant = await prisma.participant.delete({
-            where: { id: findUser.participantId }
-          });
-          this.logger.debug(`Participant ${findUser.participantId} berhasil dihapus. Hasil: ${JSON.stringify(deletedParticipant)}`);
-        }
-
-        // Kemudian hapus user
-        const deletedUser = await prisma.user.delete({
-          where: {
-            id: userId,
-          },
-        });
-        this.logger.debug(`User ${userId} berhasil dihapus. Hasil: ${JSON.stringify(deletedUser)}`);
+      // Hapus User
+      await this.prismaService.user.delete({
+        where: {
+          id: userId,
+        },
       });
       this.logger.log(`Penghapusan user ${userId} dan data terkait berhasil.`);
       return 'User berhasil dihapus';
     } catch (error) {
-      this.logger.error(`Gagal menghapus user ${userId} atau participant terkait: ${error.message}`, error.stack);
-      throw new HttpException('Gagal menghapus user atau data terkait', 500);
+      this.logger.error(`Gagal menghapus user ${userId}: ${error.message}`, error.stack);
+      throw new HttpException('Gagal menghapus user', 500);
     }
   }
 

@@ -631,7 +631,7 @@ export class ParticipantService {
             return 'Berhasil menghapus participant';
         } catch (error) {
             this.logger.error(`Gagal menghapus participant ${participantId} atau data terkait: ${error.message}`, error.stack);
-            throw new HttpException('Gagal menghapus participant atau data terkait', 500);
+            throw new HttpException('Gagal menghapus participant atau participant masih terdaftar di COT', 400);
         }
     }
 
@@ -855,6 +855,8 @@ export class ParticipantService {
             fotoFileName: participant.fotoFileName,
             suratSehatButaWarnaPath: participant.suratSehatButaWarnaPath,
             suratSehatButaWarnaFileName: participant.suratSehatButaWarnaFileName,
+            suratBebasNarkobaPath: participant.suratBebasNarkobaPath,
+            suratBebasNarkobaFileName: participant.suratBebasNarkobaFileName,
             tglKeluarSuratSehatButaWarna: participant.tglKeluarSuratSehatButaWarna,
             tglKeluarSuratBebasNarkoba: participant.tglKeluarSuratBebasNarkoba,
             gmfNonGmf: participant.gmfNonGmf,

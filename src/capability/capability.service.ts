@@ -168,19 +168,23 @@ export class CapabilityService {
     }
 
     await this.prismaService.$transaction(async (prisma) => {
-      // Hapus curriculumSyllabus terkait capabilityId
-      await prisma.curriculumSyllabus.deleteMany({
-        where: {
-          capabilityId: capabilityId,
-        },
-      });
+      try {
+        // Hapus curriculumSyllabus terkait capabilityId
+        await prisma.curriculumSyllabus.deleteMany({
+          where: {
+            capabilityId: capabilityId,
+          },
+        });
 
-      // Hapus capability
-      await prisma.capability.delete({
-        where: {
-          id: capabilityId,
-        },
-      });
+        // Hapus capability
+        await prisma.capability.delete({
+          where: {
+            id: capabilityId,
+          },
+        });
+      } catch (error) {
+        throw new HttpException('Gagal menghapus Capability atau Capability masih terdaftar di COT', 400);
+      }
     });
 
     return 'Capability berhasil dihapus';

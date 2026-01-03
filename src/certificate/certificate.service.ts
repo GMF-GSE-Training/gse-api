@@ -44,6 +44,7 @@ export class CertificateService {
               select: {
                 name: true,
                 fotoPath: true,
+                qrCodePath: true,
                 placeOfBirth: true,
                 dateOfBirth: true,
                 nationality: true,
@@ -189,6 +190,16 @@ export class CertificateService {
     const signature2Base64 = signature2Buffer.toString('base64');
     const signature2Type = this.getMediaType(signature2Buffer);
 
+
+    let qrCodeBuffer: Buffer;
+    try {
+      const { buffer } = await this.fileUploadService.downloadFile(participant.qrCodePath);
+      qrCodeBuffer = buffer;
+    } catch (err: any) {
+      throw new Error('Gagal mengambil QR Code: ' + (err.message || err));
+    }
+    const qrCodeBase64 = qrCodeBuffer.toString('base64');
+
     const formattedStartDate = this.formatDate(new Date(cot.startDate));
     const formattedEndDate = this.formatDate(new Date(cot.endDate));
     const formattedDateOfBirth = this.formatDate(
@@ -223,6 +234,7 @@ export class CertificateService {
       roleSignature2: signature2.role,
       signature2Type: signature2Type,
       signature2Base64: signature2Base64,
+      qrCodeBase64: qrCodeBase64,
       GSERegulation: GSERegulation,
       Competencies: Competencies,
       totalDuration: capability.totalDuration,

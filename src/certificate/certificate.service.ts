@@ -1,7 +1,7 @@
 import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/service/prisma.service';
 import { ValidationService } from 'src/common/service/validation.service';
-import { CertificateListResponse, CreateCertificate } from 'src/model/certificate.model';
+import { CertificateListResponse, CreateCertificate, UpdateCertificate } from 'src/model/certificate.model';
 import { CertificateValidation } from './certificate.validation';
 import { join } from 'path';
 import * as ejs from 'ejs';
@@ -479,14 +479,459 @@ export class CertificateService {
     const certificate = await this.prismaService.certificate.findUnique({
       where: {
         id: certificateId,
-      }
+      },
+      include: {
+        participant: {
+          select: {
+            idNumber: true,
+            name: true,
+          },
+        },
+        cot: {
+          include: {
+            capabilityCots: {
+              take: 1,
+              include: {
+                capability: {
+                  select: {
+                    trainingName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!certificate) {
       throw new HttpException('Sertifikat tidak ditemukan', 404);
     }
 
-    return certificate;
+    // Format response dengan hanya menambahkan 3 field baru tanpa nested object
+    const { participant, cot, ...certificateData } = certificate;
+    
+    const response = {
+      ...certificateData,
+      noPegawai: participant?.idNumber || null,
+      nama: participant?.name || null,
+      namaTraining: cot?.capabilityCots[0]?.capability?.trainingName || null,
+    };
+
+    return response;
+  }
+
+  async updateCertificate(
+    certificateId: string,
+    request: UpdateCertificate,
+  ): Promise<string> {
+    const updateCertificateRequest = this.validationService.validate(
+      CertificateValidation.UPDATE,
+      request,
+    );
+
+    // Cari certificate dengan relasi yang diperlukan
+    const existingCertificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      },
+      include: {
+        cot: {
+          select: {
+            startDate: true,
+            endDate: true,
+            participantsCots: {
+              take: 1,
+              select: {
+                participant: {
+                  select: {
+                    name: true,
+                    fotoPath: true,
+                    qrCodePath: true,
+                    placeOfBirth: true,
+                    dateOfBirth: true,
+                    nationality: true,
+                  },
+                },
+              },
+            },
+            capabilityCots: {
+              take: 1,
+              select: {
+                capability: {
+                  select: {
+                    trainingName: true,
+                    totalDuration: true,
+                    curriculumSyllabus: {
+                      select: {
+                        type: true,
+                        name: true,
+                        theoryDuration: true,
+                        practiceDuration: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        participant: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!existingCertificate) {
+      throw new HttpException('Sertifikat tidak ditemukan', 404);
+    }
+
+    // Tentukan apakah perlu generate ulang PDF
+    const needsPdfRegeneration =
+      (updateCertificateRequest.theoryScore !== undefined &&
+        updateCertificateRequest.theoryScore !== existingCertificate.theoryScore) ||
+      (updateCertificateRequest.practiceScore !== undefined &&
+        updateCertificateRequest.practiceScore !== existingCertificate.practiceScore) ||
+      (updateCertificateRequest.certificateNumber !== undefined &&
+        updateCertificateRequest.certificateNumber !== existingCertificate.certificateNumber);
+
+    let newCertificatePath = existingCertificate.certificatePath;
+    const oldCertificatePath = existingCertificate.certificatePath;
+
+    // Jika perlu generate ulang PDF
+    if (needsPdfRegeneration) {
+      const cot = existingCertificate.cot;
+      const participant = cot.participantsCots[0]?.participant;
+      const capability = cot.capabilityCots[0]?.capability;
+
+      if (!participant || !capability) {
+        throw new HttpException(
+          'Gagal update sertifikat. Data COT, participant, atau capability tidak lengkap',
+          404,
+        );
+      }
+
+      // Ambil eSign aktif
+      const eSign = await this.prismaService.signature.findMany({
+        where: {
+          status: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          eSignPath: true,
+          signatureType: true,
+        },
+      });
+
+      if (!eSign || eSign.length === 0) {
+        throw new HttpException(
+          'Gagal update sertifikat. Tidak ada Esign yang aktif',
+          404,
+        );
+      }
+
+      // Gunakan nilai baru atau nilai lama
+      const theoryScore =
+        updateCertificateRequest.theoryScore !== undefined
+          ? updateCertificateRequest.theoryScore
+          : existingCertificate.theoryScore;
+      const practiceScore =
+        updateCertificateRequest.practiceScore !== undefined
+          ? updateCertificateRequest.practiceScore
+          : existingCertificate.practiceScore;
+      const certificateNumber =
+        updateCertificateRequest.certificateNumber !== undefined
+          ? updateCertificateRequest.certificateNumber
+          : existingCertificate.certificateNumber;
+
+      // Ambil foto participant
+      let photoBuffer: Buffer;
+      try {
+        const { buffer } = await this.fileUploadService.downloadFile(participant.fotoPath);
+        photoBuffer = buffer;
+      } catch (err: any) {
+        throw new Error('Gagal mengambil foto peserta: ' + (err.message || err));
+      }
+      const photoBase64 = photoBuffer.toString('base64');
+      const photoType = this.getMediaType(photoBuffer);
+
+      // Ambil signature1
+      const signature1 = eSign.find((item) => item.signatureType === 'SIGNATURE1');
+      let signature1Buffer: Buffer;
+      try {
+        const { buffer } = await this.fileUploadService.downloadFile(signature1.eSignPath);
+        signature1Buffer = buffer;
+      } catch (err: any) {
+        throw new Error('Gagal mengambil signature1: ' + (err.message || err));
+      }
+      const signature1Base64 = signature1Buffer.toString('base64');
+      const signature1Type = this.getMediaType(signature1Buffer);
+
+      // Ambil signature2
+      const signature2 = eSign.find((item) => item.signatureType === 'SIGNATURE2');
+      let signature2Buffer: Buffer;
+      try {
+        const { buffer } = await this.fileUploadService.downloadFile(signature2.eSignPath);
+        signature2Buffer = buffer;
+      } catch (err: any) {
+        throw new Error('Gagal mengambil signature2: ' + (err.message || err));
+      }
+      const signature2Base64 = signature2Buffer.toString('base64');
+      const signature2Type = this.getMediaType(signature2Buffer);
+
+      // Ambil QR Code
+      let qrCodeBuffer: Buffer;
+      try {
+        const { buffer } = await this.fileUploadService.downloadFile(participant.qrCodePath);
+        qrCodeBuffer = buffer;
+      } catch (err: any) {
+        throw new Error('Gagal mengambil QR Code: ' + (err.message || err));
+      }
+      const qrCodeBase64 = qrCodeBuffer.toString('base64');
+
+      // Format tanggal
+      const formattedStartDate = this.formatDate(new Date(cot.startDate));
+      const formattedEndDate = this.formatDate(new Date(cot.endDate));
+      const formattedDateOfBirth = this.formatDate(new Date(participant.dateOfBirth));
+
+      // Filter GSE Regulation dan Competencies
+      const GSERegulation = capability.curriculumSyllabus.filter(
+        (item) => item.type === 'Regulasi GSE',
+      );
+      const Competencies = capability.curriculumSyllabus.filter(
+        (item) => item.type === 'Kompetensi',
+      );
+
+      // Render template
+      const backgroundImage = `${process.env.BACKEND_URL}/assets/images/background_sertifikat.png`;
+      const templatePath = join(
+        __dirname,
+        '..',
+        'templates',
+        'certificate',
+        'certificate.ejs',
+      );
+      const certificate = await ejs.renderFile(templatePath, {
+        backgroundImage: backgroundImage,
+        photoType: photoType,
+        photoBase64: photoBase64,
+        name: participant.name,
+        placeOrDateOfBirth: `${participant.placeOfBirth}/${formattedDateOfBirth}`,
+        nationality: participant.nationality,
+        competencies: capability.trainingName,
+        date: this.formatDate(new Date()),
+        certificateNumber: certificateNumber,
+        duration: capability.totalDuration,
+        coursePeriode: `${formattedStartDate} - ${formattedEndDate}`,
+        nameSignature1: signature1.name,
+        roleSignature1: signature1.role,
+        signature1Type: signature1Type,
+        signature1Base64: signature1Base64,
+        nameSignature2: signature2.name,
+        roleSignature2: signature2.role,
+        signature2Type: signature2Type,
+        signature2Base64: signature2Base64,
+        qrCodeBase64: qrCodeBase64,
+        GSERegulation: GSERegulation,
+        Competencies: Competencies,
+        totalDuration: capability.totalDuration,
+        theoryScore: theoryScore,
+        practiceScore: practiceScore,
+      });
+
+      // Generate PDF dengan Puppeteer
+      const puppeteerOptions: any = {
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+        ],
+      };
+
+      // Cari Chrome executable
+      const possiblePaths = [
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      ];
+
+      for (const chromePath of possiblePaths) {
+        try {
+          const fs = require('fs');
+          if (fs.existsSync(chromePath)) {
+            puppeteerOptions.executablePath = chromePath;
+            break;
+          }
+        } catch (error) {
+          // Continue checking other paths
+        }
+      }
+
+      let browser;
+      try {
+        this.logger.log('Launching Puppeteer for certificate update...', puppeteerOptions);
+        browser = await puppeteer.launch(puppeteerOptions);
+      } catch (error) {
+        this.logger.error('Failed to launch Puppeteer:', error.message);
+        throw new HttpException(
+          `Gagal menjalankan PDF generator: ${error.message}. Pastikan Chrome ter-install di sistem.`,
+          500,
+        );
+      }
+
+      let certificateBuffer: Buffer;
+      try {
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 800 });
+        await page.setContent(certificate, {
+          waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+          timeout: 30000,
+        });
+
+        const pdfResult = await page.pdf({
+          format: 'A4',
+          landscape: true,
+          printBackground: true,
+          preferCSSPageSize: true,
+          margin: {
+            top: '0mm',
+            right: '0mm',
+            bottom: '0mm',
+            left: '0mm',
+          },
+        });
+
+        certificateBuffer = Buffer.isBuffer(pdfResult) ? pdfResult : Buffer.from(pdfResult);
+        await browser.close();
+      } catch (error) {
+        if (browser) {
+          await browser.close();
+        }
+        this.logger.error('Failed to generate PDF:', error.message);
+        throw new HttpException(`Gagal generate PDF certificate: ${error.message}`, 500);
+      }
+
+      // Validasi PDF buffer
+      if (!certificateBuffer || !Buffer.isBuffer(certificateBuffer) || certificateBuffer.length === 0) {
+        throw new HttpException(
+          'Gagal generate PDF certificate: Invalid buffer generated',
+          500,
+        );
+      }
+
+      // Verify PDF signature
+      const pdfSignatureBytes = certificateBuffer.subarray(0, 5);
+      const pdfSignature = String.fromCharCode(...pdfSignatureBytes);
+
+      if (!pdfSignature.startsWith('%PDF')) {
+        throw new HttpException(
+          'Gagal generate PDF certificate: Invalid PDF format generated',
+          500,
+        );
+      }
+
+      // Hapus file lama dari storage
+      if (oldCertificatePath) {
+        try {
+          await this.fileUploadService.deleteFile(oldCertificatePath);
+          this.logger.log(`Deleted old certificate file: ${oldCertificatePath}`);
+        } catch (err: any) {
+          this.logger.warn(`Failed to delete old certificate file: ${oldCertificatePath}`, err.message);
+          // Continue even if deletion fails
+        }
+      }
+
+      // Upload file baru
+      try {
+        const safeCertificateNumber = certificateNumber.replace(/\//g, '_');
+        const fileObj: Express.Multer.File = {
+          fieldname: 'certificate',
+          originalname: `${safeCertificateNumber}.pdf`,
+          encoding: '7bit',
+          mimetype: 'application/pdf',
+          buffer: certificateBuffer,
+          size: certificateBuffer.length,
+          destination: '',
+          filename: `certificate_${certificateNumber}.pdf`,
+          path: '',
+          stream: undefined,
+        };
+
+        const uploadPath = `certificates/${safeCertificateNumber}.pdf`
+          .replace(/\\/g, '/')
+          .replace(/\/+/g, '/')
+          .replace(/^\//, '');
+
+        newCertificatePath = await this.fileUploadService.uploadFile(fileObj, uploadPath);
+        this.logger.log(`Uploaded new certificate file: ${newCertificatePath}`);
+      } catch (err: any) {
+        throw new HttpException(
+          `Gagal upload certificate PDF file: ${err.message}`,
+          500,
+        );
+      }
+    }
+
+    // Update data di database
+    const updateData: any = {};
+    if (updateCertificateRequest.theoryScore !== undefined) {
+      updateData.theoryScore = updateCertificateRequest.theoryScore;
+    }
+    if (updateCertificateRequest.practiceScore !== undefined) {
+      updateData.practiceScore = updateCertificateRequest.practiceScore;
+    }
+    if (updateCertificateRequest.certificateNumber !== undefined) {
+      updateData.certificateNumber = updateCertificateRequest.certificateNumber;
+    }
+    if (updateCertificateRequest.expDate !== undefined) {
+      updateData.expDate = updateCertificateRequest.expDate;
+    }
+    if (needsPdfRegeneration && newCertificatePath) {
+      updateData.certificatePath = newCertificatePath;
+    }
+
+    await this.prismaService.certificate.update({
+      where: {
+        id: certificateId,
+      },
+      data: updateData,
+    });
+
+    return 'Sertifikat berhasil diperbarui';
+  }
+
+  async getCertificateFile(certificateId: string): Promise<string> {
+    const certificate = await this.prismaService.certificate.findUnique({
+      where: {
+        id: certificateId,
+      },
+    });
+
+    if (!certificate || !certificate.certificatePath) {
+      throw new HttpException('File Sertifikat tidak ditemukan', 404);
+    }
+
+    // Gabungkan SUPABASE_STORAGE_PUBLIC_URL dengan certificatePath
+    try {
+      const publicUrl = this.fileUploadService.provider.getPublicUrl(certificate.certificatePath);
+      return publicUrl;
+    } catch (err: any) {
+      throw new HttpException('Gagal mengambil URL Sertifikat: ' + (err.message || err), 500);
+    }
   }
 
   async streamFile(certificateId: string): Promise<Buffer> {
@@ -683,7 +1128,7 @@ export class CertificateService {
 
   private validateActions(userRole: string): ActionAccessRights {
     const accessMap = {
-      'super admin': { canView: true },
+      'super admin': { canView: true, canEdit: true, canDelete: true },
       supervisor: { canView: true },
       lcu: { canView: true },
       user: { canView: true },

@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   StreamableFile,
   UseGuards,
@@ -18,7 +19,7 @@ import { CertificateService } from './certificate.service';
 import { Roles } from 'src/shared/decorator/role.decorator';
 import { AuthGuard } from 'src/shared/guard/auth.guard';
 import { RoleGuard } from 'src/shared/guard/role.guard';
-import { CertificateListResponse, CreateCertificate } from 'src/model/certificate.model';
+import { CertificateListResponse, CreateCertificate, UpdateCertificate } from 'src/model/certificate.model';
 import { buildResponse, ListRequest, WebResponse } from 'src/model/web.model';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { User } from 'src/shared/decorator/user.decorator';
@@ -112,9 +113,25 @@ export class CertificateController {
   async getCertificateFile(
     @Param('certificateId', ParseUUIDPipe) certificateId: string,
   ): Promise<WebResponse<string>> {
-    const fileBuffer = await this.certificateService.streamFile(certificateId);
-    const result = fileBuffer.toString('base64');
+    const result = await this.certificateService.getCertificateFile(certificateId);
     return buildResponse(HttpStatus.OK, result);
+  }
+
+  @Put('/:certificateId')
+  @HttpCode(200)
+  @Roles('super admin')
+  @UseGuards(AuthGuard, RoleGuard)
+  async update(
+    @Param('certificateId', ParseUUIDPipe) certificateId: string,
+    @Body() request: UpdateCertificate,
+  ): Promise<WebResponse<string>> {
+    try {
+      const result = await this.certificateService.updateCertificate(certificateId, request);
+      return buildResponse(HttpStatus.OK, result);
+    } catch (error) {
+      console.log(error);
+      throw new HttpException(error.message, error.status || 500);
+    }
   }
 
   @Delete('/:certificateId')

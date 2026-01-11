@@ -171,9 +171,9 @@
             height: 210mm;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            padding: 5% 10%;
-            gap: 25px;
+            justify-content: flex-start;
+            padding: 40px 80px;
+            gap: 15px;
             box-sizing: border-box;
         }
         
@@ -181,41 +181,44 @@
             width: 100%;
             text-align: center;
             color: #808080;
-            font-size: 18px;
-            margin-bottom: 15px;
+            font-size: 16px;
+            margin-bottom: 8px;
+            margin-top: 0;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         
         th {
-            border: 3px solid #000;
-            padding: 8px;
-            font-size: 14px;
-        }
-        
-        td {
-            border: 3px solid #000;
-            border-top: none;
-            border-bottom: none; 
-            text-align: center;
-            padding: 8px;
-            font-size: 12px;
-        }
-        
-        th {
+            border: 1.5px solid #000;
+            padding: 5px 8px;
+            font-size: 13px;
             background-color: #87CEEB;
         }
         
+        td {
+            border: 1.5px solid #000;
+            border-top: none;
+            border-bottom: none; 
+            text-align: center;
+            padding: 3px 8px;
+            font-size: 11px;
+            line-height: 1.2;
+        }
+        
         .total-row td {
-            border: 3px solid #000;
+            border: 1.5px solid #000;
+            font-weight: bold;
+            padding: 5px 8px;
         }
         
         .training-report-table th,
         .training-report-table td {
-            border: 2px solid #000;
+            border: 1.5px solid #000;
+            padding: 5px 8px;
         }
         
         .training-report-table th {
@@ -224,8 +227,11 @@
         
         .curriculum,
         .training-name {
-            text-align: start;
+            text-align: left;
         }
+
+        .col-no { width: 40px; }
+        .col-hours { width: 80px; }
     </style>
 </head>
 <body>
@@ -280,7 +286,7 @@
                     <img src="data:image/<%= signature1Type %>;base64,<%= signature1Base64 %>" alt="Signature 1">
                     <hr>
                     <p><%= nameSignature1 %><br>
-                    Director</p>
+                    <%= roleSignature2 %></p>
                 </div>
                 <div class="signature">
                     <p>Cert. No: <%= certificateNumber %></p>
@@ -301,70 +307,70 @@
         <div class="curriculum-section">
             <h1 class="section-title">Curriculum & Syllabus</h1>
             <table class="curriculum-table">
-                <tr class="header">
-                    <th rowspan="2">No.</th>
-                    <th rowspan="2">Subject</th>
-                    <th colspan="2">Hours</th>
-                </tr>
-                <tr>
-                    <th>Theory</th>
-                    <th>Practical</th>
-                </tr>
-                <tr>
-                    <td></td>
-                    <td class="curriculum"><strong><u>GSE Regulation :</u></strong></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-                <% let index = 1; %>
-                <% GSERegulation.forEach(item => { %>
-                <tr>
-                    <td><%= index++ %></td>
-                    <td class="curriculum"><%= item.name %></td>
-                    <td><%= item.theoryDuration %></td>
-                    <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
-                </tr>
-                <% }); %>
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-                <tr>
-                    <td></td>
-                    <td class="curriculum"><strong><u>Competencies : </u></strong></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-                <% Competencies.forEach(item => { %>
-                <tr>
-                    <td><%= index++ %></td>
-                    <td class="curriculum"><%= item.name %></td>
-                    <td><%= item.theoryDuration %></td>
-                    <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
-                </tr>
-                <% }); %>
-                <tr class="total-row">
-                    <td colspan="2">TOTAL</td>
-                    <td colspan="2"><%= totalDuration %></td>
-                </tr>
-                <tr class="total-row">
-                    <td colspan="2">TOTAL</td>
-                    <td colspan="2">40</td>
-                </tr>
+                <colgroup>
+                    <col class="col-no">
+                    <col>
+                    <col class="col-hours">
+                    <col class="col-hours">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2">No.</th>
+                        <th rowspan="2">Subject</th>
+                        <th colspan="2">Hours</th>
+                    </tr>
+                    <tr>
+                        <th>Theory</th>
+                        <th>Practical</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td></td>
+                        <td class="curriculum"><strong><u>GSE Regulation :</u></strong></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                    <% let index = 1; %>
+                    <% GSERegulation.forEach(item => { %>
+                    <tr>
+                        <td><%= index++ %></td>
+                        <td class="curriculum"><%= item.name %></td>
+                        <td><%= item.theoryDuration %></td>
+                        <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
+                    </tr>
+                    <% }); %>
+                    <tr>
+                        <td></td>
+                        <td class="curriculum"><strong><u>Competencies : </u></strong></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                    <% Competencies.forEach(item => { %>
+                    <tr>
+                        <td><%= index++ %></td>
+                        <td class="curriculum"><%= item.name %></td>
+                        <td><%= item.theoryDuration %></td>
+                        <td><%= item.practiceDuration === 0 ? "-" : item.practiceDuration %></td>
+                    </tr>
+                    <% }); %>
+                    <tr class="total-row">
+                        <td colspan="2">TOTAL</td>
+                        <td colspan="2"><%= totalDuration %></td>
+                    </tr>
+                </tbody>
             </table>
         </div>
     
         <div class="report-section">
             <h1 class="section-title">Training Report</h1>
             <table class="training-report-table">
+                <colgroup>
+                    <col class="col-no">
+                    <col>
+                    <col class="col-hours">
+                    <col class="col-hours">
+                </colgroup>
                 <thead>
                     <tr>
                         <th>No.</th>

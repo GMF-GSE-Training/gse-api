@@ -219,6 +219,9 @@ export class CertificateService {
       'certificate',
       'certificate.ejs',
     );
+    
+    this.clearEjsCache(templatePath);
+    
     const certificate = await ejs.renderFile(templatePath, {
       backgroundImage: backgroundImage,
       photoType: photoType,
@@ -919,6 +922,10 @@ export class CertificateService {
       where: {
         id: certificateId,
       },
+      select: {
+        certificatePath: true,
+        updatedAt: true,
+      }
     });
 
     if (!certificate || !certificate.certificatePath) {
@@ -928,7 +935,12 @@ export class CertificateService {
     // Gabungkan SUPABASE_STORAGE_PUBLIC_URL dengan certificatePath
     try {
       const publicUrl = this.fileUploadService.provider.getPublicUrl(certificate.certificatePath);
-      return publicUrl;
+      const timestamp = certificate.updatedAt 
+        ? new Date(certificate.updatedAt).getTime() 
+        : Date.now();
+      const urlWithCacheBusting = `${publicUrl}?v=${timestamp}`;
+      
+      return urlWithCacheBusting;
     } catch (err: any) {
       throw new HttpException('Gagal mengambil URL Sertifikat: ' + (err.message || err), 500);
     }
@@ -1164,5 +1176,12 @@ export class CertificateService {
     const month = months[date.getMonth()]; // Ambil nama bulan dari array
     const year = date.getFullYear();
     return `${day} ${month} ${year}`;
+  }
+
+  private clearEjsCache(templatePath: string): void {
+    if (require.cache[require.resolve(templatePath)]) {
+      delete require.cache[require.resolve(templatePath)];
+    }
+    ejs.clearCache();
   }
 }

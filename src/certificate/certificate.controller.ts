@@ -23,6 +23,7 @@ import { CertificateListResponse, CreateCertificate, UpdateCertificate } from 's
 import { buildResponse, ListRequest, WebResponse } from 'src/model/web.model';
 import { CurrentUserRequest } from 'src/model/auth.model';
 import { User } from 'src/shared/decorator/user.decorator';
+import { Public } from 'src/auth/public.decorator';
 
 @Controller('/certificate')
 export class CertificateController {
@@ -52,11 +53,11 @@ export class CertificateController {
   }
 
   @Get('/list/result')
+  @Public()
   @HttpCode(200)
-  @Roles('super admin')
-  @UseGuards(AuthGuard, RoleGuard)
+  @UseGuards(AuthGuard)
   async list(
-    @User() user: CurrentUserRequest,
+    @User() user?: CurrentUserRequest,
     @Query('q') q?: string,
     @Query(
       'page',
@@ -86,7 +87,7 @@ export class CertificateController {
       sortBy: sortBy || 'expDate',
       sortOrder: sortOrder === 'desc' ? 'desc' : 'asc',
     };
-    const result = await this.certificateService.listCertificates(query, user);
+    const result = await this.certificateService.listCertificates(query, user || null);
     return buildResponse(
       HttpStatus.OK,
       result.data,

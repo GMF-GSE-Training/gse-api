@@ -993,10 +993,10 @@ export class CertificateService {
 
   async listCertificates(
     request: ListRequest,
-    user: CurrentUserRequest,
+    user: CurrentUserRequest | null,
   ): Promise<{
     data: CertificateListResponse[];
-    actions: ActionAccessRights;
+    actions?: ActionAccessRights;
     paging: Paging;
   }> {
     const whereClause: any = {};
@@ -1122,6 +1122,19 @@ export class CertificateService {
           expDate: cert.expDate,
         };
       });
+    }
+
+    // Jika user tidak ada (request publik), return actions dengan canView saja
+    if (!user) {
+      return {
+        data: certificateList,
+        actions: { canView: true },
+        paging: {
+          currentPage: page,
+          totalPage: totalPage,
+          size: size,
+        },
+      };
     }
 
     const userRole = user.role.name.toLowerCase();

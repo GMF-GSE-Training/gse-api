@@ -153,6 +153,45 @@ export class ParticipantService {
         );
     }
 
+    async getFotoUrl(participantId: string): Promise<string> {
+        const participant = await this.findOneParticipant(participantId);
+        
+        if (!participant || !participant.fotoPath) {
+            throw new HttpException('Foto peserta tidak ditemukan', 404);
+        }
+
+        try {
+            const publicUrl = this.fileUploadService.provider.getPublicUrl(participant.fotoPath);
+            return publicUrl;
+        } catch (err: any) {
+            throw new HttpException('Gagal mengambil URL Foto: ' + (err.message || err), 500);
+        }
+    }
+
+    async getQrCodeUrl(participantId: string): Promise<string> {
+        const participant = await this.findOneParticipant(participantId);
+        
+        // Pastikan QR code sudah di-generate
+        if (!participant.qrCodePath) {
+            // Generate QR code jika belum ada
+            await this.qrCodeService.getOrRegenerateQrCodeForParticipant(participantId);
+            // Ambil ulang participant setelah generate
+            const updatedParticipant = await this.findOneParticipant(participantId);
+            if (!updatedParticipant || !updatedParticipant.qrCodePath) {
+                throw new HttpException('QR Code tidak ditemukan', 404);
+            }
+            const publicUrl = this.fileUploadService.provider.getPublicUrl(updatedParticipant.qrCodePath);
+            return publicUrl;
+        }
+
+        try {
+            const publicUrl = this.fileUploadService.provider.getPublicUrl(participant.qrCodePath);
+            return publicUrl;
+        } catch (err: any) {
+            throw new HttpException('Gagal mengambil URL QR Code: ' + (err.message || err), 500);
+        }
+    }
+
     async streamFile(participantId: string, fileName: string, user: CurrentUserRequest): Promise<Buffer> {
         const participant = await this.findOneParticipant(participantId);
     

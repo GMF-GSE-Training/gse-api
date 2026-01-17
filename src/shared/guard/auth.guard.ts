@@ -20,9 +20,6 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.get<boolean>('isPublic', context.getHandler());
-    if (isPublic) {
-      return true;
-    }
     const request = context.switchToHttp().getRequest();
     // Ambil token dari cookie, jika tidak ada cek header
     let accessToken = this.extractTokenFromCookie(request);
@@ -30,6 +27,47 @@ export class AuthGuard implements CanActivate {
       accessToken = this.extractTokenFromHeader(request);
     }
 
+    // Jika endpoint public dan tidak ada token, tetap bisa akses
+    if (isPublic && !accessToken) {
+      return true;
+    }
+
+    // Jika endpoint public dan ada token, coba set user (optional auth)
+    if (isPublic && accessToken) {
+      try {
+        const verifyAccessToken =
+          await this.accessJwtService.verifyAsync(accessToken);
+
+        const user = await this.prismaService.user.findUnique({
+          where: { id: verifyAccessToken.id },
+          select: {
+            id: true,
+            participantId: true,
+            idNumber: true,
+            nik: true,
+            email: true,
+            name: true,
+            dinas: true,
+            refreshToken: true,
+            accountVerificationToken: true,
+            emailChangeToken: true,
+            passwordResetToken: true,
+            verifiedAccount: true,
+            role: true,
+          },
+        });
+
+        if (user && user.verifiedAccount) {
+          request.user = user;
+        }
+      } catch (error) {
+        // Jika token invalid, tetap bisa akses karena endpoint public
+        // request.user akan tetap undefined
+      }
+      return true;
+    }
+
+    // Jika bukan public endpoint, wajib ada token
     if (!accessToken) {
       if (request.url.includes('auth/update-email/verify/')) {
         return true;

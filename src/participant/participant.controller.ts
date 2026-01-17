@@ -35,6 +35,7 @@ import { User } from 'src/shared/decorator/user.decorator';
 import { Response } from 'express';
 import { CoreHelper } from 'src/common/helpers/core.helper';
 import { Logger } from '@nestjs/common';
+import { Public } from 'src/auth/public.decorator';
 
 @Controller('/participants')
 export class ParticipantController {
@@ -262,38 +263,18 @@ export class ParticipantController {
   }
 
   @Get('/:participantId/foto')
+  @Public()
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
   async getFoto(
     @Param('participantId', ParseUUIDPipe) participantId: string,
-    @User() user: CurrentUserRequest,
-    @Res() res: Response,
-  ): Promise<void> {
+  ): Promise<WebResponse<string>> {
     try {
-      this.logger?.log?.(`Request download foto untuk participant: ${participantId}`);
-      const fileBuffer = await this.participantService.streamFile(
-        participantId,
-        'foto',
-        user,
-      );
-      if (fileBuffer) {
-        const mediaType = this.coreHelper.getMediaType(fileBuffer);
-        res.setHeader('Content-Type', mediaType || 'application/octet-stream');
-        res.send(fileBuffer);
-        this.logger?.log?.(`Berhasil mengirim foto participant: ${participantId}`);
-      } else {
-        res.status(404).send('Foto not found');
-        this.logger?.warn?.(`Foto tidak ditemukan untuk participant: ${participantId}`);
-      }
+      this.logger?.log?.(`Request foto URL untuk participant: ${participantId}`);
+      const result = await this.participantService.getFotoUrl(participantId);
+      return buildResponse(HttpStatus.OK, result);
     } catch (error: any) {
-      if (error.status === 404) {
-        res.status(404).send(error.message || 'Foto not found');
-        this.logger?.warn?.(`Foto tidak ditemukan (404) untuk participant: ${participantId}`);
-      } else {
-        res.status(500).send(error.message || 'Internal Server Error');
-        this.logger?.error?.(`Gagal mengirim foto participant: ${participantId} | ${error.message}`);
-      }
+      this.logger?.error?.(`Gagal mengambil foto URL participant: ${participantId} | ${error.message}`);
+      throw new HttpException(error.message || 'Internal Server Error', error.status || 500);
     }
   }
 
@@ -406,44 +387,18 @@ export class ParticipantController {
   }
 
   @Get('/:participantId/qr-code')
+  @Public()
   @HttpCode(200)
-  @Roles('super admin', 'supervisor', 'lcu', 'user')
-  @UseGuards(AuthGuard, RoleGuard)
   async getQrCode(
     @Param('participantId', ParseUUIDPipe) participantId: string,
-    @Res() res: Response,
-  ): Promise<void> {
+  ): Promise<WebResponse<string>> {
     try {
-      // Cek participant
-      let participant;
-      try {
-        participant = await this.participantService.getParticipantRaw(participantId);
-      } catch (e) {
-        res.status(404).send('Participant not found');
-        return;
-      }
-      // Ambil QR code
-      const fileBuffer = await this.participantService.getQrCode(participantId);
-      let sanitizedNama = 'Participant';
-      if (participant && participant.name) {
-        sanitizedNama = participant.name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-      }
-      const filename = `QRCode_${sanitizedNama}_${participantId}.png`;
-      const encodedFilename = encodeURIComponent(filename);
-      const disposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`;
-      if (fileBuffer) {
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Content-Disposition', disposition);
-        res.send(fileBuffer);
-      } else {
-        res.status(404).send('QR Code not found');
-      }
-    } catch (error) {
-      if (error.status === 404) {
-        res.status(404).send(error.message || 'Participant not found');
-      } else {
-        res.status(500).send(error.message || 'Internal Server Error');
-      }
+      this.logger?.log?.(`Request QR code URL untuk participant: ${participantId}`);
+      const result = await this.participantService.getQrCodeUrl(participantId);
+      return buildResponse(HttpStatus.OK, result);
+    } catch (error: any) {
+      this.logger?.error?.(`Gagal mengambil QR code URL participant: ${participantId} | ${error.message}`);
+      throw new HttpException(error.message || 'Internal Server Error', error.status || 500);
     }
   }
 

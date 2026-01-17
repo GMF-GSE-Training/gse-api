@@ -109,6 +109,17 @@ export class ESignService {
       request,
     );
 
+    // Ambil data e-sign yang sedang diupdate untuk validasi
+    const existingESign = await this.prismaService.signature.findUnique({
+      where: {
+        id: eSignId,
+      },
+    });
+
+    if (!existingESign) {
+      throw new HttpException('E-Sign tidak ditemukan', 404);
+    }
+
     if (updateRequest.signatureType) {
       if (!Object.values(SignatureType).includes(updateRequest.signatureType)) {
         throw new HttpException('Tipe tanda tangan tidak valid', 400);
@@ -120,31 +131,34 @@ export class ESignService {
         await this.prismaService.signature.count({
           where: {
             idNumber: updateRequest.idNumber,
+            id: { not: eSignId }, // Exclude current e-sign
           },
         });
 
-      if (totalESingWithSameIdNumber > 1) {
+      if (totalESingWithSameIdNumber > 0) {
         throw new HttpException('No pegawai sudah digunakan', 400);
       }
     }
 
     // Validasi status dan signatureType
-    if (updateRequest.status) {
-      if (updateRequest.status === true) {
-        const existingActiveSignature =
-          await this.prismaService.signature.count({
-            where: {
-              status: true,
-              signatureType: updateRequest.signatureType,
-            },
-          });
+    // Gunakan signatureType dari request jika ada, jika tidak gunakan dari existing data
+    const signatureTypeToCheck = updateRequest.signatureType || existingESign.signatureType;
+    
+    if (updateRequest.status === true) {
+      const existingActiveSignature =
+        await this.prismaService.signature.count({
+          where: {
+            status: true,
+            signatureType: signatureTypeToCheck,
+            id: { not: eSignId }, // Exclude current e-sign yang sedang diupdate
+          },
+        });
 
-        if (existingActiveSignature > 1) {
-          throw new HttpException(
-            `Hanya boleh ada satu tanda tangan aktif dengan tipe ${updateRequest.signatureType}`,
-            400,
-          );
-        }
+      if (existingActiveSignature > 0) {
+        throw new HttpException(
+          `Hanya boleh ada satu tanda tangan aktif dengan tipe ${signatureTypeToCheck}`,
+          400,
+        );
       }
     }
 

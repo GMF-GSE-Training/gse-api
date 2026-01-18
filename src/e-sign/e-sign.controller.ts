@@ -145,7 +145,7 @@ export class ESignController {
 
   @Get('/:eSignId/view')
   @HttpCode(200)
-  @Roles('super admin')
+  @Roles('super admin', 'supervisor')
   @UseGuards(AuthGuard, RoleGuard)
   async getESignFile(
     @Param('eSignId', ParseUUIDPipe) eSignId: string,

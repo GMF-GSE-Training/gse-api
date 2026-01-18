@@ -109,8 +109,7 @@ export class CertificateController {
 
   @Get('/:certificateId/view')
   @HttpCode(200)
-  @Roles('super admin')
-  @UseGuards(AuthGuard, RoleGuard)
+  @Public()
   async getCertificateFile(
     @Param('certificateId', ParseUUIDPipe) certificateId: string,
   ): Promise<WebResponse<string>> {
